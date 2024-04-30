@@ -1,17 +1,19 @@
 # UPEdit
 An Editor for All Heroes of Kam Yung's Stories
 
-
-不需要任何插件即可编译，建议使用Delphi 10.4或之后的版本。
-
-工程内提供的预编译版是64位版本。
-
-以下是旧内容
-
   Upwinded Editor(UPedit)
   An Editor--Special for All Heroes in Kam Yung's Stories
   Created by Upwinded.L.
   ©2011 Upwinded.L. Some rights reserved.
+
+不需要任何插件即可编译，建议使用Delphi 10.4或之后的版本。
+
+工程内提供的预编译版是64位版本。需注意网上下载的Delphi有可能不提供64位工具包。
+
+  -----------------
+  以下是旧内容
+
+
 
 
 
