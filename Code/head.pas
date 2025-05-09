@@ -542,6 +542,18 @@ begin
         else
           result := '';
       end;
+    3:
+      begin
+        if Len > 0 then
+        begin
+          setlength(tempAnsiString, Len + 1);
+          tempAnsiString[Len + 1] := #0;
+          copymemory(@tempAnsiString[1], str, Len);
+          result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 65001);
+        end
+        else
+          result := '';
+      end;
     else
       begin
         if Len >= sizeof(widechar) then
@@ -593,6 +605,14 @@ begin
       begin
         //tempAnsistring := UnicodeToMulti(Pwidechar(str), 950);
         tempAnsistring := UnicodeToMulti(pwidechar(gb2big(Pwidechar(str))), 950);
+        Zeromemory(Data, Len);
+        if length(tempAnsiString) > 0 then
+          copymemory(Data, @tempAnsiString[1], min(length(tempAnsiString), Len));
+      end;
+    3:
+      begin
+        //tempAnsistring := UnicodeToMulti(Pwidechar(str), 950);
+        tempAnsistring := UnicodeToMulti(pwidechar(gb2big(Pwidechar(str))), 65001);
         Zeromemory(Data, Len);
         if length(tempAnsiString) > 0 then
           copymemory(Data, @tempAnsiString[1], min(length(tempAnsiString), Len));

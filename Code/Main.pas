@@ -1288,12 +1288,16 @@ begin
     Form8.RadioGroup1.ItemIndex := 1
   else if talkcode = 2 then
     Form8.RadioGroup1.ItemIndex := 2
+  else if talkcode = 3 then
+    Form8.RadioGroup1.ItemIndex := 3
   else
     Form8.RadioGroup1.ItemIndex := 0;
   if datacode = 1 then
     Form8.RadioGroup2.ItemIndex := 1
   else if datacode = 2 then
     Form8.RadioGroup2.ItemIndex := 2
+  else if datacode = 3 then
+    Form8.RadioGroup2.ItemIndex := 3
   else
     Form8.RadioGroup2.ItemIndex := 0;
   if talkinvert = 1 then

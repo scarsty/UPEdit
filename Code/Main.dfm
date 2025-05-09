@@ -1,34 +1,36 @@
 object UPeditMainForm: TUPeditMainForm
   Left = 194
   Top = 111
+  Margins.Left = 2
+  Margins.Top = 2
+  Margins.Right = 2
+  Margins.Bottom = 2
   AlphaBlendValue = 1
   Caption = 'UPedit'
-  ClientHeight = 834
-  ClientWidth = 972
+  ClientHeight = 667
+  ClientWidth = 778
   Color = clBtnFace
-  Constraints.MinHeight = 434
-  Constraints.MinWidth = 620
+  Constraints.MinHeight = 347
+  Constraints.MinWidth = 496
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clBlack
-  Font.Height = -24
+  Font.Height = -19
   Font.Name = #24494#36719#38597#40657
   Font.Style = []
   FormStyle = fsMDIForm
   Menu = MainMenu1
-  OldCreateOrder = False
   Position = poDefault
   WindowState = wsMaximized
   WindowMenu = Window1
   OnClose = FormClose
   OnCreate = FormCreate
   OnResize = FormResize
-  PixelsPerInch = 120
-  TextHeight = 31
+  TextHeight = 25
   object Panel1: TPanel
     Left = 0
-    Top = 41
-    Width = 972
-    Height = 81
+    Top = 33
+    Width = 778
+    Height = 65
     Margins.Left = 0
     Margins.Top = 0
     Margins.Right = 0
@@ -39,40 +41,33 @@ object UPeditMainForm: TUPeditMainForm
     Color = clWhite
     TabOrder = 0
     Visible = False
+    ExplicitWidth = 776
     object Label2: TLabel
-      Left = 139
+      Left = 111
       Top = 2
-      Width = 606
-      Height = 67
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
+      Width = 485
+      Height = 53
       AutoSize = False
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
     end
     object Label1: TLabel
-      Left = 50
+      Left = 40
       Top = 2
-      Width = 54
-      Height = 31
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
+      Width = 43
+      Height = 25
       Caption = #28040#24687':'
     end
   end
   object Panel2: TPanel
     Left = 0
-    Top = 122
-    Width = 310
-    Height = 712
+    Top = 98
+    Width = 248
+    Height = 569
     Margins.Left = 0
     Margins.Top = 0
     Margins.Right = 0
@@ -82,22 +77,18 @@ object UPeditMainForm: TUPeditMainForm
     BevelOuter = bvNone
     TabOrder = 1
     Visible = False
+    ExplicitHeight = 561
     object WebBrowser1: TWebBrowser
       Left = 0
-      Top = 29
-      Width = 310
-      Height = 683
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
+      Top = 23
+      Width = 248
+      Height = 546
       Align = alClient
       TabOrder = 0
       OnNewWindow2 = WebBrowser1NewWindow2
-      ExplicitWidth = 313
-      ExplicitHeight = 639
+      ExplicitHeight = 538
       ControlData = {
-        4C000000A2190000793800000000000000000000000000000000000000000000
+        4C00000081140000252D00000000000000000000000000000000000000000000
         000000004C000000000000000000000001000000E0D057007335CF11AE690800
         2B2E12620A000000000000004C0000000114020000000000C000000000000046
         8000000000000000000000000000000000000000000000000000000000000000
@@ -106,17 +97,13 @@ object UPeditMainForm: TUPeditMainForm
     object Button1: TButton
       Left = 0
       Top = 0
-      Width = 310
-      Height = 29
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
+      Width = 248
+      Height = 23
       Align = alTop
       Caption = #21047#26032
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -17
+      Font.Height = -14
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
@@ -125,26 +112,18 @@ object UPeditMainForm: TUPeditMainForm
     end
   end
   object Panel3: TPanel
-    Left = 314
-    Top = 308
-    Width = 332
-    Height = 90
-    Margins.Left = 4
-    Margins.Top = 4
-    Margins.Right = 4
-    Margins.Bottom = 4
+    Left = 251
+    Top = 246
+    Width = 266
+    Height = 72
     Caption = #38544#34255#30340'webbrowser'
     TabOrder = 2
     Visible = False
     object WebBrowser2: TWebBrowser
-      Left = 4
+      Left = 3
       Top = 2
       Width = 60
       Height = 75
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
       TabOrder = 0
       OnBeforeNavigate2 = WebBrowser2BeforeNavigate2
       ControlData = {
@@ -158,45 +137,34 @@ object UPeditMainForm: TUPeditMainForm
   object Panel4: TPanel
     Left = 0
     Top = 0
-    Width = 972
-    Height = 41
-    Margins.Left = 4
-    Margins.Top = 4
-    Margins.Right = 4
-    Margins.Bottom = 4
+    Width = 778
+    Height = 33
     Align = alTop
     TabOrder = 3
+    ExplicitWidth = 776
     object Label3: TLabel
-      Left = 31
-      Top = 4
-      Width = 100
-      Height = 27
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
+      Left = 25
+      Top = 3
+      Width = 80
+      Height = 21
       Caption = #24555#25463#21151#33021#65306
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
     end
     object Label4: TLabel
-      Left = 146
-      Top = 4
-      Width = 100
-      Height = 27
+      Left = 117
+      Top = 3
+      Width = 80
+      Height = 21
       Cursor = crHandPoint
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
       Caption = #25105#35201#25913#23384#26723
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
@@ -205,19 +173,15 @@ object UPeditMainForm: TUPeditMainForm
       OnMouseLeave = Label4MouseLeave
     end
     object Label5: TLabel
-      Left = 285
-      Top = 4
-      Width = 100
-      Height = 27
+      Left = 228
+      Top = 3
+      Width = 80
+      Height = 21
       Cursor = crHandPoint
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
       Caption = #25105#35201#25913#22270#29255
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
@@ -226,19 +190,15 @@ object UPeditMainForm: TUPeditMainForm
       OnMouseLeave = Label5MouseLeave
     end
     object Label6: TLabel
-      Left = 424
-      Top = 4
-      Width = 100
-      Height = 27
+      Left = 339
+      Top = 3
+      Width = 80
+      Height = 21
       Cursor = crHandPoint
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
       Caption = #25105#35201#25913#22330#26223
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
@@ -247,19 +207,15 @@ object UPeditMainForm: TUPeditMainForm
       OnMouseLeave = Label6MouseLeave
     end
     object Label7: TLabel
-      Left = 569
-      Top = 4
-      Width = 100
-      Height = 27
+      Left = 455
+      Top = 3
+      Width = 80
+      Height = 21
       Cursor = crHandPoint
-      Margins.Left = 4
-      Margins.Top = 4
-      Margins.Right = 4
-      Margins.Bottom = 4
       Caption = #25105#35201#25913#20107#20214
       Font.Charset = DEFAULT_CHARSET
       Font.Color = clBlack
-      Font.Height = -20
+      Font.Height = -16
       Font.Name = #24494#36719#38597#40657
       Font.Style = []
       ParentFont = False
@@ -399,14 +355,18 @@ object UPeditMainForm: TUPeditMainForm
     end
   end
   object IdHTTP1: TIdHTTP
-    AllowCookies = True
     RedirectMaximum = 30
     ProxyParams.BasicAuthentication = False
     ProxyParams.ProxyPort = 0
     Request.ContentLength = -1
+    Request.ContentRangeEnd = -1
+    Request.ContentRangeStart = -1
+    Request.ContentRangeInstanceLength = -1
     Request.Accept = 'text/html, */*'
     Request.BasicAuthentication = False
     Request.UserAgent = 'Mozilla/3.0 (compatible; Indy Library)'
+    Request.Ranges.Units = 'bytes'
+    Request.Ranges = <>
     HTTPOptions = [hoForceEncodeParams]
     Left = 32
     Top = 96

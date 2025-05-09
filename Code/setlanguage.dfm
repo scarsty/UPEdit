@@ -10,9 +10,7 @@ object Form8: TForm8
   Font.Height = -11
   Font.Name = 'Tahoma'
   Font.Style = []
-  OldCreateOrder = False
   Position = poMainFormCenter
-  PixelsPerInch = 96
   TextHeight = 13
   object Label1: TLabel
     Left = 32
@@ -50,24 +48,26 @@ object Form8: TForm8
     Width = 297
     Height = 57
     Caption = #23545#35805#25968#25454#32534#30721
-    Columns = 3
+    Columns = 4
     Items.Strings = (
       'GBK'
       'BIG5'
-      'UNICODE')
+      'UNICODE'
+      'UTF-8')
     TabOrder = 2
   end
   object RadioGroup2: TRadioGroup
     Left = 42
-    Top = 16
+    Top = 8
     Width = 297
     Height = 57
     Caption = #28216#25103#25968#25454#32534#30721
-    Columns = 3
+    Columns = 4
     Items.Strings = (
       'GBK('#21069#20256')'
       'BIG5('#21407#29256#31561')'
-      'UNICODE')
+      'UNICODE'
+      'UTF-8')
     TabOrder = 3
   end
   object RadioGroup3: TRadioGroup
