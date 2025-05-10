@@ -1293,7 +1293,7 @@ var
   inifilename, tempstr: string;
   strlist: Tstringlist;
   i1,i2: integer;
-  strnum: integer;
+  strnum, diff: integer;
 begin
   //
   
@@ -1315,6 +1315,7 @@ begin
         if typedataitem[i1] > 0 then
         begin
           setlength(Rini[i1].Rterm, typedataitem[i1]);
+          diff:=0;
           for i2 := 0 to typedataitem[i1] - 1 do
           begin
             strlist.Clear;
@@ -1333,7 +1334,8 @@ begin
                   isname := strtoint64(strlist.Strings[4]);
                   quote := strtoint64(strlist.Strings[5]);
                   name := strlist.Strings[6];
-                  note := strlist.Strings[7];
+                  note := strlist.Strings[7] + '('+inttostr(diff)+')';
+                  diff := diff + datalen div 2 * datanum;
                 end;
               end;
             end;

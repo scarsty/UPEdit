@@ -6,8 +6,8 @@ object Form5: TForm5
   Margins.Right = 2
   Margins.Bottom = 2
   Caption = 'R'#25991#20214#32534#36753
-  ClientHeight = 681
-  ClientWidth = 862
+  ClientHeight = 673
+  ClientWidth = 860
   Color = clBtnFace
   DoubleBuffered = True
   Font.Charset = DEFAULT_CHARSET
@@ -25,12 +25,12 @@ object Form5: TForm5
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 862
+    Width = 860
     Height = 169
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 860
+    ExplicitWidth = 862
     object Label1: TLabel
       Left = 25
       Top = 25
@@ -177,21 +177,19 @@ object Form5: TForm5
   object Panel2: TPanel
     Left = 110
     Top = 169
-    Width = 752
-    Height = 512
+    Width = 750
+    Height = 504
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 750
-    ExplicitHeight = 504
+    ExplicitWidth = 752
+    ExplicitHeight = 512
     object StatusBar1: TStatusBar
       Left = 1
       Top = 491
       Width = 750
       Height = 20
       Panels = <>
-      ExplicitTop = 483
-      ExplicitWidth = 748
     end
     object CheckListBox1: TCheckListBox
       Left = 1
@@ -209,19 +207,17 @@ object Form5: TForm5
       TabOrder = 1
       OnClick = CheckListBox1Click
       OnDblClick = CheckListBox1DblClick
-      ExplicitWidth = 748
-      ExplicitHeight = 482
     end
   end
   object Panel3: TPanel
     Left = 0
     Top = 169
     Width = 110
-    Height = 512
+    Height = 504
     Align = alLeft
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitHeight = 504
+    ExplicitHeight = 512
     object Label3: TLabel
       Left = 11
       Top = 265
