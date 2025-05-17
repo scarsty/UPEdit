@@ -1191,11 +1191,13 @@ var
   dir: string;
   ini: Tinifile;
   filename: string;
+  outdir: TArray<string>;
 begin
   N28.Enabled := false;
-  if SelectDirectory('ÉèÖÃÓÎÏ·Â·¾¶',dir,gamepath) then
-  begin
 
+ if SelectDirectory(gamepath, outdir)then
+  begin
+    gamepath:=outdir[0];
     if gamepath[length(gamepath)] <> '\' then
       gamepath :=gamepath + '\';
 
