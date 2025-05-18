@@ -3,7 +3,7 @@ unit head;
 interface
 
 uses
-  windows,Graphics,sysutils, inifiles,classes,IdHashMessageDigest,SyncObjs,ShlObj, PNGimage, math;
+  windows,Graphics,sysutils, inifiles,classes,IdHashMessageDigest,SyncObjs,ShlObj, PNGimage, math, Dialogs;
 
 type
 
@@ -584,6 +584,7 @@ end;
 function writeinstr(str: WideString; Data: Pointer; Len: integer): Pointer;
 var
   tempAnsistring: AnsiString;
+  len1,i:integer;
 function GB2Big(GB: string): string;
 var
 Len: Integer;
@@ -612,10 +613,17 @@ begin
     3:
       begin
         //tempAnsistring := UnicodeToMulti(Pwidechar(str), 950);
-        tempAnsistring := UnicodeToMulti(pwidechar(gb2big(Pwidechar(str))), 65001);
+        tempAnsistring := UnicodeToMulti(pwidechar(str), 65001);
         Zeromemory(Data, Len);
-        if length(tempAnsiString) > 0 then
-          copymemory(Data, @tempAnsiString[1], min(length(tempAnsiString), Len));
+        len1:=length(tempAnsiString);
+        for i := 1 to length(tempAnsiString) do
+          if tempAnsiString[i]=#0 then
+          begin
+          len1:=i-1;
+          break;
+          end;
+        if len1 > 0 then
+            copymemory(Data, @tempAnsiString[1], min(len1, Len));
       end;
     else
       begin
