@@ -5,7 +5,7 @@ object ImzForm: TImzForm
   Margins.Top = 2
   Margins.Right = 2
   Margins.Bottom = 2
-  Caption = 'Imz'#25991#20214#32534#36753
+  Caption = 'PNG'#25991#20214#22841'/'#21387#32553#21253#32534#36753
   ClientHeight = 561
   ClientWidth = 829
   Color = clBtnFace
@@ -89,14 +89,14 @@ object ImzForm: TImzForm
       Top = 1
       Width = 330
       Height = 139
-      Caption = 'imz'#25991#20214
+      Caption = 'PNG'#25991#20214#22841'/'#21387#32553#21253
       TabOrder = 0
       object Label2: TLabel
         Left = 11
         Top = 24
-        Width = 91
+        Width = 76
         Height = 13
-        Caption = 'imz'#25991#20214#21517'/'#30446#24405#21517
+        Caption = #25991#20214#21517'/'#30446#24405#21517
       end
       object Edit2: TEdit
         Left = 17

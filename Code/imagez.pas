@@ -62,6 +62,7 @@ type
     procedure CalImzLen(tempimz: Pimz);
     procedure SaveImzToFile(tempimz: Pimz; Fname: string);
     procedure ReadImzFromFile(tempimz: Pimz; Fname: string);
+    procedure ReadImzFromZIPFile(tempimz: Pimz; Fname: string);
     procedure Button3Click(Sender: TObject);
     procedure Button5Click(Sender: TObject);
     procedure DrawImz;
@@ -139,9 +140,11 @@ function TImzForm.GetEditMode: TIMZEditMode;
 begin
   RadioGroup1.ItemIndex := integer(IMZeditMode);
   if RadioGroup1.ItemIndex = 1 then
-    result := zPNGmode
-  else
+    result := zPNGmode;
+  if RadioGroup1.ItemIndex = 0 then
     result := zIMZmode;
+  if RadioGroup1.ItemIndex = 2 then
+    result := zZIPmode;
 end;
 
 procedure TImzForm.SetEditMode(EMode: TIMZEditMode);
@@ -320,6 +323,7 @@ procedure TImzForm.Button4Click(Sender: TObject);
 var
   Path: string;
   I, FH: integer;
+  zip:pzip_t;
 begin
   if IMZeditMode = zPNGmode then
   begin
@@ -333,6 +337,10 @@ begin
     finally
       fileclose(FH);
     end;
+  end
+  else if IMZeditMode = zZIPmode then
+  begin
+    zip:=
   end
   else
   begin
@@ -369,8 +377,10 @@ begin
   firstpicnum := 0;
   nowpic := -1;
   linenum := 0;
-  if IMZeditMode = zIMZmode then
+  if (IMZeditMode = zIMZmode) then
     ReadImzFromFile(@imz, Edit2.Text)
+  else if (IMZeditMode = zZIPmode) then
+    ReadImzFromZIPFile(@imz, Edit2.Text)
   else
   begin
     InitialImzFromPath(@imz, Edit2.Text);
@@ -582,6 +592,8 @@ end;
 procedure TImzForm.DrawImz;
 var
   ix, iy, I, I2, h, w, count, FH: integer;
+  zip: pzip_t;
+  buf: ansistring;
 begin
   //
   imzBufbmp.Canvas.Lock;
@@ -600,6 +612,10 @@ begin
   ix := 0;
   iy := 0;
   h := 0;
+
+  if IMZeditMode = zZIPmode then
+    zip := zip_open(UnicodeToMulti(Pwidechar(Edit2.Text), 65001));
+
   for I := firstpicnum to imz.PNGnum - 1 do
   begin
     if ix = linepicnum then
@@ -652,22 +668,50 @@ begin
           end;
         end;
       end;
+    end;
 
-      { try
-        FH := Fileopen(PNGEditPath + indexFile, fmopenread);
-        fileseek(FH, I shl 2, 0);
-        fileread(FH, Imz.imzPNG[I].x, 2);
-        fileread(FH, Imz.imzPNG[I].y, 2);
+    if IMZeditMode = zZIPmode then
+    begin
+      imz.imzPNG[I].frame := 0;
+      if zip_has_file(zip, inttostr(I) + '.png') then
+      begin
+        imz.imzPNG[I].frame := 1;
+        setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
+        setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
+        try
+          buf := zip_express(zip, inttostr(I) + '.png');
+          imz.imzPNG[I].framelen[0] := length(buf);
+          setlength(imz.imzPNG[I].framedata[0].data, imz.imzPNG[I].framelen[0]);
+          copymemory(@(imz.imzPNG[I].framedata[0].data[0]), @buf[1], imz.imzPNG[I].framelen[0]);
         finally
-        Fileclose(FH);
-        end; }
-
+        end;
+      end
+      else
+      begin
+        I2 := 0;
+        while (zip_has_file(zip, inttostr(I) + '_' + inttostr(I2) + '.png')) do
+          inc(I2);
+        imz.imzPNG[I].frame := I2;
+        setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
+        setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
+        for I2 := 0 to imz.imzPNG[I].frame - 1 do
+        begin
+          try
+            buf := zip_express(zip, inttostr(I) + '_' + inttostr(I2) + '.png');
+            imz.imzPNG[I].framelen[I2] := length(buf);
+            setlength(imz.imzPNG[I].framedata[I2].data, imz.imzPNG[I].framelen[I2]);
+            copymemory(@imz.imzPNG[I].framedata[I2].data[0], @buf[1], imz.imzPNG[I].framelen[I2]);
+          finally
+          end;
+        end;
+      end;
     end;
 
     if imz.imzPNG[I].frame > 1 then
       count := Timercount mod imz.imzPNG[I].frame
     else
       count := 0;
+
     DrawimzPNGtoImage(@imz.imzPNG[I], count, ix * squareW, iy * squareH + titleh);
 
     imzBufbmp.Canvas.Lock;
@@ -676,6 +720,9 @@ begin
     // image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     inc(ix);
   end;
+  if IMZeditMode = zZIPmode then
+    zip_close(zip);
+
   ScrollBar1.LargeChange := Max(1, linenum - 1);
 end;
 
@@ -798,51 +845,95 @@ var
   FH, I, I2, tempint: integer;
   offset, frameoffset: array of integer;
 begin
-  //
-  try
-    FH := fileopen(Fname, fmopenread);
-    fileread(FH, tempimz.PNGnum, 4);
-    if tempimz.PNGnum < 0 then
-      tempimz.PNGnum := 0;
-    if tempimz.PNGnum > 0 then
-    begin
-      setlength(offset, tempimz.PNGnum);
-      fileread(FH, offset[0], tempimz.PNGnum * 4);
-      setlength(tempimz.imzPNG, tempimz.PNGnum);
-      for I := 0 to tempimz.PNGnum - 1 do
+  if IMZeditMode = zIMZmode then
+  begin
+    try
+      FH := fileopen(Fname, fmopenread);
+      fileread(FH, tempimz.PNGnum, 4);
+      if tempimz.PNGnum < 0 then
+        tempimz.PNGnum := 0;
+      if tempimz.PNGnum > 0 then
       begin
-        fileseek(FH, offset[I], 0);
-        fileread(FH, tempimz.imzPNG[I].x, 2);
-        fileread(FH, tempimz.imzPNG[I].y, 2);
-        fileread(FH, tempimz.imzPNG[I].frame, 4);
-        if tempimz.imzPNG[I].frame > 0 then
+        setlength(offset, tempimz.PNGnum);
+        fileread(FH, offset[0], tempimz.PNGnum * 4);
+        setlength(tempimz.imzPNG, tempimz.PNGnum);
+        for I := 0 to tempimz.PNGnum - 1 do
         begin
-          setlength(tempimz.imzPNG[I].framedata, tempimz.imzPNG[I].frame);
-          setlength(tempimz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
-          setlength(frameoffset, tempimz.imzPNG[I].frame);
-        end;
-        for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
-        begin
-          fileread(FH, frameoffset[I2], 4);
-          fileread(FH, tempimz.imzPNG[I].framelen[I2], 4);
-        end;
-        for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
-        begin
-          setlength(tempimz.imzPNG[I].framedata[I2].data, tempimz.imzPNG[I].framelen[I2]);
-          fileseek(FH, frameoffset[I2], 0);
-          fileread(FH, tempimz.imzPNG[I].framedata[I2].data[0], tempimz.imzPNG[I].framelen[I2]);
+          fileseek(FH, offset[I], 0);
+          fileread(FH, tempimz.imzPNG[I].x, 2);
+          fileread(FH, tempimz.imzPNG[I].y, 2);
+          fileread(FH, tempimz.imzPNG[I].frame, 4);
+          if tempimz.imzPNG[I].frame > 0 then
+          begin
+            setlength(tempimz.imzPNG[I].framedata, tempimz.imzPNG[I].frame);
+            setlength(tempimz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
+            setlength(frameoffset, tempimz.imzPNG[I].frame);
+          end;
+          for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
+          begin
+            fileread(FH, frameoffset[I2], 4);
+            fileread(FH, tempimz.imzPNG[I].framelen[I2], 4);
+          end;
+          for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
+          begin
+            setlength(tempimz.imzPNG[I].framedata[I2].data, tempimz.imzPNG[I].framelen[I2]);
+            fileseek(FH, frameoffset[I2], 0);
+            fileread(FH, tempimz.imzPNG[I].framedata[I2].data[0], tempimz.imzPNG[I].framelen[I2]);
+          end;
         end;
       end;
+      fileclose(FH);
+      CalImzLen(tempimz);
+    except
+      fileclose(FH);
+      tempimz.PNGnum := 0;
+      setlength(tempimz.imzPNG, tempimz.PNGnum);
+      showmessage('∂¡»° ß∞‹£°');
     end;
-    fileclose(FH);
-    CalImzLen(tempimz);
-  except
-    fileclose(FH);
-    tempimz.PNGnum := 0;
-    setlength(tempimz.imzPNG, tempimz.PNGnum);
-    showmessage('∂¡»° ß∞‹£°');
+  end
+  else
+  begin
+
   end;
 
+end;
+
+procedure TImzForm.ReadImzFromZIPFile(tempimz: Pimz; Fname: string);
+var
+  ini: Tinifile;
+  I, FH: integer;
+  tpath: string;
+  name, buf: ansistring;
+  zip: pzip_t;
+  p: psmallint;
+begin
+  indexfile := imzindexfilename;
+  try
+    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
+  finally
+    ini.Free;
+  end;
+  try
+    name := UnicodeToMulti(Pwidechar(Fname), 65001);
+    zip := zip_open(name);
+    if zip <> nil then
+    begin
+      buf := zip_express(zip, indexfile);
+      tempimz.PNGnum := length(buf) div 4;
+      setlength(tempimz.imzPNG, tempimz.PNGnum);
+      p := @buf[1];
+      for I := 0 to tempimz.PNGnum - 1 do
+      begin
+        tempimz.imzPNG[I].x := p^;
+        inc(p);
+        tempimz.imzPNG[I].y := p^;
+        inc(p);
+      end;
+    end;
+  finally
+    zip_close(zip);
+  end;
 end;
 
 procedure TImzForm.SaveImzToFile(tempimz: Pimz; Fname: string);
@@ -1362,8 +1453,8 @@ begin
   tempdata[3] := 255;
 
   PInteger(@tempdata[4])^ := IMZCopyPNG.len;
-  PSmallint(@tempdata[8])^ := IMZCopyPNG.x;
-  PSmallint(@tempdata[10])^ := IMZCopyPNG.y;
+  psmallint(@tempdata[8])^ := IMZCopyPNG.x;
+  psmallint(@tempdata[10])^ := IMZCopyPNG.y;
   PInteger(@tempdata[12])^ := IMZCopyPNG.frame;
 
   I2 := 16;
