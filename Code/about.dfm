@@ -6,15 +6,14 @@ object AboutBox: TAboutBox
   Caption = 'About'
   ClientHeight = 271
   ClientWidth = 333
+  Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clBlack
   Font.Height = -11
   Font.Name = 'MS Sans Serif'
   Font.Style = []
-  OldCreateOrder = False
   Position = poScreenCenter
   OnCreate = FormCreate
-  PixelsPerInch = 96
   TextHeight = 13
   object Panel1: TPanel
     Left = 7
@@ -4124,14 +4123,14 @@ object AboutBox: TAboutBox
     object Label3: TLabel
       Left = 42
       Top = 178
-      Width = 249
+      Width = 271
       Height = 19
       Cursor = crHandPoint
       Margins.Left = 2
       Margins.Top = 2
       Margins.Right = 2
       Margins.Bottom = 2
-      Caption = #35775#38382#38081#34880#20025#24515#35770#22363#65306'Http://www.txdx.net/'
+      Caption = #35775#38382#38081#34880#20025#24515#35770#22363#65306'https://tiexuedanxin.net/'
       Font.Charset = ANSI_CHARSET
       Font.Color = clMaroon
       Font.Height = -13

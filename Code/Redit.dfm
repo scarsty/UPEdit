@@ -30,7 +30,7 @@ object Form5: TForm5
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 862
+    ExplicitWidth = 858
     object Label1: TLabel
       Left = 25
       Top = 25
@@ -166,7 +166,7 @@ object Form5: TForm5
     end
     object Button12: TButton
       Left = 552
-      Top = 130
+      Top = 128
       Width = 127
       Height = 36
       Caption = #23548#20837'Excel('#24555#36895')'
@@ -182,20 +182,22 @@ object Form5: TForm5
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 752
-    ExplicitHeight = 512
+    ExplicitWidth = 748
+    ExplicitHeight = 496
     object StatusBar1: TStatusBar
       Left = 1
-      Top = 491
-      Width = 750
+      Top = 483
+      Width = 748
       Height = 20
       Panels = <>
+      ExplicitTop = 475
+      ExplicitWidth = 746
     end
     object CheckListBox1: TCheckListBox
       Left = 1
       Top = 1
-      Width = 750
-      Height = 490
+      Width = 748
+      Height = 482
       Align = alClient
       BevelInner = bvLowered
       BevelOuter = bvRaised
@@ -207,6 +209,8 @@ object Form5: TForm5
       TabOrder = 1
       OnClick = CheckListBox1Click
       OnDblClick = CheckListBox1DblClick
+      ExplicitWidth = 746
+      ExplicitHeight = 474
     end
   end
   object Panel3: TPanel
@@ -217,7 +221,7 @@ object Form5: TForm5
     Align = alLeft
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitHeight = 512
+    ExplicitHeight = 496
     object Label3: TLabel
       Left = 11
       Top = 265

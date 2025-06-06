@@ -57,7 +57,7 @@ end;
 
 procedure TAboutBox.Label3Click(Sender: TObject);
 begin
-  ShellExecute(Application.Handle, nil, 'http://www.txdx.net' , nil, nil, SW_SHOWNORMAL);
+  ShellExecute(Application.Handle, nil, 'https://tiexuedanxin.net' , nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TAboutBox.OKButtonClick(Sender: TObject);

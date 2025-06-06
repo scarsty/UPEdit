@@ -180,7 +180,7 @@ var
   //m_bNewWindow: boolean = false;
   //mainwebshow: boolean = false;
 const
-  titlestr: string = 'UPedit Formal Ver1.16a';
+  titlestr: string = 'UPedit Formal Ver 1.xxx';
   Appname: string = 'UPedit Formal';
   WM_ABOUT: integer = 2000;
 

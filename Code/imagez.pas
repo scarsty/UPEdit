@@ -4,11 +4,11 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, PNGimage, StdCtrls, fileCtrl, math, Menus, head, inifiles, imzObject;
+  Dialogs, ExtCtrls, PNGimage, StdCtrls, fileCtrl, math, Menus, head, inifiles, imzObject, libzip;
 
 type
 
-  TIMZEditMode = (zIMZmode, zPNGmode);
+  TIMZEditMode = (zIMZmode, zPNGmode, zZIPmode);
 
   TImzForm = class(TForm)
     Panel1: TPanel;
@@ -61,26 +61,23 @@ type
     procedure Button2Click(Sender: TObject);
     procedure CalImzLen(tempimz: Pimz);
     procedure SaveImzToFile(tempimz: Pimz; Fname: string);
-    procedure ReadImzFromFile(tempimz: pimz; Fname: string);
+    procedure ReadImzFromFile(tempimz: Pimz; Fname: string);
     procedure Button3Click(Sender: TObject);
     procedure Button5Click(Sender: TObject);
     procedure DrawImz;
     procedure CopyImzPNG(dest, ori: PimzPNG);
     procedure DrawimzPNGtoImage(imzPNG: PimzPNG; count, x, y: integer);
     procedure ScrollBar1Change(Sender: TObject);
-    procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+    procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; x, y: integer);
     procedure Drawsquare(x, y: integer);
     procedure Timer1Timer(Sender: TObject);
     procedure CheckBox1Click(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Image1MouseLeave(Sender: TObject);
-    procedure Image1MouseUp(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
+    procedure Image1MouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; x, y: integer);
     procedure Button4Click(Sender: TObject);
-    procedure FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
-    procedure FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
-      MousePos: TPoint; var Handled: Boolean);
+    procedure FormMouseWheelDown(Sender: TObject; Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
+    procedure FormMouseWheelUp(Sender: TObject; Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
     procedure N5Click(Sender: TObject);
     procedure N3Click(Sender: TObject);
     procedure N2Click(Sender: TObject);
@@ -90,9 +87,8 @@ type
     procedure InitialImzFromPath(tempimz: Pimz; Path: string);
     procedure RadioGroup1Click(Sender: TObject);
     procedure Image1StartDrag(Sender: TObject; var DragObject: TDragObject);
-    procedure Image1MouseDown(Sender: TObject; Button: TMouseButton;
-      Shift: TShiftState; X, Y: Integer);
-    procedure Image1EndDrag(Sender, Target: TObject; X, Y: Integer);
+    procedure Image1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; x, y: integer);
+    procedure Image1EndDrag(Sender, Target: TObject; x, y: integer);
     procedure Button7Click(Sender: TObject);
     procedure N6Click(Sender: TObject);
     procedure N7Click(Sender: TObject);
@@ -103,35 +99,34 @@ type
   public
     { Public declarations }
     imz: Timz;
-    indexfile : string;
-    IMZeditMode: TimzEditMode;
+    indexfile: string;
+    IMZeditMode: TIMZEditMode;
     IMZcanCopyPNG: Boolean;
     IMZCopyPNG: TIMZPNG;
-    function GetEditMode: TimzEditMode;
-    procedure SetEditMode(EMode: TimzEditMode);
+    function GetEditMode: TIMZEditMode;
+    procedure SetEditMode(EMode: TIMZEditMode);
   private
     { Private declarations }
-    linepicnum: integer;   //每行图片数
-    backcol: cardinal;     //背景颜色
-    squarecol: cardinal;    //选框颜色
-    squareW: integer;       //选框宽度
-    squareH: integer;       //选框高度
-    firstpicnum: integer;  //当前第一副图的序号
-    nowpic: integer;       //现在鼠标指向的图片序号
-    linenum: integer;      //窗体显示图片的行数
+    linepicnum: integer; // 每行图片数
+    backcol: cardinal; // 背景颜色
+    squarecol: cardinal; // 选框颜色
+    squareW: integer; // 选框宽度
+    squareH: integer; // 选框高度
+    firstpicnum: integer; // 当前第一副图的序号
+    nowpic: integer; // 现在鼠标指向的图片序号
+    linenum: integer; // 窗体显示图片的行数
     titleh: integer;
     popmenupic: integer;
     Timercount: integer;
     imzBufbmp: Tbitmap;
-    bufBmpInitial: boolean;
-    timerdraw: boolean;
+    bufBmpInitial: Boolean;
+    timerdraw: Boolean;
     PNGEditPath: string;
   end;
 
 var
   imzDragInt: integer = -1;
-  IMZDrag: boolean = false;
-
+  IMZDrag: Boolean = false;
 
 implementation
 
@@ -140,19 +135,19 @@ uses
 
 {$R *.dfm}
 
-function TImzForm.GetEditMode: TimzEditMode;
+function TImzForm.GetEditMode: TIMZEditMode;
 begin
-  RadioGroup1.ItemIndex := integer(ImzEditMode);
+  RadioGroup1.ItemIndex := integer(IMZeditMode);
   if RadioGroup1.ItemIndex = 1 then
-    result := zPNGMode
+    result := zPNGmode
   else
-    result := zImzMode;
+    result := zIMZmode;
 end;
 
-procedure TImzForm.SetEditMode(EMode: TimzEditMode);
+procedure TImzForm.SetEditMode(EMode: TIMZEditMode);
 begin
-  ImzEditMode := Emode;
-  RadioGroup1.ItemIndex := Integer(ImzEditMode);
+  IMZeditMode := EMode;
+  RadioGroup1.ItemIndex := integer(IMZeditMode);
 end;
 
 procedure TImzForm.Button10Click(Sender: TObject);
@@ -160,9 +155,9 @@ var
   BeginGrpset, EndGrpset, I, offsetpos, temp, setint: integer;
 begin
   try
-    BeginGrpset := strtoint(edit4.Text);
-    EndGrpset := strtoint(edit5.Text);
-    setint := strtoint(edit7.Text);
+    BeginGrpset := strtoint(Edit4.Text);
+    EndGrpset := strtoint(Edit5.Text);
+    setint := strtoint(Edit7.Text);
   except
     exit;
   end;
@@ -176,123 +171,128 @@ begin
   begin
     if (I < 0) then
       continue;
-    if (I >= Imz.PNGnum) then
+    if (I >= imz.PNGnum) then
       break;
-    case Combobox3.ItemIndex of
-      0: Imz.imzPNG[I].y := setint;
-      1: Imz.imzPNG[I].y := Imz.imzPNG[I].y + setint;
-      2: Imz.imzPNG[I].y := Imz.imzPNG[I].y - setint;
-      3: Imz.imzPNG[I].y := Imz.imzPNG[I].y * setint;
-      4: Imz.imzPNG[I].y := Imz.imzPNG[I].y div setint;
+    case ComboBox3.ItemIndex of
+      0:
+        imz.imzPNG[I].y := setint;
+      1:
+        imz.imzPNG[I].y := imz.imzPNG[I].y + setint;
+      2:
+        imz.imzPNG[I].y := imz.imzPNG[I].y - setint;
+      3:
+        imz.imzPNG[I].y := imz.imzPNG[I].y * setint;
+      4:
+        imz.imzPNG[I].y := imz.imzPNG[I].y div setint;
     end;
   end;
 end;
 
 procedure TImzForm.Button1Click(Sender: TObject);
 var
-  path, dir: string;
+  Path, dir: string;
 begin
-  path := edit1.Text;
-  if path = '' then
-    path := ExtractFilePath(paramstr(0));
-  if path[length(path)] <> '\' then
-    path := path + '\';
-  if SelectDirectory('设置打包目录', dir, path) then
+  Path := Edit1.Text;
+  if Path = '' then
+    Path := ExtractFilePath(paramstr(0));
+  if Path[length(Path)] <> '\' then
+    Path := Path + '\';
+  if SelectDirectory('设置打包目录', dir, Path) then
   begin
-    if path[length(path)] <> '\' then
-      path := path + '\';
+    if Path[length(Path)] <> '\' then
+      Path := Path + '\';
 
-    Edit1.Text := path;
+    Edit1.Text := Path;
   end;
 end;
 
 procedure TImzForm.Button2Click(Sender: TObject);
 var
   Fname: string;
-  path: string;
+  Path: string;
   I, I2, tempint, FH: integer;
   pakimz: Timz;
   ini: Tinifile;
 begin
   indexfile := imzindexfilename;
   try
-    ini := TiniFile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
-    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexFile);
+    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
   end;
-  path := Edit1.Text;
-  if path = '' then
-    path := ExtractFilePath(paramstr(0));
-  if path[length(path)] <> '\' then
-    path := path + '\';
-  if not DirectoryExists(path) then
+  Path := Edit1.Text;
+  if Path = '' then
+    Path := ExtractFilePath(paramstr(0));
+  if Path[length(Path)] <> '\' then
+    Path := Path + '\';
+  if not DirectoryExists(Path) then
   begin
-    //ForceDirectories(path);
+    // ForceDirectories(path);
     showmessage('目录不存在！');
     exit;
   end;
   SaveDialog1.Title := '保存imz文件名';
   SaveDialog1.Filter := '*.imz|*.imz';
-  if Savedialog1.Execute then
+  if SaveDialog1.Execute then
   begin
     Fname := SaveDialog1.filename;
     if not SameText(ExtractFileExt(SaveDialog1.filename), '.imz') then
-      fname := SaveDialog1.filename + '.imz';
-    if not fileexists(path + indexfile) then
+      Fname := SaveDialog1.filename + '.imz';
+    if not fileexists(Path + indexfile) then
     begin
       showmessage('偏移文件不存在！');
       exit;
     end;
 
-    FH := fileopen(path + indexfile, fmopenread);
+    FH := fileopen(Path + indexfile, fmopenread);
     pakimz.PNGnum := fileseek(FH, 0, 2) shr 2;
     fileseek(FH, 0, 0);
-    setlength(Pakimz.imzPNG, Pakimz.PNGnum);
+    setlength(pakimz.imzPNG, pakimz.PNGnum);
     for I := 0 to pakimz.PNGnum - 1 do
     begin
       fileread(FH, pakimz.imzPNG[I].x, 2);
       fileread(FH, pakimz.imzPNG[I].y, 2);
     end;
-    fileclose(Fh);
+    fileclose(FH);
 
     for I := 0 to pakimz.PNGnum - 1 do
     begin
-      if Fileexists(path + inttostr(I) + '.png') then
+      if fileexists(Path + inttostr(I) + '.png') then
       begin
         pakimz.imzPNG[I].frame := 1;
-        setlength(Pakimz.imzPNG[I].framelen, pakimz.imzPNG[I].frame);
-        setlength(Pakimz.imzPNG[I].framedata, pakimz.imzPNG[I].frame);
-        FH := fileopen(path + inttostr(I) + '.png', fmopenread);
-        Pakimz.imzPNG[I].framelen[0] := fileseek(Fh, 0, 2);
-        fileseek(Fh, 0, 0);
-        setlength(Pakimz.imzPNG[I].framedata[0].data, Pakimz.imzPNG[I].framelen[0]);
-        fileread(Fh, Pakimz.imzPNG[I].framedata[0].data[0], Pakimz.imzPNG[I].framelen[0]);
-        fileclose(Fh);
+        setlength(pakimz.imzPNG[I].framelen, pakimz.imzPNG[I].frame);
+        setlength(pakimz.imzPNG[I].framedata, pakimz.imzPNG[I].frame);
+        FH := fileopen(Path + inttostr(I) + '.png', fmopenread);
+        pakimz.imzPNG[I].framelen[0] := fileseek(FH, 0, 2);
+        fileseek(FH, 0, 0);
+        setlength(pakimz.imzPNG[I].framedata[0].data, pakimz.imzPNG[I].framelen[0]);
+        fileread(FH, pakimz.imzPNG[I].framedata[0].data[0], pakimz.imzPNG[I].framelen[0]);
+        fileclose(FH);
       end
       else
       begin
         I2 := 0;
-        while (fileexists(path + inttostr(I) + '_' + inttostr(I2) + '.png')) do
+        while (fileexists(Path + inttostr(I) + '_' + inttostr(I2) + '.png')) do
         begin
           inc(I2);
         end;
         pakimz.imzPNG[I].frame := I2;
-        setlength(Pakimz.imzPNG[I].framelen, pakimz.imzPNG[I].frame);
-        setlength(Pakimz.imzPNG[I].framedata, pakimz.imzPNG[I].frame);
+        setlength(pakimz.imzPNG[I].framelen, pakimz.imzPNG[I].frame);
+        setlength(pakimz.imzPNG[I].framedata, pakimz.imzPNG[I].frame);
         for I2 := 0 to pakimz.imzPNG[I].frame - 1 do
         begin
-          Fh := fileopen(path + inttostr(I) + '_' + inttostr(I2) + '.png', fmopenread);
-          Pakimz.imzPNG[I].framelen[I2] := fileseek(Fh, 0, 2);
-          setlength(Pakimz.imzPNG[I].framedata[I2].data, Pakimz.imzPNG[I].framelen[I2]);
-          fileseek(Fh, 0, 0);
-          fileread(Fh, Pakimz.imzPNG[I].framedata[I2].data[0], Pakimz.imzPNG[I].framelen[I2]);
-          fileclose(Fh);
+          FH := fileopen(Path + inttostr(I) + '_' + inttostr(I2) + '.png', fmopenread);
+          pakimz.imzPNG[I].framelen[I2] := fileseek(FH, 0, 2);
+          setlength(pakimz.imzPNG[I].framedata[I2].data, pakimz.imzPNG[I].framelen[I2]);
+          fileseek(FH, 0, 0);
+          fileread(FH, pakimz.imzPNG[I].framedata[I2].data[0], pakimz.imzPNG[I].framelen[I2]);
+          fileclose(FH);
         end;
       end;
     end;
 
-    SaveImzToFile(@Pakimz, Fname);
+    SaveImzToFile(@pakimz, Fname);
     showmessage('IMZ文件打包成功！');
   end;
 
@@ -300,14 +300,17 @@ end;
 
 procedure TImzForm.Button3Click(Sender: TObject);
 begin
-  opendialog1.FileName := edit2.Text;
-  opendialog1.Filter := '*.imz|*.imz|All files (*.*)|*.*';
-  if opendialog1.Execute then
+  OpenDialog1.filename := Edit2.Text;
+  OpenDialog1.Filter := '*.zip|*.zip|*.imz|*.imz|All files (*.*)|*.*';
+  if OpenDialog1.Execute then
   begin
-    //ImzEditMode := ImzMode;
-    SetEditMode(zImzMode);
-    Edit2.Text := Opendialog1.FileName;
-    Edit1.Text := ExtractFilePath(Opendialog1.FileName);
+    // ImzEditMode := ImzMode;
+    if ExtractFileExt(OpenDialog1.filename) = '.zip' then
+      SetEditMode(zZIPmode)
+    else
+      SetEditMode(zIMZmode);
+    Edit2.Text := OpenDialog1.filename;
+    Edit1.Text := ExtractFilePath(OpenDialog1.filename);
     Button5Click(Sender);
   end;
   SetCurrentDirectory(Pchar(ExtractFilePath(paramstr(0))));
@@ -315,40 +318,40 @@ end;
 
 procedure TImzForm.Button4Click(Sender: TObject);
 var
-  path: string;
+  Path: string;
   I, FH: integer;
 begin
-  if ImzEditMode = zPNGMode then
+  if IMZeditMode = zPNGmode then
   begin
     try
-      FH := Filecreate(PNGEditPath + indexFile);
+      FH := Filecreate(PNGEditPath + indexfile);
       for I := 0 to imz.PNGnum - 1 do
-      begin  
+      begin
         filewrite(FH, imz.imzPNG[I].x, 2);
         filewrite(FH, imz.imzPNG[I].y, 2);
       end;
     finally
-      Fileclose(FH);
+      fileclose(FH);
     end;
   end
   else
   begin
-    if edit2.Text = '' then
+    if Edit2.Text = '' then
     begin
       showmessage('保存的文件名无效！');
       exit;
     end;
-    path := ExtractFilePath(edit2.Text);
-    if path <> '' then
+    Path := ExtractFilePath(Edit2.Text);
+    if Path <> '' then
     begin
-      if not DirectoryExists(path) then
+      if not DirectoryExists(Path) then
       begin
         if ExtractFileDrive(Edit2.Text) = '' then
         begin
-          edit2.Text := ExtractFilePath(paramstr(0)) + Edit2.Text;
+          Edit2.Text := ExtractFilePath(paramstr(0)) + Edit2.Text;
         end
         else
-          ForceDirectories(ExtractFilePath(edit2.Text));
+          ForceDirectories(ExtractFilePath(Edit2.Text));
       end;
     end
     else
@@ -356,7 +359,7 @@ begin
       Edit2.Text := ExtractFilePath(paramstr(0)) + Edit2.Text;
     end;
 
-    saveimztoFile(@imz, edit2.Text);
+    SaveImzToFile(@imz, Edit2.Text);
   end;
 end;
 
@@ -366,22 +369,22 @@ begin
   firstpicnum := 0;
   nowpic := -1;
   linenum := 0;
-  if ImzEditMode = zImzMode then
+  if IMZeditMode = zIMZmode then
     ReadImzFromFile(@imz, Edit2.Text)
   else
   begin
     InitialImzFromPath(@imz, Edit2.Text);
   end;
   if imz.PNGnum mod linepicnum = 0 then
-    scrollbar1.Max := max(imz.PNGnum div linepicnum - 1, 0)
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum - 1, 0)
   else
-    scrollbar1.Max := imz.PNGnum div linepicnum;
-  scrollbar1.Position := 0;
-  timercount := 0;
+    ScrollBar1.Max := imz.PNGnum div linepicnum;
+  ScrollBar1.Position := 0;
+  Timercount := 0;
   DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
 end;
@@ -394,30 +397,30 @@ var
 begin
   indexfile := imzindexfilename;
   try
-    ini := TiniFIle.Create(ExtractFilePath(paramstr(0)) + iniFileName);
-    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexFile);
+    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
   end;
-  tpath := path;
-  if tPath = '' then
+  tpath := Path;
+  if tpath = '' then
     tpath := ExtractFilePath(paramstr(0));
-  if tPath[length(tpath)] <> '\' then
+  if tpath[length(tpath)] <> '\' then
     tpath := tpath + '\';
   try
-    if not Fileexists(tpath + indexFile) then
+    if not fileexists(tpath + indexfile) then
     begin
-      SetEditMode(zImzMode);
-      //ImzEditMode := ImzMode;
+      SetEditMode(zIMZmode);
+      // ImzEditMode := ImzMode;
       tempimz.PNGnum := 0;
-      showmessage('索引文件:' + tpath + indexFile + '不存在！');
+      showmessage('索引文件:' + tpath + indexfile + '不存在！');
       exit;
     end;
-    
-    FH := Fileopen(tpath + indexFile, fmopenread);
-    tempimz.PNGnum := Fileseek(FH, 0, 2) shr 2;
 
-    Fileseek(FH, 0, 0);
+    FH := fileopen(tpath + indexfile, fmopenread);
+    tempimz.PNGnum := fileseek(FH, 0, 2) shr 2;
+
+    fileseek(FH, 0, 0);
     setlength(tempimz.imzPNG, tempimz.PNGnum);
     for I := 0 to tempimz.PNGnum - 1 do
     begin
@@ -425,7 +428,7 @@ begin
       fileread(FH, tempimz.imzPNG[I].y, 2);
     end;
   finally
-    Fileclose(FH);
+    fileclose(FH);
   end;
 
   PNGEditPath := Path;
@@ -434,21 +437,23 @@ end;
 
 procedure TImzForm.Button6Click(Sender: TObject);
 var
-  path, dir: string;
+  Path, dir: string;
+  outdir: TArray<string>;
 begin
-  path := ExtractFilePath(edit2.Text);
-  if path = '' then
-    path := ExtractFilePath(paramstr(0));
-  if path[length(path)] <> '\' then
-    path := path + '\';
-  if SelectDirectory('读取PNG目录', dir, path) then
+  Path := ExtractFilePath(Edit2.Text);
+  if Path = '' then
+    Path := ExtractFilePath(paramstr(0));
+  if Path[length(Path)] <> '\' then
+    Path := Path + '\';
+  if SelectDirectory(Path, outdir) then
   begin
-    //ImzEditMode := PNGMode;
-    SetEditMode(zPNGMode);
-    if path[length(path)] <> '\' then
-      path := path + '\';
-    Edit2.Text := path;
-    Edit1.Text := path;
+    Path := outdir[0];
+    // ImzEditMode := PNGMode;
+    SetEditMode(zPNGmode);
+    if Path[length(Path)] <> '\' then
+      Path := Path + '\';
+    Edit2.Text := Path;
+    Edit1.Text := Path;
     Button5.Click;
   end;
 end;
@@ -461,7 +466,7 @@ var
   ini: Tinifile;
 begin
 
-  if IMZEditMode = zPNGmode then
+  if IMZeditMode = zPNGmode then
   begin
     showmessage('解包不支持文件夹编辑模式，只可以在IMZ文件编辑模式中使用！');
     exit;
@@ -469,8 +474,8 @@ begin
 
   indexfile := imzindexfilename;
   try
-    ini := TiniFile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
-    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexFile);
+    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
   end;
@@ -478,25 +483,25 @@ begin
   if imz.PNGnum <= 0 then
     exit;
 
-  dir := edit1.Text;
+  dir := Edit1.Text;
   if dir = '' then
     dir := ExtractFilePath(paramstr(0));
 
   if dir[length(dir)] <> '\' then
-    dir :=dir + '\';
+    dir := dir + '\';
 
   if not DirectoryExists(dir) then
-      ForceDirectories(dir);
+    ForceDirectories(dir);
 
   try
-    FH := Filecreate(dir + indexFile);
+    FH := Filecreate(dir + indexfile);
     for I1 := 0 to imz.PNGnum - 1 do
     begin
       filewrite(FH, imz.imzPNG[I1].x, 2);
       filewrite(FH, imz.imzPNG[I1].y, 2);
     end;
   finally
-    Fileclose(FH);
+    fileclose(FH);
   end;
 
   for I1 := 0 to imz.PNGnum - 1 do
@@ -509,7 +514,7 @@ begin
           FH := Filecreate(dir + inttostr(I1) + '.png');
           filewrite(FH, imz.imzPNG[I1].framedata[0].data[0], imz.imzPNG[I1].framelen[0]);
         finally
-          Fileclose(FH);
+          fileclose(FH);
         end;
       end;
     end
@@ -522,7 +527,7 @@ begin
             FH := Filecreate(dir + inttostr(I1) + '_' + inttostr(I2) + '.png');
             filewrite(FH, imz.imzPNG[I1].framedata[I2].data[0], imz.imzPNG[I1].framelen[I2]);
           finally
-            Fileclose(FH);
+            fileclose(FH);
           end;
         end;
     end;
@@ -535,9 +540,9 @@ var
   BeginGrpset, EndGrpset, I, offsetpos, temp, setint: integer;
 begin
   try
-    BeginGrpset := strtoint(edit4.Text);
-    EndGrpset := strtoint(edit5.Text);
-    setint := strtoint(edit6.Text);
+    BeginGrpset := strtoint(Edit4.Text);
+    EndGrpset := strtoint(Edit5.Text);
+    setint := strtoint(Edit6.Text);
   except
     exit;
   end;
@@ -551,14 +556,19 @@ begin
   begin
     if (I < 0) then
       continue;
-    if (I >= Imz.PNGnum) then
+    if (I >= imz.PNGnum) then
       break;
-    case Combobox3.ItemIndex of
-      0: Imz.imzPNG[I].x := setint;
-      1: Imz.imzPNG[I].x := Imz.imzPNG[I].x + setint;
-      2: Imz.imzPNG[I].x := Imz.imzPNG[I].x - setint;
-      3: Imz.imzPNG[I].x := Imz.imzPNG[I].x * setint;
-      4: Imz.imzPNG[I].x := Imz.imzPNG[I].x div setint;
+    case ComboBox3.ItemIndex of
+      0:
+        imz.imzPNG[I].x := setint;
+      1:
+        imz.imzPNG[I].x := imz.imzPNG[I].x + setint;
+      2:
+        imz.imzPNG[I].x := imz.imzPNG[I].x - setint;
+      3:
+        imz.imzPNG[I].x := imz.imzPNG[I].x * setint;
+      4:
+        imz.imzPNG[I].x := imz.imzPNG[I].x div setint;
     end;
   end;
 end;
@@ -575,17 +585,17 @@ var
 begin
   //
   imzBufbmp.Canvas.Lock;
-  imzBufbmp.Canvas.Brush.Color := BackCol;
+  imzBufbmp.Canvas.Brush.Color := backcol;
   imzBufbmp.Canvas.Brush.Style := bssolid;
-  imzBufbmp.Canvas.FillRect(image1.Canvas.ClipRect);
+  imzBufbmp.Canvas.FillRect(Image1.Canvas.ClipRect);
   imzBufbmp.Canvas.Font.Color := squarecol;
   imzBufbmp.Canvas.Brush.Style := bsclear;
-  imzBufbmp.Canvas.Unlock;
-  {image1.Canvas.Brush.Color := BackCol;
-  image1.Canvas.Brush.Style := bssolid;
-  image1.Canvas.FillRect(image1.Canvas.ClipRect);
-  image1.Canvas.Font.Color := squarecol;
-  image1.Canvas.Brush.Style := bsclear;}
+  imzBufbmp.Canvas.UnLock;
+  { image1.Canvas.Brush.Color := BackCol;
+    image1.Canvas.Brush.Style := bssolid;
+    image1.Canvas.FillRect(image1.Canvas.ClipRect);
+    image1.Canvas.Font.Color := squarecol;
+    image1.Canvas.Brush.Style := bsclear; }
   linenum := 0;
   ix := 0;
   iy := 0;
@@ -600,62 +610,62 @@ begin
     end;
     linenum := iy;
     if h >= imzBufbmp.Height then
-    //if h >= image1.Height then
+      // if h >= image1.Height then
       break;
 
-    if ImzEditMode = zPNGMode then
+    if IMZeditMode = zPNGmode then
     begin
       imz.imzPNG[I].frame := 0;
-      if Fileexists(PNGEditPath + inttostr(I) + '.png') then
+      if fileexists(PNGEditPath + inttostr(I) + '.png') then
       begin
         imz.imzPNG[I].frame := 1;
-        setlength(Imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
-        setlength(Imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
+        setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
+        setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
         try
-          FH := Fileopen(PNGEditPath + inttostr(I) + '.png', fmopenread);
-          Imz.imzPNG[I].framelen[0] := fileseek(FH, 0, 2);
+          FH := fileopen(PNGEditPath + inttostr(I) + '.png', fmopenread);
+          imz.imzPNG[I].framelen[0] := fileseek(FH, 0, 2);
           fileseek(FH, 0, 0);
-          setlength(Imz.imzPNG[I].framedata[0].data, Imz.imzPNG[I].framelen[0]);
-          fileread(FH, Imz.imzPNG[I].framedata[0].data[0], Imz.imzPNG[I].framelen[0]);
+          setlength(imz.imzPNG[I].framedata[0].data, imz.imzPNG[I].framelen[0]);
+          fileread(FH, imz.imzPNG[I].framedata[0].data[0], imz.imzPNG[I].framelen[0]);
         finally
-          Fileclose(FH);
+          fileclose(FH);
         end;
       end
       else
       begin
-        i2 := 0;
-        while (Fileexists(PNGEditPath + inttostr(I) + '_' + inttostr(i2) + '.png')) do
-          inc(i2);
-        imz.imzPNG[I].frame := i2;
-        setlength(Imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
-        setlength(Imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
+        I2 := 0;
+        while (fileexists(PNGEditPath + inttostr(I) + '_' + inttostr(I2) + '.png')) do
+          inc(I2);
+        imz.imzPNG[I].frame := I2;
+        setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
+        setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
         for I2 := 0 to imz.imzPNG[I].frame - 1 do
         begin
           try
-            FH := Fileopen(PNGEditPath + inttostr(I) + '_' + inttostr(i2) + '.png', fmopenread);
-            Imz.imzPNG[I].framelen[I2] := fileseek(FH, 0, 2);
+            FH := fileopen(PNGEditPath + inttostr(I) + '_' + inttostr(I2) + '.png', fmopenread);
+            imz.imzPNG[I].framelen[I2] := fileseek(FH, 0, 2);
             fileseek(FH, 0, 0);
-            setlength(Imz.imzPNG[I].framedata[I2].data, Imz.imzPNG[I].framelen[I2]);
-            fileread(FH, Imz.imzPNG[I].framedata[I2].data[0], Imz.imzPNG[I].framelen[I2]);
+            setlength(imz.imzPNG[I].framedata[I2].data, imz.imzPNG[I].framelen[I2]);
+            fileread(FH, imz.imzPNG[I].framedata[I2].data[0], imz.imzPNG[I].framelen[I2]);
           finally
-            Fileclose(FH);
+            fileclose(FH);
           end;
         end;
       end;
 
-      {try
+      { try
         FH := Fileopen(PNGEditPath + indexFile, fmopenread);
         fileseek(FH, I shl 2, 0);
         fileread(FH, Imz.imzPNG[I].x, 2);
         fileread(FH, Imz.imzPNG[I].y, 2);
-      finally
+        finally
         Fileclose(FH);
-      end; }
+        end; }
 
     end;
 
     if imz.imzPNG[I].frame > 1 then
-      count := timercount mod imz.imzPNG[I].frame
+      count := Timercount mod imz.imzPNG[I].frame
     else
       count := 0;
     DrawimzPNGtoImage(@imz.imzPNG[I], count, ix * squareW, iy * squareH + titleh);
@@ -663,62 +673,61 @@ begin
     imzBufbmp.Canvas.Lock;
     imzBufbmp.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     imzBufbmp.Canvas.UnLock;
-    //image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
+    // image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     inc(ix);
   end;
-  Scrollbar1.LargeChange := max(1, linenum - 1);
+  ScrollBar1.LargeChange := Max(1, linenum - 1);
 end;
 
 procedure TImzForm.DrawimzPNGtoImage(imzPNG: PimzPNG; count, x, y: integer);
 var
-  PNG :TpngObject;
+  PNG: TpngObject;
   temprs: Tmemorystream;
   rh, rw: integer;
-  //sourcedata: pByteArray;
+  // sourcedata: pByteArray;
 begin
   //
   if imzPNG.frame <= 0 then
     exit;
   try
-  try
-    PNG := TPNGObject.Create;
-    temprs := Tmemorystream.Create;
-    temprs.SetSize(imzPNG.framelen[count]);
-    temprs.Position := 0;
-    temprs.Write(imzPNG.framedata[Count].data[0], imzPNG.framelen[count]);
-    temprs.Position := 0;
+    try
+      PNG := TpngObject.Create;
+      temprs := Tmemorystream.Create;
+      temprs.SetSize(imzPNG.framelen[count]);
+      temprs.Position := 0;
+      temprs.Write(imzPNG.framedata[count].data[0], imzPNG.framelen[count]);
+      temprs.Position := 0;
 
-
-    PNG.LoadFromStream(temprs);
-    if (PNG.Width > 0) and (PNG.Height > 0) then
-    begin
-      if (PNG.Height <= squareh - titleh) and (PNG.Width <= squarew) then
+      PNG.LoadFromStream(temprs);
+      if (PNG.Width > 0) and (PNG.Height > 0) then
       begin
-        rw := PNG.Width;
-        rh := PNG.Height;
-      end
-      else
-      begin
-        if ((PNG.Width / squarew) > (PNG.Height / (squareh - titleh))) then
+        if (PNG.Height <= squareH - titleh) and (PNG.Width <= squareW) then
         begin
-          rw := squarew;
-          rh := max(Round(PNG.Height / (PNG.Width / squarew)), 1);
+          rw := PNG.Width;
+          rh := PNG.Height;
         end
         else
         begin
-          rw := max(Round(PNG.Width / (PNG.Height / (squareh - titleh))), 1);
-          rh := squareh - titleh;
+          if ((PNG.Width / squareW) > (PNG.Height / (squareH - titleh))) then
+          begin
+            rw := squareW;
+            rh := Max(Round(PNG.Height / (PNG.Width / squareW)), 1);
+          end
+          else
+          begin
+            rw := Max(Round(PNG.Width / (PNG.Height / (squareH - titleh))), 1);
+            rh := squareH - titleh;
+          end;
         end;
+        PNG.Draw(imzBufbmp.Canvas, Rect(x, y, x + rw, y + rh));
       end;
-      PNG.Draw(imzBufbmp.Canvas, Rect(x, y, x + rw, y + rh));
-    end;
-  except
+    except
 
-  end;
-    //imzBufbmp.Canvas.CopyRect(Rect(x, y, x + rw, y + rh), PNG.Canvas, PNG.Canvas.ClipRect);
+    end;
+    // imzBufbmp.Canvas.CopyRect(Rect(x, y, x + rw, y + rh), PNG.Canvas, PNG.Canvas.ClipRect);
   finally
     PNG.Destroy;
-    //PNG.Free;
+    // PNG.Free;
     temprs.Free;
   end;
 end;
@@ -759,45 +768,45 @@ end;
 
 procedure TImzForm.CheckBox1Click(Sender: TObject);
 begin
-  if checkbox1.Checked then
+  if CheckBox1.Checked then
   begin
-    timercount := 0;
-    timer1.Enabled := true;
+    Timercount := 0;
+    Timer1.Enabled := true;
     timerdraw := false;
   end
   else
   begin
-    timer1.Enabled := false;
-    timercount := 0;
+    Timer1.Enabled := false;
+    Timercount := 0;
     DrawImz;
     Image1.Canvas.Lock;
     imzBufbmp.Canvas.Lock;
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-    imzBufbmp.Canvas.Unlock;
-    Drawsquare(nowpic mod linepicnum * squarew, nowpic div linepicnum * squareh);
-    Image1.Canvas.Unlock;
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    imzBufbmp.Canvas.UnLock;
+    Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
+    Image1.Canvas.UnLock;
   end;
 end;
 
 procedure TImzForm.RadioGroup1Click(Sender: TObject);
 begin
-  RadioGroup1.ItemIndex := integer(ImzEditMode);
+  RadioGroup1.ItemIndex := integer(IMZeditMode);
 end;
 
-procedure TImzForm.ReadImzFromFile(tempimz: pimz; Fname: string);
+procedure TImzForm.ReadImzFromFile(tempimz: Pimz; Fname: string);
 var
   FH, I, I2, tempint: integer;
   offset, frameoffset: array of integer;
 begin
   //
   try
-    FH := Fileopen(Fname, fmopenread);
+    FH := fileopen(Fname, fmopenread);
     fileread(FH, tempimz.PNGnum, 4);
     if tempimz.PNGnum < 0 then
       tempimz.PNGnum := 0;
     if tempimz.PNGnum > 0 then
     begin
-      setlength(Offset, tempimz.PNGnum);
+      setlength(offset, tempimz.PNGnum);
       fileread(FH, offset[0], tempimz.PNGnum * 4);
       setlength(tempimz.imzPNG, tempimz.PNGnum);
       for I := 0 to tempimz.PNGnum - 1 do
@@ -852,7 +861,7 @@ begin
     offset[0] := 4 + tempimz.PNGnum * 4;
     for I := 1 to tempimz.PNGnum - 1 do
     begin
-      offset[I] := Offset[I - 1] + tempimz.imzPNG[I - 1].len;
+      offset[I] := offset[I - 1] + tempimz.imzPNG[I - 1].len;
     end;
     filewrite(FH, offset[0], tempimz.PNGnum * 4);
     pos := 4 + tempimz.PNGnum * 4;
@@ -891,18 +900,18 @@ end;
 
 procedure TImzForm.ScrollBar1Change(Sender: TObject);
 var
-  tempbool: boolean;
+  tempbool: Boolean;
 begin
-  tempbool := timer1.Enabled;
-  timer1.Enabled := false;
-  firstpicnum := scrollbar1.Position * linepicnum;
-  drawImz;
+  tempbool := Timer1.Enabled;
+  Timer1.Enabled := false;
+  firstpicnum := ScrollBar1.Position * linepicnum;
+  DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
-  timer1.Enabled := tempbool;
+  Timer1.Enabled := tempbool;
 end;
 
 procedure TImzForm.Timer1Timer(Sender: TObject);
@@ -926,43 +935,42 @@ begin
     end;
     linenum := iy;
     if h >= imzBufbmp.Height then
-    //if h >= image1.Height then
+      // if h >= image1.Height then
       break;
-    imzbufbmp.Canvas.Lock;
+    imzBufbmp.Canvas.Lock;
     if imz.imzPNG[I].frame > 1 then
     begin
-      imzBufbmp.Canvas.Brush.Color := BackCol;
+      imzBufbmp.Canvas.Brush.Color := backcol;
       imzBufbmp.Canvas.Brush.Style := bssolid;
       imzBufbmp.Canvas.FillRect(Rect(ix * squareW, iy * squareH, (ix + 1) * squareW, (iy + 1) * squareH));
 
       imzBufbmp.Canvas.Font.Color := squarecol;
       imzBufbmp.Canvas.Brush.Style := bsclear;
 
-
-      count := timercount mod imz.imzPNG[I].frame;
+      count := Timercount mod imz.imzPNG[I].frame;
       DrawimzPNGtoImage(@imz.imzPNG[I], count, ix * squareW, iy * squareH + titleh);
       imzBufbmp.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     end;
 
-    //image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
+    // image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     inc(ix);
   end;
 
-  image1.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  imzbufbmp.Canvas.Unlock;
+  Image1.Canvas.Lock;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  imzBufbmp.Canvas.UnLock;
   if nowpic >= 0 then
-    Drawsquare(nowpic mod linepicnum * squarew, nowpic div linepicnum * squareh);
-  image1.Canvas.Unlock;
+    Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
+  Image1.Canvas.UnLock;
   timerdraw := false;
 end;
 
 procedure TImzForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  action := cafree;
-  IMZcopypng.frame := 0;
-  setlength(IMZcopypng.framelen, 0);
-  setlength(IMZcopypng.framedata, 0);
+  Action := cafree;
+  IMZCopyPNG.frame := 0;
+  setlength(IMZCopyPNG.framelen, 0);
+  setlength(IMZCopyPNG.framedata, 0);
 
   CFormIMZ := true;
 
@@ -976,7 +984,7 @@ begin
   IMZcanCopyPNG := false;
   timerdraw := false;
   imzBufbmp := Tbitmap.Create;
-  IMZEditMode := zImzMode;
+  IMZeditMode := zIMZmode;
   PNGEditPath := '';
   bufBmpInitial := true;
   Timercount := 0;
@@ -984,68 +992,65 @@ begin
   linepicnum := 10;
   backcol := clwhite;
   squarecol := clred;
-  squareW := image1.Width div linepicnum;
+  squareW := Image1.Width div linepicnum;
   squareH := 100;
   titleh := 10;
   firstpicnum := 0;
   nowpic := -1;
   linenum := 0;
   imz.PNGnum := 0;
-  imzBufbmp.Width := image1.Width;
-  imzBufbmp.Height := image1.Height;
+  imzBufbmp.Width := Image1.Width;
+  imzBufbmp.Height := Image1.Height;
 
-  timercount := 0;
-  timer1.Enabled := true;
+  Timercount := 0;
+  Timer1.Enabled := true;
   timerdraw := false;
 
-  Checkbox1.Checked := timer1.Enabled;
+  CheckBox1.Checked := Timer1.Enabled;
 
-  //self.Width := self.Constraints.MinWidth;
-  //self.Height := self.Constraints.MinHeight;
+  // self.Width := self.Constraints.MinWidth;
+  // self.Height := self.Constraints.MinHeight;
 end;
 
-procedure TImzForm.FormMouseWheelDown(Sender: TObject; Shift: TShiftState;
-  MousePos: TPoint; var Handled: Boolean);
+procedure TImzForm.FormMouseWheelDown(Sender: TObject; Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
 begin
-  scrollbar1.Position := scrollbar1.Position + 1;
+  ScrollBar1.Position := ScrollBar1.Position + 1;
 end;
 
-procedure TImzForm.FormMouseWheelUp(Sender: TObject; Shift: TShiftState;
-  MousePos: TPoint; var Handled: Boolean);
+procedure TImzForm.FormMouseWheelUp(Sender: TObject; Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
 begin
-  scrollbar1.Position := scrollbar1.Position - 1;
+  ScrollBar1.Position := ScrollBar1.Position - 1;
 end;
 
 procedure TImzForm.FormResize(Sender: TObject);
 begin
   try
-  image1.Picture.Bitmap.Width := image1.Width;
-  image1.Picture.Bitmap.Height := image1.Height;
-  imzBufbmp.Width := image1.Width;
-  imzBufbmp.Height := image1.Height;
-  squareW := image1.Width div linepicnum;
-  DrawImz;
-  Image1.Canvas.Lock;
-  imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  Image1.Canvas.UnLock;
-  imzBufbmp.Canvas.UnLock;
+    Image1.Picture.Bitmap.Width := Image1.Width;
+    Image1.Picture.Bitmap.Height := Image1.Height;
+    imzBufbmp.Width := Image1.Width;
+    imzBufbmp.Height := Image1.Height;
+    squareW := Image1.Width div linepicnum;
+    DrawImz;
+    Image1.Canvas.Lock;
+    imzBufbmp.Canvas.Lock;
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    Image1.Canvas.UnLock;
+    imzBufbmp.Canvas.UnLock;
   except
 
   end;
 end;
 
-procedure TImzForm.Image1EndDrag(Sender, Target: TObject; X, Y: Integer);
+procedure TImzForm.Image1EndDrag(Sender, Target: TObject; x, y: integer);
 begin
   IMZDrag := false;
 end;
 
-procedure TImzForm.Image1MouseDown(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+procedure TImzForm.Image1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; x, y: integer);
 begin
-  if (button = mbLeft) and (nowpic + firstpicnum < imz.pngnum{filenum}) and (nowpic >= 0) then
+  if (Button = mbLeft) and (nowpic + firstpicnum < imz.PNGnum { filenum } ) and (nowpic >= 0) then
   begin
-    image1.BeginDrag(true);
+    Image1.BeginDrag(true);
   end;
 end;
 
@@ -1054,40 +1059,39 @@ begin
   nowpic := -1;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
 end;
 
-procedure TImzForm.Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
+procedure TImzForm.Image1MouseMove(Sender: TObject; Shift: TShiftState; x, y: integer);
 var
   tempint: integer;
 begin
-  if ((x div squarew) >= linepicnum) then
+  if ((x div squareW) >= linepicnum) then
     tempint := -1
   else
-    tempint := x div squarew + y div squareh * linepicnum;
+    tempint := x div squareW + y div squareH * linepicnum;
   if tempint <> nowpic then
   begin
     nowpic := tempint;
-    //DrawImz;
+    // DrawImz;
     imzBufbmp.Canvas.Lock;
-    image1.Canvas.Lock;
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-    imzBufbmp.Canvas.Unlock;
-    Drawsquare(nowpic mod linepicnum * squarew, nowpic div linepicnum * squareh);
-    image1.Canvas.Unlock;
+    Image1.Canvas.Lock;
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    imzBufbmp.Canvas.UnLock;
+    Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
+    Image1.Canvas.UnLock;
   end;
 end;
 
-procedure TImzForm.Image1MouseUp(Sender: TObject; Button: TMouseButton;
-  Shift: TShiftState; X, Y: Integer);
+procedure TImzForm.Image1MouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; x, y: integer);
 var
   mpos: TPoint;
 begin
   if (Button = mbRight) then
   begin
-    if ImzEditMode = zImzMode then
+    if IMZeditMode = zIMZmode then
     begin
       if (nowpic >= 0) and (nowpic + firstpicnum < imz.PNGnum) then
       begin
@@ -1140,18 +1144,17 @@ begin
     end;
     popmenupic := nowpic + firstpicnum;
     getcursorpos(mpos);
-    popupmenu1.Popup(mpos.X, mpos.Y);
+    PopupMenu1.Popup(mpos.x, mpos.y);
   end;
 end;
 
-procedure TImzForm.Image1StartDrag(Sender: TObject;
-  var DragObject: TDragObject);
+procedure TImzForm.Image1StartDrag(Sender: TObject; var DragObject: TDragObject);
 begin
   if nowpic >= 0 then
-    imzdragint := nowpic + firstpicnum
+    imzDragInt := nowpic + firstpicnum
   else
-    imzDragint := -1;
-  imzDrag := true;
+    imzDragInt := -1;
+  IMZDrag := true;
 end;
 
 procedure TImzForm.N1Click(Sender: TObject);
@@ -1161,26 +1164,26 @@ begin
   //
   ImzPNGeditForm := TImzPNGeditForm.Create(Application);
   ImzPNGeditForm.imzPNG := @imz.imzPNG[popmenupic];
-  ImzPNGeditForm.Initial(ImzEditMode);
+  ImzPNGeditForm.Initial(IMZeditMode);
   ImzPNGeditForm.ShowModal;
   ImzPNGeditForm.Free;
   DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
 end;
 
 procedure TImzForm.N2Click(Sender: TObject);
 var
-  I, Fh: integer;
+  I, FH: integer;
 begin
-  opendialog1.FileName := '';
-  opendialog1.Filter := '*.png|*.png|All files (*.*)|*.*';
-  if opendialog1.Execute then
+  OpenDialog1.filename := '';
+  OpenDialog1.Filter := '*.png|*.png|All files (*.*)|*.*';
+  if OpenDialog1.Execute then
   begin
-    if fileexists(opendialog1.FileName) then
+    if fileexists(OpenDialog1.filename) then
     begin
       if imz.PNGnum < 0 then
         imz.PNGnum := 0;
@@ -1188,7 +1191,7 @@ begin
       setlength(imz.imzPNG, imz.PNGnum);
       for I := imz.PNGnum - 2 downto popmenupic do
       begin
-        copyimzPNG(@imz.imzPNG[I + 1], @imz.imzPNG[I]);
+        CopyImzPNG(@imz.imzPNG[I + 1], @imz.imzPNG[I]);
       end;
 
       imz.imzPNG[popmenupic].len := 0;
@@ -1197,22 +1200,22 @@ begin
       imz.imzPNG[popmenupic].frame := 1;
       setlength(imz.imzPNG[popmenupic].framelen, imz.imzPNG[popmenupic].frame);
       setlength(imz.imzPNG[popmenupic].framedata, imz.imzPNG[popmenupic].frame);
-      FH := fileopen(opendialog1.FileName, fmopenread);
+      FH := fileopen(OpenDialog1.filename, fmopenread);
       imz.imzPNG[popmenupic].framelen[0] := fileseek(FH, 0, 2);
       fileseek(FH, 0, 0);
       setlength(imz.imzPNG[popmenupic].framedata[0].data, imz.imzPNG[popmenupic].framelen[0]);
       fileread(FH, imz.imzPNG[popmenupic].framedata[0].data[0], imz.imzPNG[popmenupic].framelen[0]);
-      Fileclose(FH);
+      fileclose(FH);
 
       imz.imzPNG[popmenupic].len := 2 * 2 + 4 + imz.imzPNG[popmenupic].frame * 2 * 4 + imz.imzPNG[popmenupic].framelen[0];
       if imz.PNGnum mod linepicnum = 0 then
-        scrollbar1.Max := imz.PNGnum div linepicnum - 1
+        ScrollBar1.Max := imz.PNGnum div linepicnum - 1
       else
-        scrollbar1.Max := imz.PNGnum div linepicnum;
-      Drawimz;
+        ScrollBar1.Max := imz.PNGnum div linepicnum;
+      DrawImz;
       Image1.Canvas.Lock;
       imzBufbmp.Canvas.Lock;
-      image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+      Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
       Image1.Canvas.UnLock;
       imzBufbmp.Canvas.UnLock;
       nowpic := -1;
@@ -1226,17 +1229,17 @@ var
 begin
   for I := popmenupic to imz.PNGnum - 2 do
   begin
-    copyImzPNG(@imz.imzPNG[I], @Imz.imzPNG[I + 1]);
+    CopyImzPNG(@imz.imzPNG[I], @imz.imzPNG[I + 1]);
   end;
   dec(imz.PNGnum);
   if imz.PNGnum mod linepicnum = 0 then
-    scrollbar1.Max := max(imz.PNGnum div linepicnum - 1, 0)
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum - 1, 0)
   else
-    scrollbar1.Max := max(imz.PNGnum div linepicnum, 0);
-  Drawimz;
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum, 0);
+  DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
   nowpic := -1;
@@ -1244,9 +1247,9 @@ end;
 
 procedure TImzForm.N4Click(Sender: TObject);
 var
-  I, Fh: integer;
+  I, FH: integer;
 begin
-  if ImzEditMode = zPNGMode then
+  if IMZeditMode = zPNGmode then
   begin
     inc(imz.PNGnum);
     setlength(imz.imzPNG, imz.PNGnum);
@@ -1254,22 +1257,22 @@ begin
     imz.imzPNG[imz.PNGnum - 1].x := 0;
     imz.imzPNG[imz.PNGnum - 1].y := 0;
     if imz.PNGnum mod linepicnum = 0 then
-      scrollbar1.Max := imz.PNGnum div linepicnum - 1
+      ScrollBar1.Max := imz.PNGnum div linepicnum - 1
     else
-      scrollbar1.Max := imz.PNGnum div linepicnum;
-    Drawimz;
+      ScrollBar1.Max := imz.PNGnum div linepicnum;
+    DrawImz;
     Image1.Canvas.Lock;
     imzBufbmp.Canvas.Lock;
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
     Image1.Canvas.UnLock;
     imzBufbmp.Canvas.UnLock;
     nowpic := -1;
   end;
-  opendialog1.FileName := '';
-  opendialog1.Filter := '*.png|*.png|All files (*.*)|*.*';
-  if opendialog1.Execute then
+  OpenDialog1.filename := '';
+  OpenDialog1.Filter := '*.png|*.png|All files (*.*)|*.*';
+  if OpenDialog1.Execute then
   begin
-    if fileexists(opendialog1.FileName) then
+    if fileexists(OpenDialog1.filename) then
     begin
       if imz.PNGnum < 0 then
         imz.PNGnum := 0;
@@ -1281,22 +1284,22 @@ begin
       imz.imzPNG[imz.PNGnum - 1].frame := 1;
       setlength(imz.imzPNG[imz.PNGnum - 1].framelen, imz.imzPNG[imz.PNGnum - 1].frame);
       setlength(imz.imzPNG[imz.PNGnum - 1].framedata, imz.imzPNG[imz.PNGnum - 1].frame);
-      FH := fileopen(opendialog1.FileName, fmopenread);
+      FH := fileopen(OpenDialog1.filename, fmopenread);
       imz.imzPNG[imz.PNGnum - 1].framelen[0] := fileseek(FH, 0, 2);
       fileseek(FH, 0, 0);
       setlength(imz.imzPNG[imz.PNGnum - 1].framedata[0].data, imz.imzPNG[imz.PNGnum - 1].framelen[0]);
       fileread(FH, imz.imzPNG[imz.PNGnum - 1].framedata[0].data[0], imz.imzPNG[imz.PNGnum - 1].framelen[0]);
-      Fileclose(FH);
+      fileclose(FH);
 
       imz.imzPNG[imz.PNGnum - 1].len := 2 * 2 + 4 + imz.imzPNG[imz.PNGnum - 1].frame * 2 * 4 + imz.imzPNG[imz.PNGnum - 1].framelen[0];
       if imz.PNGnum mod linepicnum = 0 then
-        scrollbar1.Max := imz.PNGnum div linepicnum - 1
+        ScrollBar1.Max := imz.PNGnum div linepicnum - 1
       else
-        scrollbar1.Max := imz.PNGnum div linepicnum;
-      Drawimz;
+        ScrollBar1.Max := imz.PNGnum div linepicnum;
+      DrawImz;
       Image1.Canvas.Lock;
       imzBufbmp.Canvas.Lock;
-      image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+      Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
       Image1.Canvas.UnLock;
       imzBufbmp.Canvas.UnLock;
       nowpic := -1;
@@ -1312,13 +1315,13 @@ begin
     imz.PNGnum := 0;
   setlength(imz.imzPNG, imz.PNGnum);
   if imz.PNGnum mod linepicnum = 0 then
-    scrollbar1.Max := max(imz.PNGnum div linepicnum - 1, 0)
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum - 1, 0)
   else
-    scrollbar1.Max := max(imz.PNGnum div linepicnum, 0);
-  Drawimz;
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum, 0);
+  DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
   nowpic := -1;
@@ -1329,25 +1332,25 @@ procedure TImzForm.N6Click(Sender: TObject);
 var
   FormH, temphandle: cardinal;
   tempdata: array of byte;
-  tempquit: boolean;
+  tempquit: Boolean;
   tempbuf: TCopyDataStruct;
   tempchar: PByte;
   tempsize, I, I2: integer;
 begin
   if (popmenupic < 0) or (popmenupic >= imz.PNGnum) then
     exit;
-  CopyImzPNG(@imzcopypng, @imz.imzPNG[popmenupic]);
+  CopyImzPNG(@IMZCopyPNG, @imz.imzPNG[popmenupic]);
   IMZcanCopyPNG := true;
 
-  //复制到其他正在运行的UPedit
+  // 复制到其他正在运行的UPedit
   temphandle := 0;
   tempquit := true;
 
   tempsize := 12;
-  for I := 0 to imzcopypng.frame - 1 do
+  for I := 0 to IMZCopyPNG.frame - 1 do
   begin
-    if imzcopypng.framelen[I] > 0 then
-      inc(tempsize, imzcopypng.framelen[I]);
+    if IMZCopyPNG.framelen[I] > 0 then
+      inc(tempsize, IMZCopyPNG.framelen[I]);
     inc(tempsize, 4);
   end;
 
@@ -1358,20 +1361,20 @@ begin
   PAnsiChar(@tempdata[2])^ := 'Z';
   tempdata[3] := 255;
 
-  PInteger(@tempdata[4])^ := imzcopypng.len;
-  PSmallint(@tempdata[8])^ := imzcopypng.x;
-  PSmallint(@tempdata[10])^ := imzcopypng.y;
-  PInteger(@tempdata[12])^ := imzcopypng.frame;
+  PInteger(@tempdata[4])^ := IMZCopyPNG.len;
+  PSmallint(@tempdata[8])^ := IMZCopyPNG.x;
+  PSmallint(@tempdata[10])^ := IMZCopyPNG.y;
+  PInteger(@tempdata[12])^ := IMZCopyPNG.frame;
 
   I2 := 16;
-  for I := 0 to imzcopypng.frame - 1 do
+  for I := 0 to IMZCopyPNG.frame - 1 do
   begin
-    Pinteger(@tempdata[I2])^ := max(0, imzcopypng.framelen[I]);
+    PInteger(@tempdata[I2])^ := Max(0, IMZCopyPNG.framelen[I]);
     inc(I2, 4);
-    if imzcopypng.framelen[I] > 0 then
+    if IMZCopyPNG.framelen[I] > 0 then
     begin
-      copymemory(@tempdata[I2], @imzcopypng.framedata[I].data[0], imzcopypng.framelen[I]);
-      inc(I2, imzcopypng.framelen[I]);
+      copymemory(@tempdata[I2], @IMZCopyPNG.framedata[I].data[0], IMZCopyPNG.framelen[I]);
+      inc(I2, IMZCopyPNG.framelen[I]);
     end;
   end;
 
@@ -1386,19 +1389,19 @@ begin
   begin
     FormH := 0;
     try
-    FormH := FindWindowEx(0,temphandle, 'TUPeditMainForm', nil);
-    if FormH = 0 then
-    begin
-      tempquit := false;
-    end
-    else
-    begin
-      temphandle := FormH;
-      if FormH <> mainform.Handle then
+      FormH := FindWindowEx(0, temphandle, 'TUPeditMainForm', nil);
+      if FormH = 0 then
       begin
-        sendmessage(Formh, WM_COPYDATA, 0, integer(@tempbuf));
+        tempquit := false;
+      end
+      else
+      begin
+        temphandle := FormH;
+        if FormH <> mainform.Handle then
+        begin
+          sendmessage(FormH, WM_COPYDATA, 0, integer(@tempbuf));
+        end;
       end;
-    end;
     except
 
     end;
@@ -1409,11 +1412,11 @@ end;
 
 procedure TImzForm.N7Click(Sender: TObject);
 begin
-  copyImzPNG(@imz.imzPNG[popmenupic], @imzcopypng);
-  drawIMZ;
+  CopyImzPNG(@imz.imzPNG[popmenupic], @IMZCopyPNG);
+  DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
   nowpic := -1;
@@ -1424,11 +1427,11 @@ var
   imzPNGnum, I: integer;
 begin
   try
-    imzPNGnum := Strtoint(inputbox('设置总贴图数', '设置总贴图数', inttostr(Imz.PNGnum)));
+    imzPNGnum := strtoint(inputbox('设置总贴图数', '设置总贴图数', inttostr(imz.PNGnum)));
   except
     exit;
   end;
-  if (imzPNGnum < 0) or (imzPNGnum = Imz.PNGnum) then
+  if (imzPNGnum < 0) or (imzPNGnum = imz.PNGnum) then
     exit;
   if imzPNGnum < imz.PNGnum then
   begin
@@ -1450,13 +1453,13 @@ begin
     imz.PNGnum := imzPNGnum;
   end;
   if imz.PNGnum mod linepicnum = 0 then
-    scrollbar1.Max := max(imz.PNGnum div linepicnum - 1, 0)
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum - 1, 0)
   else
-    scrollbar1.Max := max(imz.PNGnum div linepicnum, 0);
-  Drawimz;
+    ScrollBar1.Max := Max(imz.PNGnum div linepicnum, 0);
+  DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
   Image1.Canvas.UnLock;
   imzBufbmp.Canvas.UnLock;
   nowpic := -1;
@@ -1464,20 +1467,20 @@ end;
 
 procedure TImzForm.Drawsquare(x, y: integer);
 var
-  Ix, iy: integer;
+  ix, iy: integer;
 begin
   //
   iy := y;
-  for Ix := x to x + squarew - 1 do
+  for ix := x to x + squareW - 1 do
   begin
-    image1.Canvas.Pixels[ix, iy] := squarecol;
-    image1.Canvas.Pixels[ix, iy + squareH] := squarecol;
+    Image1.Canvas.Pixels[ix, iy] := squarecol;
+    Image1.Canvas.Pixels[ix, iy + squareH] := squarecol;
   end;
   ix := x;
-  for Iy := y to y + squareh - 1 do
+  for iy := y to y + squareH - 1 do
   begin
-    image1.Canvas.Pixels[ix, iy] := squarecol;
-    image1.Canvas.Pixels[ix + squareW, iy] := squarecol;
+    Image1.Canvas.Pixels[ix, iy] := squarecol;
+    Image1.Canvas.Pixels[ix + squareW, iy] := squarecol;
   end;
 end;
 

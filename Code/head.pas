@@ -498,7 +498,6 @@ begin
   setlength(result, len - 1);
   MultiByteToWideChar(codepage, 0, PAnsiChar(str), length(str), pwidechar(result), len + 1);
   //result := ' ' + result;
-
 end;
 
 //unicode转为多字节, 扩展
@@ -508,8 +507,8 @@ var
   len: integer;
 begin
   len := WideCharToMultiByte(codepage, 0, PWideChar(str), -1, nil, 0, nil, nil);
-  setlength(result, len + 1);
-  WideCharToMultiByte(codepage, 0, PWideChar(str), -1, pAnsichar(result), len + 1, nil, nil);
+  setlength(result, len);
+  WideCharToMultiByte(codepage, 0, PWideChar(str), -1, pAnsichar(result), len, nil, nil);
 end;
 
 function readOutstr(str: Pointer; Len: integer): Widestring;
@@ -604,7 +603,6 @@ begin
       end;
     1:
       begin
-        //tempAnsistring := UnicodeToMulti(Pwidechar(str), 950);
         tempAnsistring := UnicodeToMulti(pwidechar(gb2big(Pwidechar(str))), 950);
         Zeromemory(Data, Len);
         if length(tempAnsiString) > 0 then
@@ -612,18 +610,10 @@ begin
       end;
     3:
       begin
-        //tempAnsistring := UnicodeToMulti(Pwidechar(str), 950);
         tempAnsistring := UnicodeToMulti(pwidechar(str), 65001);
         Zeromemory(Data, Len);
-        len1:=length(tempAnsiString);
-        for i := 1 to length(tempAnsiString) do
-          if tempAnsiString[i]=#0 then
-          begin
-          len1:=i-1;
-          break;
-          end;
-        if len1 > 0 then
-            copymemory(Data, @tempAnsiString[1], min(len1, Len));
+        if length(tempAnsiString) > 0 then
+          copymemory(Data, @tempAnsiString[1], min(length(tempAnsiString), Len));
       end;
     else
       begin
