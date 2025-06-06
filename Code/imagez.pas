@@ -323,7 +323,9 @@ procedure TImzForm.Button4Click(Sender: TObject);
 var
   Path: string;
   I, FH: integer;
-  zip:pzip_t;
+  zip: pzip_t;
+  buf: ansistring;
+  p: psmallint;
 begin
   if IMZeditMode = zPNGmode then
   begin
@@ -340,7 +342,18 @@ begin
   end
   else if IMZeditMode = zZIPmode then
   begin
-    zip:=
+    zip := zip_open(UnicodeToMulti(Pwidechar(Edit2.Text), 65001), ZIP_CREATE);
+    setlength(buf, imz.PNGnum * 4);
+    p := @buf[1];
+    for I := 0 to imz.PNGnum - 1 do
+    begin
+      p^ := imz.imzPNG[I].x;
+      inc(p);
+      p^ := imz.imzPNG[I].y;
+      inc(p);
+    end;
+    zip_compress(zip, 'index.ka', @buf[1], length(buf));
+    zip_close(zip);
   end
   else
   begin

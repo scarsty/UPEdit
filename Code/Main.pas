@@ -519,9 +519,9 @@ begin
     palette := ini.ReadString('file','palette','');
     language := ini.ReadInteger('run','language',0);
     grplistnum := ini.ReadInteger('file','filenumber',0);
-    checkupdate := ini.ReadInteger('run','checkupdate',1);
-    leftcolumn := ini.ReadBool('run','leftcolumn',true);
-    topcolumn := ini.ReadBool('run','topcolumn',true);
+    checkupdate := ini.ReadInteger('run','checkupdate',0);
+    leftcolumn := ini.ReadBool('run','leftcolumn',false);
+    topcolumn := ini.ReadBool('run','topcolumn',false);
 
     GameVersion := ini.ReadInteger('run', 'GameVersion', GameVersion);
     
@@ -1696,7 +1696,7 @@ end;
 
 procedure TUPeditMainForm.bug1Click(Sender: TObject);
 begin
-  ShellExecute(Forms.Application.Handle, nil, 'http://www.upwinded.com/bbs/forum.php' , nil, nil, SW_SHOWNORMAL);
+  //ShellExecute(Forms.Application.Handle, nil, 'http://www.upwinded.com/bbs/forum.php' , nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TUPeditMainForm.bug2Click(Sender: TObject);
@@ -1708,19 +1708,19 @@ procedure TUPeditMainForm.Button1Click(Sender: TObject);
 var
   temprs: TStringStream;
 begin
-  try
+  {try
     temprs := TStringStream.Create;
 
 
-    mainForm.idhttp1.Get('http://www.upwinded.com/upedit/news.txt', temprs);
+    //mainForm.idhttp1.Get('http://www.upwinded.com/upedit/news.txt', temprs);
     temprs.Position := 0;
     Label2.Caption := MultiToUnicode(temprs.Memory, 936);
 
     Webbrowser1.Refresh;
   except
-    Webbrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
+    //Webbrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
   end;
-  temprs.Free;
+  temprs.Free;}
 end;
 
 procedure TUPeditMainForm.FileExit1Execute(Sender: TObject);
@@ -1745,13 +1745,13 @@ begin
   temprs.Clear;
   temprs.Position := 0;
   canlink := 0;
-  try
+  {try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/news.txt', temprs);
     canlink := 1;
   except
 
           canlink := -1;
-  end;
+  end;}
     temprs.Position := 0;
     //anoce := temprs.readString(temprs.Size);
     anoce := MultiToUnicode(temprs.Memory, 936);
@@ -1768,14 +1768,14 @@ begin
   temprs.Clear;
   temprs.Position := 0;
   //showmessage('http创建成功成功');
-  try
+  {try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/upversion.txt', temprs);
   except
         mainForm.idhttp1.Disconnect;
         if checkupdate = 1 then
           Synchronize(checkupdatefail);
         exit;
-  end;
+  end;}
   //showmessage('得到版本号成功');
   temprs.Position := 0;
   MYMD5 := hashmyself;
@@ -1807,7 +1807,7 @@ end;
 
 procedure setwebbrowser;
 begin
-  mainForm.WebBrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
+  //mainForm.WebBrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
 end;
 
 procedure UPcheckUpdate;
