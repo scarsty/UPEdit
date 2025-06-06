@@ -33,7 +33,7 @@ object ImzForm: TImzForm
     Height = 146
     Align = alTop
     TabOrder = 0
-    ExplicitWidth = 821
+    ExplicitWidth = 827
     object GroupBox1: TGroupBox
       Left = 346
       Top = 1
@@ -295,8 +295,8 @@ object ImzForm: TImzForm
     Color = clWhite
     ParentBackground = False
     TabOrder = 1
-    ExplicitWidth = 821
-    ExplicitHeight = 390
+    ExplicitWidth = 827
+    ExplicitHeight = 407
     object Image1: TImage
       Left = 1
       Top = 1
@@ -323,8 +323,8 @@ object ImzForm: TImzForm
       ParentDoubleBuffered = False
       TabOrder = 0
       OnChange = ScrollBar1Change
-      ExplicitLeft = 799
-      ExplicitHeight = 388
+      ExplicitLeft = 805
+      ExplicitHeight = 405
     end
   end
   object OpenDialog1: TOpenDialog

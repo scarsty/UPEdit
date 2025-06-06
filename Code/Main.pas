@@ -132,11 +132,8 @@ type
     procedure IMZ1Click(Sender: TObject);
     procedure BitBtn2Click(Sender: TObject);
     procedure BitBtn3Click(Sender: TObject);
-    procedure WebBrowser1NewWindow2(ASender: TObject; var ppDisp: IDispatch;
-      var Cancel: WordBool);
-    procedure WebBrowser2BeforeNavigate2(ASender: TObject;
-      const pDisp: IDispatch; var URL, Flags, TargetFrameName, PostData,
-      Headers: OleVariant; var Cancel: WordBool);
+    procedure WebBrowser1NewWindow2(ASender: TObject; var ppDisp: IDispatch; var Cancel: WordBool);
+    procedure WebBrowser2BeforeNavigate2(ASender: TObject; const pDisp: IDispatch; var URL, Flags, TargetFrameName, PostData, Headers: OleVariant; var Cancel: WordBool);
     procedure Button1Click(Sender: TObject);
     procedure Label4MouseEnter(Sender: TObject);
     procedure Label4MouseLeave(Sender: TObject);
@@ -154,10 +151,11 @@ type
     { Private declarations }
   public
     { Public declarations }
-    MyThead : TMythead;
-    procedure Onmymessage(var t:TWmCopyData);message WM_COPYDATA;
+    MyThead: TMyThead;
+    procedure Onmymessage(var t: TWmCopyData); message WM_COPYDATA;
 
   end;
+
 procedure UPcheckUpdate;
 procedure displayupdate;
 procedure setwebbrowser;
@@ -166,19 +164,18 @@ procedure ifupdate;
 procedure checkupdatefail;
 procedure AppInitial;
 
-
 var
   MainForm: TUPeditMainForm;
   canlink: integer;
   anoce: string;
   laststate: Twindowstate;
-  mainhide : boolean = false;
-  topcolumn: boolean = true;
-  leftcolumn: boolean = true;
+  mainhide: Boolean = false;
+  topcolumn: Boolean = true;
+  leftcolumn: Boolean = true;
 
-  //侧边栏
-  //m_bNewWindow: boolean = false;
-  //mainwebshow: boolean = false;
+  // 侧边栏
+  // m_bNewWindow: boolean = false;
+  // mainwebshow: boolean = false;
 const
   titlestr: string = 'UPedit Formal Ver 1.xxx';
   Appname: string = 'UPedit Formal';
@@ -190,16 +187,15 @@ implementation
 
 {$R *.dfm}
 
-uses Replicatedlist,takein, about, grplist, picedit, Redit, setlanguage, KDEFedit,
-     warEdit,Update, warmapedit, sencemapedit, Mainmapedit, CYhead, TxtLeadin, FileRelation,
-     Imagez, PNGimport;
-
+uses Replicatedlist, takein, about, grplist, picedit, Redit, setlanguage, KDEFedit,
+  warEdit, Update, warmapedit, sencemapedit, Mainmapedit, CYhead, TxtLeadin, FileRelation,
+  Imagez, PNGimport;
 
 procedure TUPeditMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-{
-  if downloadupdate then
-  begin
+  {
+    if downloadupdate then
+    begin
     AssignFile(DBat, 'UpdateUPedit.bat');
     Rewrite(DBat);
     Writeln(DBat,'@echo off');
@@ -207,20 +203,20 @@ begin
     Writeln(DBat,'del '+ParamStr(0)); //写入删除主程序的命令
     Writeln(DBat,'copy   UPedit.exe.tmp   UPedit.exe');
     Writeln(DBat,'del UPedit.exe.tmp');
-   // Writeln(DBat,'start "" "' + ParamStr(0)+'"');
+    // Writeln(DBat,'start "" "' + ParamStr(0)+'"');
 
     Writeln(DBat,'del %0'); //删除BAT文件自身
     Writeln(DBat,'exit');
     CloseFile(DBat);
     application.Terminate;
     WinExec('UpdateUPedit.bat',SW_HIDE);
-  end;  }
-   //DeleteCriticalSection(L);
-  //MyThead.Free
-  {if MyThead.Handle <> 0 then
-  begin
+    end; }
+  // DeleteCriticalSection(L);
+  // MyThead.Free
+  { if MyThead.Handle <> 0 then
+    begin
     MyThead.Terminate;
-  end; }
+    end; }
   try
     halt;
   except
@@ -228,13 +224,13 @@ begin
   end;
 end;
 
-procedure TUPeditMainForm.Onmymessage(var t:TWmCopyData);
+procedure TUPeditMainForm.Onmymessage(var t: TWmCopyData);
 var
   filename: string;
-  //tempForm: ^TForm;
+  // tempForm: ^TForm;
   FormImz: TImzForm;
   Form91: TForm91;
-  Form1: TForm1;
+  form1: TForm1;
   FOrm3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
@@ -242,61 +238,57 @@ var
   I, I2, I3: integer;
   tempdata: Pbyte;
 begin
-    tempstr := strpas(PAnsiChar(t.CopyDataStruct.lpData));
-    tempdata := t.CopyDataStruct.lpData;
-    if byte(tempstr[1]) = 1 then
+  tempstr := strpas(PAnsiChar(t.CopyDataStruct.lpData));
+  tempdata := t.CopyDataStruct.lpData;
+  if byte(tempstr[1]) = 1 then
+  begin
+    copynum := Pinteger(Pbyte(t.CopyDataStruct.lpData) + 1)^;
+    // showmessage(inttostr(copynum));
+    setlength(grplistcopydata, copynum);
+    if copynum > 0 then
     begin
-      copynum := Pinteger(Pbyte(t.CopyDataStruct.lpData) + 1)^;
-      //showmessage(inttostr(copynum));
-      setlength(grplistcopydata, copynum);
-      if copynum > 0 then
-      begin
-        copymemory(@grplistcopydata[0], (Pbyte(t.CopyDataStruct.lpData) + 5), copynum);
-      end;
-    end
-    else if (length(tempstr) > 4) and
-            (AnsiChar(tempStr[1]) = 'I') and
-            (AnsiChar(tempStr[2]) = 'M') and
-            (AnsiChar(tempStr[3]) = 'Z') and
-            (Byte(tempStr[4]) = 255) then
+      copymemory(@grplistcopydata[0], (Pbyte(t.CopyDataStruct.lpData) + 5), copynum);
+    end;
+  end
+  else if (length(tempstr) > 4) and (AnsiChar(tempstr[1]) = 'I') and (AnsiChar(tempstr[2]) = 'M') and (AnsiChar(tempstr[3]) = 'Z') and (byte(tempstr[4]) = 255) then
+  begin
+    if not CFormImz then
     begin
-      if not CFormImz then
-      begin
-        for I := 0 to self.MDIChildCount - 1 do
-          if self.MDIChildren[I].Handle = MdiChildHandle[13] then
-          begin
-            //self.MDIChildren[I].Show;
-            FormImz := TImzForm(self.MDIChildren[I]);
-            FormImz.IMZcanCopyPNG := true;
-            try
+      for I := 0 to self.MDIChildCount - 1 do
+        if self.MDIChildren[I].Handle = MdiChildHandle[13] then
+        begin
+          // self.MDIChildren[I].Show;
+          FormImz := TImzForm(self.MDIChildren[I]);
+          FormImz.IMZcanCopyPNG := true;
+          try
 
-              FormImz.imzcopypng.len := PInteger(tempdata + 4)^;
-              FormImz.imzcopypng.x := PSmallint(tempdata + 8)^;
-              FormImz.imzcopypng.y := PSmallint(tempdata + 10)^;
-              FormImz.imzcopypng.frame := max(0, PInteger(tempdata + 12)^);
-              setlength(FormImz.IMZCopyPNG.framelen, FormImz.imzcopypng.frame);
-              setlength(FormImz.IMZCopyPNG.framedata, FormImz.imzcopypng.frame);
-              I3 := 16;
-              for I2 := 0 to FormImz.imzcopypng.frame - 1 do
-              begin
-                FormImz.IMZCopyPNG.framelen[I2] := max(0, Pinteger(tempdata + I3)^);
-                inc(I3, 4);
-                setlength(FormImz.IMZCopyPNG.frameData[I2].data, FormImz.IMZCopyPNG.framelen[I2]);
-                if FormImz.IMZCopyPNG.framelen[I2] > 0 then
-                  copymemory(@FormImz.IMZCopyPNG.framedata[I2].data[0], (tempdata + I3), FormImz.IMZCopyPNG.framelen[I2]);
-                inc(I3, FormImz.IMZCopyPNG.framelen[I2]);                 
-              end;
-            except
-
-              FormImz.IMZcanCopyPNG := false;
+            FormImz.imzcopypng.len := Pinteger(tempdata + 4)^;
+            FormImz.imzcopypng.x := PSmallint(tempdata + 8)^;
+            FormImz.imzcopypng.y := PSmallint(tempdata + 10)^;
+            FormImz.imzcopypng.frame := max(0, Pinteger(tempdata + 12)^);
+            setlength(FormImz.imzcopypng.framelen, FormImz.imzcopypng.frame);
+            setlength(FormImz.imzcopypng.framedata, FormImz.imzcopypng.frame);
+            I3 := 16;
+            for I2 := 0 to FormImz.imzcopypng.frame - 1 do
+            begin
+              FormImz.imzcopypng.framelen[I2] := max(0, Pinteger(tempdata + I3)^);
+              inc(I3, 4);
+              setlength(FormImz.imzcopypng.framedata[I2].data, FormImz.imzcopypng.framelen[I2]);
+              if FormImz.imzcopypng.framelen[I2] > 0 then
+                copymemory(@FormImz.imzcopypng.framedata[I2].data[0], (tempdata + I3), FormImz.imzcopypng.framelen[I2]);
+              inc(I3, FormImz.imzcopypng.framelen[I2]);
             end;
-            
-            Break;
+          except
+
+            FormImz.IMZcanCopyPNG := false;
           end;
-      end;
-    end
-    else
-    begin
+
+          Break;
+        end;
+    end;
+  end
+  else
+  begin
     filename := widestring(tempstr);
     if fileexists(filename) then
     begin
@@ -308,7 +300,7 @@ begin
           CForm4 := false;
           MdiChildHandle[4] := Form4.Handle;
           Form4.openfile(filename);
-          FOrm4.OpenDialog1.FileName := filename;
+          Form4.OpenDialog1.filename := filename;
         end
         else
         begin
@@ -316,12 +308,12 @@ begin
             if self.MDIChildren[I].Handle = MdiChildHandle[4] then
             begin
               self.MDIChildren[I].Show;
-              form4 := TForm4(self.MDIChildren[I]);
+              Form4 := TForm4(self.MDIChildren[I]);
 
-              //form4 := PForm4(tempform)^;
-              form4.openfile(filename);
-              form4.OpenDialog1.FileName := filename;
-              break;
+              // form4 := PForm4(tempform)^;
+              Form4.openfile(filename);
+              Form4.OpenDialog1.filename := filename;
+              Break;
             end;
         end;
 
@@ -335,7 +327,7 @@ begin
 
           MdiChildHandle[11] := Form91.Handle;
           Form91.Edit1.Text := filename;
-          Form91.OpenDialog1.FileName := filename;
+          Form91.OpenDialog1.filename := filename;
         end
         else
         begin
@@ -343,11 +335,11 @@ begin
             if self.MDIChildren[I].Handle = MdiChildHandle[11] then
             begin
               self.MDIChildren[I].Show;
-              Form91 := TFOrm91(self.MDIChildren[I]);
-              //Form91 := PForm91(tempform)^;
+              Form91 := TForm91(self.MDIChildren[I]);
+              // Form91 := PForm91(tempform)^;
               Form91.Edit1.Text := filename;
-              Form91.OpenDialog1.FileName := filename;
-              break;
+              Form91.OpenDialog1.filename := filename;
+              Break;
             end;
         end;
       end
@@ -356,13 +348,13 @@ begin
         opentempstr := ChangeFileExt(filename, '.idx');
         if CForm3 then
         begin
-          CFOrm3 := false;
-          Form3 := TForm3.Create(application);
-          Form3.WindowState := wsmaximized;
-          MdiChildHandle[3] := Form3.Handle;
-          Form3.Edit1.Text := opentempstr;
-          Form3.Edit2.Text := filename;
-          Form3.displaygrplist;
+          CForm3 := false;
+          FOrm3 := TForm3.Create(application);
+          FOrm3.WindowState := wsmaximized;
+          MdiChildHandle[3] := FOrm3.Handle;
+          FOrm3.Edit1.Text := opentempstr;
+          FOrm3.Edit2.Text := filename;
+          FOrm3.displaygrplist;
         end
         else
         begin
@@ -370,13 +362,13 @@ begin
             if self.MDIChildren[I].Handle = MdiChildHandle[3] then
             begin
               self.MDIChildren[I].Show;
-              Form3 := TFOrm3(self.MDIChildren[I]);
-              //Form3 := PForm3(tempform)^;
+              FOrm3 := TForm3(self.MDIChildren[I]);
+              // Form3 := PForm3(tempform)^;
               FOrm3.ComboBox1.ItemIndex := -1;
-              Form3.Edit1.Text := opentempstr;
-              Form3.Edit2.Text := filename;
-              Form3.displaygrplist;
-              break;
+              FOrm3.Edit1.Text := opentempstr;
+              FOrm3.Edit2.Text := filename;
+              FOrm3.displaygrplist;
+              Break;
             end;
         end;
       end
@@ -385,13 +377,13 @@ begin
         opentempstr := ChangeFileExt(filename, '.grp');
         if CForm3 then
         begin
-          CFOrm3 := false;
-          Form3 := TForm3.Create(application);
-          Form3.WindowState := wsmaximized;
-          MdiChildHandle[3] := Form3.Handle;
-          Form3.Edit1.Text := filename;
-          Form3.Edit2.Text := opentempstr;
-          Form3.displaygrplist;
+          CForm3 := false;
+          FOrm3 := TForm3.Create(application);
+          FOrm3.WindowState := wsmaximized;
+          MdiChildHandle[3] := FOrm3.Handle;
+          FOrm3.Edit1.Text := filename;
+          FOrm3.Edit2.Text := opentempstr;
+          FOrm3.displaygrplist;
         end
         else
         begin
@@ -399,39 +391,40 @@ begin
             if self.MDIChildren[I].Handle = MdiChildHandle[3] then
             begin
               self.MDIChildren[I].Show;
-              Form3 := TForm3(self.MDIChildren[I]);
-              //Form3 := PForm3(tempform)^;
-              Form3.Edit1.Text := filename;
-              Form3.Edit2.Text := opentempstr;
-              Form3.displaygrplist;
+              FOrm3 := TForm3(self.MDIChildren[I]);
+              // Form3 := PForm3(tempform)^;
+              FOrm3.Edit1.Text := filename;
+              FOrm3.Edit2.Text := opentempstr;
+              FOrm3.displaygrplist;
               FOrm3.ComboBox1.ItemIndex := -1;
-              break;
+              Break;
             end;
         end;
       end
-      else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif') or SameText(ExtractFileExt(filename), '.jpeg') then
+      else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif') or
+        SameText(ExtractFileExt(filename), '.jpeg') then
       begin
-         if CForm1 then
-         begin
-           CForm1 := false;
-           Form1 := TForm1.Create(application);
-           MdiChildHandle[2] := Form1.Handle;
-           picname := filename;
-           Form1.picdisplay;
-         end
-         else
-         begin
-           for I := 0 to self.MDIChildCount - 1 do
-             if self.MDIChildren[I].Handle = MdiChildHandle[2] then
-             begin
-               self.MDIChildren[I].Show;
-               Form1 := TForm1(self.MDIChildren[I]);
-               //Form1 :=PForm1(tempform)^;
-               picname := filename;
-               Form1.picdisplay;
-               break;
-             end;
-         end;
+        if CForm1 then
+        begin
+          CForm1 := false;
+          form1 := TForm1.Create(application);
+          MdiChildHandle[2] := form1.Handle;
+          picname := filename;
+          form1.picdisplay;
+        end
+        else
+        begin
+          for I := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[I].Handle = MdiChildHandle[2] then
+            begin
+              self.MDIChildren[I].Show;
+              form1 := TForm1(self.MDIChildren[I]);
+              // Form1 :=PForm1(tempform)^;
+              picname := filename;
+              form1.picdisplay;
+              Break;
+            end;
+        end;
       end
       else if SameText(ExtractFileExt(filename), '.imz') then
       begin
@@ -453,28 +446,28 @@ begin
               FormImz.Edit2.Text := filename;
               FormImz.SetEditMode(zImzMode);
               FormImz.Button5.Click;
-              break;
+              Break;
             end;
         end;
       end;
     end;
-    end;
-    setlength(tempstr,0);
+  end;
+  setlength(tempstr, 0);
 end;
 
 procedure TUPeditMainForm.FormCreate(Sender: TObject);
 begin
-  trayicon1.Hint := titlestr;
-  trayicon1.Icon := Forms.application.Icon;
-  Forms.Application.OnMessage := self.AppOnMessage;
-  //Application.OnMessage:=OnAppMessage;
-  self.Caption := titlestr + ' - '+ gamepath;
-  webbrowser1.Cursor := fmcursor;
+  TrayIcon1.Hint := titlestr;
+  TrayIcon1.Icon := Forms.application.Icon;
+  Forms.application.OnMessage := self.AppOnMessage;
+  // Application.OnMessage:=OnAppMessage;
+  self.Caption := titlestr + ' - ' + gamepath;
+  WebBrowser1.Cursor := fmcursor;
   N20.Checked := topcolumn;
   N21.Checked := leftcolumn;
-  panel1.Visible := topcolumn;
-  panel2.Visible := leftcolumn;
-  DragAcceptFiles(Self.Handle, True);
+  Panel1.Visible := topcolumn;
+  Panel2.Visible := leftcolumn;
+  DragAcceptFiles(self.Handle, true);
 end;
 
 procedure AppInitial;
@@ -483,91 +476,91 @@ var
   filename: string;
   tempstr: widestring;
   strlist: Tstringlist;
-  I, strnum, temp,I2: integer;
+  I, strnum, temp, I2: integer;
   inihead: word;
-  Mnu:HMenu;
+  Mnu: HMenu;
 begin
 
-  application.Title := Appname;//titlestr;
-  //application.
+  application.Title := Appname; // titlestr;
+  // application.
 
-  Mnu:=GetSystemMenu(Application.Handle, False);
-  AppendMenu(Mnu,MF_SEPARATOR,0,nil);
-  AppendMenu(Mnu,MF_STRING,WM_ABOUT,pchar('关于...'));
+  Mnu := GetSystemMenu(application.Handle, false);
+  AppendMenu(Mnu, MF_SEPARATOR, 0, nil);
+  AppendMenu(Mnu, MF_STRING, WM_ABOUT, pchar('关于...'));
 
   try
 
-    Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+    filename := ExtractFilePath(Paramstr(0)) + iniFilename;
     temp := fileopen(filename, fmopenread);
-    fileseek(temp,0,0);
+    fileseek(temp, 0, 0);
     fileread(temp, inihead, 2);
     if inihead = $FEFF then
       inicode := 0
     else
       inicode := 1;
     fileclose(temp);
-    ini := TIniFile.Create(filename);
-    appfirstrun := ini.ReadBool('run','firstrun',true);
-    updatepath := ini.ReadString('run', 'updatapath',ExtractFilePath(Paramstr(0)));
-    gamepath := ini.readString('run','gamepath', '\');
+    ini := Tinifile.Create(filename);
+    appfirstrun := ini.ReadBool('run', 'firstrun', true);
+    updatepath := ini.ReadString('run', 'updatapath', ExtractFilePath(Paramstr(0)));
+    gamepath := ini.ReadString('run', 'gamepath', '\');
     if length(gamepath) > 0 then
       if gamepath[length(gamepath)] <> '\' then
         gamepath := gamepath + '\';
-    datacode := ini.Readinteger('run','datacode', 1);
-    talkcode := ini.Readinteger('run','talkcode', datacode);
-    talkinvert := ini.Readinteger('run','talkinvert', talkinvert);
-    palette := ini.ReadString('file','palette','');
-    language := ini.ReadInteger('run','language',0);
-    grplistnum := ini.ReadInteger('file','filenumber',0);
-    checkupdate := ini.ReadInteger('run','checkupdate',0);
-    leftcolumn := ini.ReadBool('run','leftcolumn',false);
-    topcolumn := ini.ReadBool('run','topcolumn',false);
+    datacode := ini.Readinteger('run', 'datacode', 1);
+    talkcode := ini.Readinteger('run', 'talkcode', datacode);
+    talkinvert := ini.Readinteger('run', 'talkinvert', talkinvert);
+    palette := ini.ReadString('file', 'palette', '');
+    language := ini.Readinteger('run', 'language', 0);
+    grplistnum := ini.Readinteger('file', 'filenumber', 0);
+    checkupdate := ini.Readinteger('run', 'checkupdate', 0);
+    leftcolumn := ini.ReadBool('run', 'leftcolumn', false);
+    topcolumn := ini.ReadBool('run', 'topcolumn', false);
 
-    GameVersion := ini.ReadInteger('run', 'GameVersion', GameVersion);
-    
-    talkidx := ini.ReadString('file','talkidx','');
-    talkgrp := ini.ReadString('file','talkgrp','');
-    kdefidx := ini.ReadString('file','kdefidx','');
-    kdefgrp := ini.ReadString('file','kdefgrp','');
-    nameidx := ini.ReadString('file','nameidx','');
-    namegrp := ini.ReadString('file','namegrp','');
-    wardata := ini.ReadString('file','WarDefine','');
-    headpicname := ini.ReadString('file','headpicname','');
+    GameVersion := ini.Readinteger('run', 'GameVersion', GameVersion);
 
-    warmapgrp := ini.ReadString('file','WarMAPGRP','');
-    warmapidx := ini.ReadString('file','WarMAPIDX','');
-    WMAPIMZ := ini.ReadString('file','WMAPIMZ','');
-    WMAPPNGPATH := ini.ReadString('file','WMAPPNGPATH','');
+    talkidx := ini.ReadString('file', 'talkidx', '');
+    talkgrp := ini.ReadString('file', 'talkgrp', '');
+    kdefidx := ini.ReadString('file', 'kdefidx', '');
+    kdefgrp := ini.ReadString('file', 'kdefgrp', '');
+    nameidx := ini.ReadString('file', 'nameidx', '');
+    namegrp := ini.ReadString('file', 'namegrp', '');
+    wardata := ini.ReadString('file', 'WarDefine', '');
+    headpicname := ini.ReadString('file', 'headpicname', '');
+
+    warmapgrp := ini.ReadString('file', 'WarMAPGRP', '');
+    warmapidx := ini.ReadString('file', 'WarMAPIDX', '');
+    WMAPIMZ := ini.ReadString('file', 'WMAPIMZ', '');
+    WMAPPNGPATH := ini.ReadString('file', 'WMAPPNGPATH', '');
     if length(WMAPPNGPATH) > 0 then
       if WMAPPNGPATH[length(WMAPPNGPATH)] <> '\' then
         WMAPPNGPATH := WMAPPNGPATH + '\';
-    WarMAPDefGRP := ini.ReadString('file','WarMAPDefGRP','');
-    WarMAPDefIDX := ini.ReadString('file','WarMAPDefIDX','');
+    WarMAPDefGRP := ini.ReadString('file', 'WarMAPDefGRP', '');
+    WarMAPDefIDX := ini.ReadString('file', 'WarMAPDefIDX', '');
 
-    SMAPGRP := ini.ReadString('file','SMAPGRP','');
-    SMAPIDX := ini.ReadString('file','SMAPIDX','');
-    SMAPIMZ := ini.ReadString('file','SMAPIMZ','');
-    SMAPPNGPATH := ini.ReadString('file','SMAPPNGPATH','');
+    SMAPGRP := ini.ReadString('file', 'SMAPGRP', '');
+    SMAPIDX := ini.ReadString('file', 'SMAPIDX', '');
+    SMAPIMZ := ini.ReadString('file', 'SMAPIMZ', '');
+    SMAPPNGPATH := ini.ReadString('file', 'SMAPPNGPATH', '');
     if length(SMAPPNGPATH) > 0 then
       if SMAPPNGPATH[length(SMAPPNGPATH)] <> '\' then
         SMAPPNGPATH := SMAPPNGPATH + '\';
 
-    MMAPfileGRP := ini.ReadString('file','MMAPGRP','');
-    MMAPfileIDX := ini.ReadString('file','MMAPIDX','');
-    MMAPIMZ := ini.ReadString('file','MMAPIMZ','');
-    MMAPPNGPATH := ini.ReadString('file','MMAPPNGPATH','');
+    MMAPfileGRP := ini.ReadString('file', 'MMAPGRP', '');
+    MMAPfileIDX := ini.ReadString('file', 'MMAPIDX', '');
+    MMAPIMZ := ini.ReadString('file', 'MMAPIMZ', '');
+    MMAPPNGPATH := ini.ReadString('file', 'MMAPPNGPATH', '');
     if length(MMAPPNGPATH) > 0 then
       if MMAPPNGPATH[length(MMAPPNGPATH)] <> '\' then
         MMAPPNGPATH := MMAPPNGPATH + '\';
 
-    Leave:= ini.ReadString('file','Leave','');
-    Effect:= ini.ReadString('file','Effect','');
-    Match:= ini.ReadString('file','Match','');
-    Exp:= ini.ReadString('file','Exp','');
-    grplistselect := ini.ReadInteger('file','GRPselect',0);
-    GRPListBackGround := ini.ReadInteger('file','GRPListBackGround',clwhite);
-    GRPListTextCol := ini.ReadInteger('file','GRPListTextCol',clred);
-    warsmallmapsize := ini.ReadInteger('file','warsmallmapsize',3);
+    Leave := ini.ReadString('file', 'Leave', '');
+    Effect := ini.ReadString('file', 'Effect', '');
+    Match := ini.ReadString('file', 'Match', '');
+    Exp := ini.ReadString('file', 'Exp', '');
+    grplistselect := ini.Readinteger('file', 'GRPselect', 0);
+    GRPListBackGround := ini.Readinteger('file', 'GRPListBackGround', clwhite);
+    GRPListTextCol := ini.Readinteger('file', 'GRPListTextCol', clred);
+    warsmallmapsize := ini.Readinteger('file', 'warsmallmapsize', 3);
 
     if grplistnum > 0 then
     begin
@@ -578,48 +571,48 @@ begin
       strlist := Tstringlist.Create;
       for I := 0 to grplistnum - 1 do
       begin
-        tempstr := ini.ReadString('file','file'+ inttostr(I),'');
+        tempstr := ini.ReadString('file', 'file' + inttostr(I), '');
         strlist.Clear;
-        //wtempstr := @tempstr;
-        strnum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+        // wtempstr := @tempstr;
+        strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
         if strnum = 3 then
         begin
           grplistidx[I] := strlist.Strings[0];
           grplistgrp[I] := strlist.Strings[1];
           grplistname[I] := strlist.Strings[2];
         end;
-        tempstr := ini.ReadString('file','Section'+ inttostr(I),'');
+        tempstr := ini.ReadString('file', 'Section' + inttostr(I), '');
         strlist.Clear;
-        strnum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
-        if ((strnum div 3)> 0) and (strnum mod 3 = 0) then
+        strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+        if ((strnum div 3) > 0) and (strnum mod 3 = 0) then
         begin
-          GRPlistSection[I].num := strnum div 3;
-          setlength(GRPlistSection[I].tag, GRPlistSection[I].num);
-          setlength(GRPlistSection[I].beginnum, GRPlistSection[I].num);
-          setlength(GRPlistSection[I].endnum, GRPlistSection[I].num);
-          for I2 := 0 to GRPlistSection[I].num - 1 do
+          grplistSection[I].num := strnum div 3;
+          setlength(grplistSection[I].tag, grplistSection[I].num);
+          setlength(grplistSection[I].beginnum, grplistSection[I].num);
+          setlength(grplistSection[I].endnum, grplistSection[I].num);
+          for I2 := 0 to grplistSection[I].num - 1 do
           begin
-            GRPlistSection[I].tag[I2] := Strlist.Strings[I2 * 3];
-            GRPlistSection[I].beginnum[I2] := strtoint(Strlist.Strings[I2 * 3 + 1]);
-            if strlist.Strings[I2 * 3 + 2]= 'end' then
-              GRPlistSection[I].endnum[I2] := -2
+            grplistSection[I].tag[I2] := strlist.Strings[I2 * 3];
+            grplistSection[I].beginnum[I2] := strtoint(strlist.Strings[I2 * 3 + 1]);
+            if strlist.Strings[I2 * 3 + 2] = 'end' then
+              grplistSection[I].endnum[I2] := -2
             else
-              GRPlistSection[I].endnum[I2] := strtoint(Strlist.Strings[I2 * 3 + 2]);
+              grplistSection[I].endnum[I2] := strtoint(strlist.Strings[I2 * 3 + 2]);
           end;
         end
         else
         begin
-          GRPlistSection[I].num := 0;
+          grplistSection[I].num := 0;
         end;
       end;
       strlist.Free;
     end;
-    strlist := TStringlist.Create;
+    strlist := Tstringlist.Create;
     strlist.Clear;
-    tempstr := ini.ReadString('file','MMAPStruct', '');
+    tempstr := ini.ReadString('file', 'MMAPStruct', '');
     if tempstr <> '' then
     begin
-      strnum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if strnum = 5 then
       begin
         Mearth := strlist.Strings[0];
@@ -630,10 +623,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','RIDX', '');
+    tempstr := ini.ReadString('file', 'RIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       temp := Rfilenum;
       if Rfilenum > 0 then
       begin
@@ -643,10 +636,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','RGRP', '');
+    tempstr := ini.ReadString('file', 'RGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -657,10 +650,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','SIDX', '');
+    tempstr := ini.ReadString('file', 'SIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -671,10 +664,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','SGRP', '');
+    tempstr := ini.ReadString('file', 'SGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -685,10 +678,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','DIDX', '');
+    tempstr := ini.ReadString('file', 'DIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -699,10 +692,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','DGRP', '');
+    tempstr := ini.ReadString('file', 'DGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -713,10 +706,10 @@ begin
       end;
     end;
     strlist.Clear;
-    tempstr := ini.ReadString('file','RecordNote', '');
+    tempstr := ini.ReadString('file', 'RecordNote', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -728,10 +721,10 @@ begin
     end;
     Rfilenum := temp;
     scenenum := temp;
-    fightgrpnum  := ini.ReadInteger('file','fightnum',0);
+    fightgrpnum := ini.Readinteger('file', 'fightnum', 0);
     strlist.Clear;
-    tempstr := ini.ReadString('file','fightname','');
-    strnum := ExtractStrings([','], [], Pwidechar(tempstr), Strlist);
+    tempstr := ini.ReadString('file', 'fightname', '');
+    strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
     if strnum = 3 then
     begin
       fightidx := strlist.Strings[0];
@@ -740,12 +733,12 @@ begin
     end;
     strlist.Free;
     ini.Free;
-    Readini;//Rini
+    Readini; // Rini
     readwini;
     readDini;
-    read50memory;//50指令内存表
+    read50memory; // 50指令内存表
     readMcol;
-    readw(gamepath + wardata,@useW);
+    readw(gamepath + wardata, @useW);
     if readR(gamepath + Ridxfilename[0], gamepath + Rfilename[0], @useR) then
       calnamepos(@useR);
 
@@ -757,38 +750,38 @@ end;
 
 procedure TUPeditMainForm.FormHide(Sender: TObject);
 begin
-  //self.Visible := false;
+  // self.Visible := false;
   self.Hide;
   self.WindowState := wsMinimized;
   mainhide := true;
-  ShowWindow(Forms.Application.Handle, SW_HIDE);
-  //application.Terminate;
+  ShowWindow(Forms.application.Handle, SW_HIDE);
+  // application.Terminate;
 end;
 
 procedure TUPeditMainForm.FormResize(Sender: TObject);
-{var
+{ var
   ix, iy: integer;
   xparam, yparam: single;
   bparam, gparam, rparam: byte;
   formbmp: Tbitmap;
   bmpdata: array of array of byte; }
 begin
-  //Self.Constraints.MaxHeight := Screen.WorkAreaHeight;//不挡住任务栏
-  panel2.Width := 250;
+  // Self.Constraints.MaxHeight := Screen.WorkAreaHeight;//不挡住任务栏
+  Panel2.Width := 250;
   if (self.Width - 250) > 300 then
-    label2.Width := self.Width - 250
+    Label2.Width := self.Width - 250
   else
-    label2.Width := 300;
+    Label2.Width := 300;
 
-  {if self.GlassFrame.Enabled then
-  begin
+  { if self.GlassFrame.Enabled then
+    begin
     self.GlassFrame.Bottom := self.ClientHeight - panel1.Height;
-  end;}
-  {Image1.Picture.Bitmap.Width := Image1.Width;
-  Image1.Picture.Bitmap.Height := Image1.Height;
+    end; }
+  { Image1.Picture.Bitmap.Width := Image1.Width;
+    Image1.Picture.Bitmap.Height := Image1.Height;
 
-  formbmp := Tbitmap.Create;
-  try
+    formbmp := Tbitmap.Create;
+    try
     formbmp.Width := Image1.Width;
     formbmp.Height := Image1.Height;
     formbmp.PixelFormat := pf32bit;
@@ -796,43 +789,43 @@ begin
     setlength(bmpdata, formbmp.Height, formbmp.Width * 4);
     for iy := 0 to formbmp.Height - 1 do
     begin
-      Zeromemory(@bmpdata[iy][0], formbmp.Width shl 2);
-      yparam := iy / formbmp.Height;
-      for ix := 0 to formbmp.Width - 1 do
-      begin
-        xparam := 1 - ix / formbmp.Width;
-        bparam := round((xparam - yparam + 1) / 2 * 255);
-        gparam := round((1 - abs(xparam - yparam)) * 255);
-        rparam := round((yparam - xparam + 1) / 2 * 255);
-        bmpdata[iy][ix shl 2] := bparam;
-        bmpdata[iy][ix shl 2 + 1] := gparam;
-        bmpdata[iy][ix shl 2 + 2] := rparam;
-      end;
-      copymemory(formbmp.ScanLine[iy], @bmpdata[iy][0], formbmp.Width shl 2);
+    Zeromemory(@bmpdata[iy][0], formbmp.Width shl 2);
+    yparam := iy / formbmp.Height;
+    for ix := 0 to formbmp.Width - 1 do
+    begin
+    xparam := 1 - ix / formbmp.Width;
+    bparam := round((xparam - yparam + 1) / 2 * 255);
+    gparam := round((1 - abs(xparam - yparam)) * 255);
+    rparam := round((yparam - xparam + 1) / 2 * 255);
+    bmpdata[iy][ix shl 2] := bparam;
+    bmpdata[iy][ix shl 2 + 1] := gparam;
+    bmpdata[iy][ix shl 2 + 2] := rparam;
+    end;
+    copymemory(formbmp.ScanLine[iy], @bmpdata[iy][0], formbmp.Width shl 2);
 
     end;
     Image1.Canvas.Draw(0, 0, formbmp);
-  finally
+    finally
     setlength(bmpdata, 0, 0);
     if formbmp <> nil then
     begin
-      formbmp.Free;
-      formbmp := nil;
+    formbmp.Free;
+    formbmp := nil;
     end;
-  end; }
+    end; }
 end;
 
 procedure TUPeditMainForm.grp1Click(Sender: TObject);
 var
-  Form3: TForm3;
+  FOrm3: TForm3;
   I: integer;
 begin
   if CForm3 then
   begin
-    CFOrm3 := false;
-    Form3 := TForm3.Create(application);
-    Form3.WindowState := wsmaximized;
-    MdiChildHandle[3] := Form3.Handle;
+    CForm3 := false;
+    FOrm3 := TForm3.Create(application);
+    FOrm3.WindowState := wsmaximized;
+    MdiChildHandle[3] := FOrm3.Handle;
   end
   else
   begin
@@ -894,10 +887,10 @@ procedure TUPeditMainForm.Label5Click(Sender: TObject);
 begin
   if GameVersion = 1 then
   begin
-    imz1click(Sender);
+    IMZ1Click(Sender);
   end
   else
-    grp1click(Sender);
+    grp1Click(Sender);
 end;
 
 procedure TUPeditMainForm.Label5MouseEnter(Sender: TObject);
@@ -1063,19 +1056,19 @@ end;
 
 procedure TUPeditMainForm.N19Click(Sender: TObject);
 begin
-  Form87.showmodal;
+  Form87.ShowModal;
 end;
 
 procedure TUPeditMainForm.N1Click(Sender: TObject);
 var
-  Form1: TForm1;
+  form1: TForm1;
   I: integer;
 begin
   if CForm1 then
   begin
     CForm1 := false;
-    Form1 := TForm1.Create(application);
-    MdiChildHandle[2] := Form1.Handle;
+    form1 := TForm1.Create(application);
+    MdiChildHandle[2] := form1.Handle;
   end
   else
   begin
@@ -1089,32 +1082,32 @@ procedure TUPeditMainForm.N20Click(Sender: TObject);
 var
   ini: Tinifile;
 begin
-  panel1.Visible := not(panel1.Visible);
-  N20.Checked := panel1.Visible;
-  topcolumn := panel1.Visible;
+  Panel1.Visible := not(Panel1.Visible);
+  N20.Checked := Panel1.Visible;
+  topcolumn := Panel1.Visible;
   try
     ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
-    ini.Writebool('run','topcolumn',topcolumn);
+    ini.Writebool('run', 'topcolumn', topcolumn);
   finally
     ini.Free;
   end;
-  FormResize(sender);
+  FormResize(Sender);
 end;
 
 procedure TUPeditMainForm.N21Click(Sender: TObject);
 var
   ini: Tinifile;
 begin
-  panel2.Visible := not(panel2.Visible);
-  N21.Checked := panel2.Visible;
-  leftcolumn := panel2.Visible;
+  Panel2.Visible := not(Panel2.Visible);
+  N21.Checked := Panel2.Visible;
+  leftcolumn := Panel2.Visible;
   try
     ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
-    ini.Writebool('run','leftcolumn',leftcolumn);
+    ini.Writebool('run', 'leftcolumn', leftcolumn);
   finally
     ini.Free;
   end;
-  FormResize(sender);
+  FormResize(Sender);
 end;
 
 procedure TUPeditMainForm.N22Click(Sender: TObject);
@@ -1154,10 +1147,10 @@ procedure TUPeditMainForm.N25Click(Sender: TObject);
 begin
 
   self.Visible := true;
-  //self.Show;
+  // self.Show;
   Forms.application.Restore;
-  if not form87.Visible then
-    Form87.showmodal;
+  if not Form87.Visible then
+    Form87.ShowModal;
 
 end;
 
@@ -1165,7 +1158,7 @@ procedure TUPeditMainForm.N28Click(Sender: TObject);
 begin
 
   self.Visible := true;
-  //self.Show;
+  // self.Show;
   Forms.application.Restore;
 
   N2Click(Sender);
@@ -1175,7 +1168,7 @@ procedure TUPeditMainForm.N29Click(Sender: TObject);
 begin
 
   self.Visible := true;
-  //self.Show;
+  // self.Show;
   Forms.application.Restore;
   if not Form8.Visible then
     N5Click(Sender);
@@ -1195,18 +1188,18 @@ var
 begin
   N28.Enabled := false;
 
- if SelectDirectory(gamepath, outdir)then
+  if SelectDirectory(gamepath, outdir) then
   begin
-    gamepath:=outdir[0];
+    gamepath := outdir[0];
     if gamepath[length(gamepath)] <> '\' then
-      gamepath :=gamepath + '\';
+      gamepath := gamepath + '\';
 
-    mainform.Caption := titlestr + ' - ' + gamepath;
-    Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
-    //gamepath := dir;
-    ini := TIniFile.Create(filename);
-    ini.WriteString('run','gamepath', gamepath);
-    ini.free;
+    MainForm.Caption := titlestr + ' - ' + gamepath;
+    filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+    // gamepath := dir;
+    ini := Tinifile.Create(filename);
+    ini.WriteString('run', 'gamepath', gamepath);
+    ini.Free;
     if readR(gamepath + Ridxfilename[0], gamepath + Rfilename[0], @useR) then
       calnamepos(@useR);
     readw(gamepath + wardata, @useW);
@@ -1219,8 +1212,8 @@ procedure TUPeditMainForm.N30Click(Sender: TObject);
 begin
   self.Visible := true;
   Forms.application.Restore;
-  if aboutbox.Visible = false then
-    aboutbox.ShowModal;
+  if AboutBox.Visible = false then
+    AboutBox.ShowModal;
 end;
 
 procedure TUPeditMainForm.N31Click(Sender: TObject);
@@ -1259,9 +1252,9 @@ end;
 procedure TUPeditMainForm.N34Click(Sender: TObject);
 begin
   self.Visible := true;
-  //self.Show;
+  // self.Show;
   Forms.application.Restore;
-  if not FOrm92.Visible then
+  if not Form92.Visible then
     Form92.ShowModal;
 end;
 
@@ -1273,7 +1266,7 @@ begin
   if CForm7 then
   begin
     CForm7 := false;
-    Form7 := TForm7.create(application);
+    Form7 := TForm7.Create(application);
     MdiChildHandle[1] := Form7.Handle;
   end
   else
@@ -1341,7 +1334,7 @@ begin
   if Cform10 then
   begin
     Form10 := TForm10.Create(application);
-    CForm10 := false;
+    Cform10 := false;
     MdiChildHandle[5] := Form10.Handle;
   end
   else
@@ -1406,7 +1399,7 @@ begin
   if CForm5 then
   begin
     CForm5 := false;
-    Form5 := TFOrm5.Create(application);
+    Form5 := TForm5.Create(application);
     MdiChildHandle[0] := Form5.Handle;
   end
   else
@@ -1428,46 +1421,43 @@ end;
 
 procedure TUPeditMainForm.TrayIcon1Click(Sender: TObject);
 begin
-  TrayIcon1DblClick(sender);
+  TrayIcon1DblClick(Sender);
 end;
 
 procedure TUPeditMainForm.TrayIcon1DblClick(Sender: TObject);
 begin
   Forms.application.Restore;
   Forms.application.BringToFront;
-  {if mainhide then
-  begin
+  { if mainhide then
+    begin
     mainhide := false;
-  end
-  else
-    application.Restore;  }
+    end
+    else
+    application.Restore; }
 end;
 
-procedure TUPeditMainForm.WebBrowser1NewWindow2(ASender: TObject;
-  var ppDisp: IDispatch; var Cancel: WordBool);
+procedure TUPeditMainForm.WebBrowser1NewWindow2(ASender: TObject; var ppDisp: IDispatch; var Cancel: WordBool);
 begin
-  //Cancel := true;
-  //m_bNewWindow := true;
-  ppDisp := webbrowser2.DefaultInterface;
-  //ShellExecute(Forms.Application.Handle, nil, PWidechar(webURL) , nil, nil, SW_SHOWNORMAL);
+  // Cancel := true;
+  // m_bNewWindow := true;
+  ppDisp := WebBrowser2.DefaultInterface;
+  // ShellExecute(Forms.Application.Handle, nil, PWidechar(webURL) , nil, nil, SW_SHOWNORMAL);
 end;
 
-procedure TUPeditMainForm.WebBrowser2BeforeNavigate2(ASender: TObject;
-  const pDisp: IDispatch; var URL, Flags, TargetFrameName, PostData,
-  Headers: OleVariant; var Cancel: WordBool);
+procedure TUPeditMainForm.WebBrowser2BeforeNavigate2(ASender: TObject; const pDisp: IDispatch; var URL, Flags, TargetFrameName, PostData, Headers: OleVariant; var Cancel: WordBool);
 begin
   Cancel := true;
-  ShellExecute(Forms.Application.Handle, nil, PWidechar(WideString(URL)) , nil, nil, SW_SHOWNORMAL);
+  ShellExecute(Forms.application.Handle, nil, Pwidechar(widestring(URL)), nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TUPeditMainForm.AppOnMessage(var Msg: tagMSG; var Handled: Boolean);
 var
-  //FileName: String;
-  Filename: Array[0..255] of Char;
+  // FileName: String;
+  filename: Array [0 .. 255] of Char;
   num, I: integer;
   FormImz: TImzForm;
   Form91: TForm91;
-  Form1: TForm1;
+  form1: TForm1;
   FOrm3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
@@ -1476,30 +1466,30 @@ var
 begin
   if IsChild(WebBrowser1.Handle, Msg.Hwnd) then
   begin
-    if (Msg.Message = WM_RBUTTONDOWN) or (Msg.Message = WM_RBUTTONUP)  then
+    if (Msg.Message = WM_RBUTTONDOWN) or (Msg.Message = WM_RBUTTONUP) then
     begin
       Handled := true;
       exit;
     end;
   end;
 
-  case Msg.message of
+  case Msg.Message of
     WM_SYSCOMMAND:
       begin
         if Msg.wParam = WM_ABOUT then
         begin
           self.Visible := true;
           Forms.application.Restore;
-          if aboutbox.Visible = false then
-            aboutbox.ShowModal;
+          if AboutBox.Visible = false then
+            AboutBox.ShowModal;
         end;
       end;
     WM_DropFiles:
       begin
-        num := DragQueryFile(Msg.WParam,$FFFFFFFF,nil,0);
+        num := DragQueryFile(Msg.wParam, $FFFFFFFF, nil, 0);
         if num > 0 then
         begin
-          DragQueryFile(MSG.wParam, 0, FileName, 255);
+          DragQueryFile(Msg.wParam, 0, filename, 255);
           if fileexists(filename) then
           begin
             if SameText(ExtractFileExt(filename), '.pic') then
@@ -1510,7 +1500,7 @@ begin
                 CForm4 := false;
                 MdiChildHandle[4] := Form4.Handle;
                 Form4.openfile(filename);
-                FOrm4.OpenDialog1.FileName := filename;
+                Form4.OpenDialog1.filename := filename;
               end
               else
               begin
@@ -1518,12 +1508,12 @@ begin
                   if self.MDIChildren[I].Handle = MdiChildHandle[4] then
                   begin
                     self.MDIChildren[I].Show;
-                    form4 := TForm4(self.MDIChildren[I]);
+                    Form4 := TForm4(self.MDIChildren[I]);
 
-                    //form4 := PForm4(tempform)^;
-                    form4.openfile(filename);
-                    form4.OpenDialog1.FileName := filename;
-                    break;
+                    // form4 := PForm4(tempform)^;
+                    Form4.openfile(filename);
+                    Form4.OpenDialog1.filename := filename;
+                    Break;
                   end;
               end;
 
@@ -1537,7 +1527,7 @@ begin
 
                 MdiChildHandle[11] := Form91.Handle;
                 Form91.Edit1.Text := filename;
-                Form91.OpenDialog1.FileName := filename;
+                Form91.OpenDialog1.filename := filename;
               end
               else
               begin
@@ -1545,11 +1535,11 @@ begin
                   if self.MDIChildren[I].Handle = MdiChildHandle[11] then
                   begin
                     self.MDIChildren[I].Show;
-                    Form91 := TFOrm91(self.MDIChildren[I]);
-                    //Form91 := PForm91(tempform)^;
+                    Form91 := TForm91(self.MDIChildren[I]);
+                    // Form91 := PForm91(tempform)^;
                     Form91.Edit1.Text := filename;
-                    Form91.OpenDialog1.FileName := filename;
-                    break;
+                    Form91.OpenDialog1.filename := filename;
+                    Break;
                   end;
               end;
             end
@@ -1558,13 +1548,13 @@ begin
               opentempstr := ChangeFileExt(filename, '.idx');
               if CForm3 then
               begin
-                CFOrm3 := false;
-                Form3 := TForm3.Create(application);
-                Form3.WindowState := wsmaximized;
-                MdiChildHandle[3] := Form3.Handle;
-                Form3.Edit1.Text := opentempstr;
-                Form3.Edit2.Text := filename;
-                Form3.displaygrplist;
+                CForm3 := false;
+                FOrm3 := TForm3.Create(application);
+                FOrm3.WindowState := wsmaximized;
+                MdiChildHandle[3] := FOrm3.Handle;
+                FOrm3.Edit1.Text := opentempstr;
+                FOrm3.Edit2.Text := filename;
+                FOrm3.displaygrplist;
               end
               else
               begin
@@ -1572,13 +1562,13 @@ begin
                   if self.MDIChildren[I].Handle = MdiChildHandle[3] then
                   begin
                     self.MDIChildren[I].Show;
-                    Form3 := TFOrm3(self.MDIChildren[I]);
-                    //Form3 := PForm3(tempform)^;
-                    Form3.Edit1.Text := opentempstr;
-                    Form3.Edit2.Text := filename;
-                    Form3.displaygrplist;
+                    FOrm3 := TForm3(self.MDIChildren[I]);
+                    // Form3 := PForm3(tempform)^;
+                    FOrm3.Edit1.Text := opentempstr;
+                    FOrm3.Edit2.Text := filename;
+                    FOrm3.displaygrplist;
                     FOrm3.ComboBox1.ItemIndex := -1;
-                    break;
+                    Break;
                   end;
               end;
             end
@@ -1587,13 +1577,13 @@ begin
               opentempstr := ChangeFileExt(filename, '.grp');
               if CForm3 then
               begin
-                CFOrm3 := false;
-                Form3 := TForm3.Create(application);
-                Form3.WindowState := wsmaximized;
-                MdiChildHandle[3] := Form3.Handle;
-                Form3.Edit1.Text := filename;
-                Form3.Edit2.Text := opentempstr;
-                Form3.displaygrplist;
+                CForm3 := false;
+                FOrm3 := TForm3.Create(application);
+                FOrm3.WindowState := wsmaximized;
+                MdiChildHandle[3] := FOrm3.Handle;
+                FOrm3.Edit1.Text := filename;
+                FOrm3.Edit2.Text := opentempstr;
+                FOrm3.displaygrplist;
               end
               else
               begin
@@ -1601,39 +1591,40 @@ begin
                   if self.MDIChildren[I].Handle = MdiChildHandle[3] then
                   begin
                     self.MDIChildren[I].Show;
-                    Form3 := TForm3(self.MDIChildren[I]);
-                    //Form3 := PForm3(tempform)^;
-                    Form3.Edit1.Text := filename;
-                    Form3.Edit2.Text := opentempstr;
-                    Form3.displaygrplist;
+                    FOrm3 := TForm3(self.MDIChildren[I]);
+                    // Form3 := PForm3(tempform)^;
+                    FOrm3.Edit1.Text := filename;
+                    FOrm3.Edit2.Text := opentempstr;
+                    FOrm3.displaygrplist;
                     FOrm3.ComboBox1.ItemIndex := -1;
-                    break;
+                    Break;
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif') or SameText(ExtractFileExt(filename), '.jpeg') then
+            else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif')
+              or SameText(ExtractFileExt(filename), '.jpeg') then
             begin
-               if CForm1 then
-               begin
-                 CForm1 := false;
-                 Form1 := TForm1.Create(application);
-                 MdiChildHandle[2] := Form1.Handle;
-                 picname := filename;
-                 Form1.picdisplay;
-               end
-               else
-               begin
-                 for I := 0 to self.MDIChildCount - 1 do
-                   if self.MDIChildren[I].Handle = MdiChildHandle[2] then
-                   begin
-                     self.MDIChildren[I].Show;
-                     Form1 := TForm1(self.MDIChildren[I]);
-                     //Form1 :=PForm1(tempform)^;
-                     picname := filename;
-                     Form1.picdisplay;
-                     break;
-                   end;
-               end;
+              if CForm1 then
+              begin
+                CForm1 := false;
+                form1 := TForm1.Create(application);
+                MdiChildHandle[2] := form1.Handle;
+                picname := filename;
+                form1.picdisplay;
+              end
+              else
+              begin
+                for I := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[I].Handle = MdiChildHandle[2] then
+                  begin
+                    self.MDIChildren[I].Show;
+                    form1 := TForm1(self.MDIChildren[I]);
+                    // Form1 :=PForm1(tempform)^;
+                    picname := filename;
+                    form1.picdisplay;
+                    Break;
+                  end;
+              end;
             end
             else if SameText(ExtractFileExt(filename), '.imz') then
             begin
@@ -1655,7 +1646,7 @@ begin
                     FormImz.Edit2.Text := filename;
                     FormImz.SetEditMode(zImzMode);
                     FormImz.Button5.Click;
-                    break;
+                    Break;
                   end;
               end;
             end;
@@ -1669,16 +1660,16 @@ procedure TUPeditMainForm.BitBtn1Click(Sender: TObject);
 var
   ini: Tinifile;
 begin
-  panel2.Visible := not(panel2.Visible);
-  N21.Checked := panel2.Visible;
-  leftcolumn := panel2.Visible;
+  Panel2.Visible := not(Panel2.Visible);
+  N21.Checked := Panel2.Visible;
+  leftcolumn := Panel2.Visible;
   try
     ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
-    ini.Writebool('run','leftcolumn',leftcolumn);
+    ini.Writebool('run', 'leftcolumn', leftcolumn);
   finally
     ini.Free;
   end;
-  FormResize(sender);
+  FormResize(Sender);
 end;
 
 procedure TUPeditMainForm.BitBtn2Click(Sender: TObject);
@@ -1689,26 +1680,26 @@ end;
 
 procedure TUPeditMainForm.BitBtn3Click(Sender: TObject);
 begin
-  if panel2.Visible then
+  if Panel2.Visible then
     BitBtn1Click(Sender);
   BitBtn2Click(Sender);
 end;
 
 procedure TUPeditMainForm.bug1Click(Sender: TObject);
 begin
-  //ShellExecute(Forms.Application.Handle, nil, 'http://www.upwinded.com/bbs/forum.php' , nil, nil, SW_SHOWNORMAL);
+  // ShellExecute(Forms.Application.Handle, nil, 'http://www.upwinded.com/bbs/forum.php' , nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TUPeditMainForm.bug2Click(Sender: TObject);
 begin
-  bug1Click(sender);
+  bug1Click(Sender);
 end;
 
 procedure TUPeditMainForm.Button1Click(Sender: TObject);
 var
   temprs: TStringStream;
 begin
-  {try
+  { try
     temprs := TStringStream.Create;
 
 
@@ -1717,10 +1708,10 @@ begin
     Label2.Caption := MultiToUnicode(temprs.Memory, 936);
 
     Webbrowser1.Refresh;
-  except
+    except
     //Webbrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
-  end;
-  temprs.Free;}
+    end;
+    temprs.Free; }
 end;
 
 procedure TUPeditMainForm.FileExit1Execute(Sender: TObject);
@@ -1730,35 +1721,35 @@ end;
 
 procedure TUPeditMainForm.newthread;
 begin
-  MyThead:=TMyThead.Create(False);
+  MyThead := TMyThead.Create(false);
 end;
 
 procedure TMyThead.Execute;
 var
-  MYMD5,newVersionMD5: string;
+  MYMD5, newVersionMD5: string;
   temprs: TStringStream;
 begin
   freeonterminate := true;
   synchronize(UPcheckUpdate);
- mainForm.idhttp1 := Tidhttp.Create(nil);
+  MainForm.IdHTTP1 := TIdHTTP.Create(nil);
   temprs := TStringStream.Create;
   temprs.Clear;
   temprs.Position := 0;
   canlink := 0;
-  {try
+  { try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/news.txt', temprs);
     canlink := 1;
-  except
+    except
 
-          canlink := -1;
-  end;}
-    temprs.Position := 0;
-    //anoce := temprs.readString(temprs.Size);
-    anoce := MultiToUnicode(temprs.Memory, 936);
-    //anoce := temprs.ToString;
-        //displayanoce;
-    Synchronize(displayanoce);
-    Synchronize(setwebbrowser);
+    canlink := -1;
+    end; }
+  temprs.Position := 0;
+  // anoce := temprs.readString(temprs.Size);
+  anoce := MultiToUnicode(temprs.Memory, 936);
+  // anoce := temprs.ToString;
+  // displayanoce;
+  synchronize(displayanoce);
+  synchronize(setwebbrowser);
 
   if checkupdate = 0 then
   begin
@@ -1767,23 +1758,23 @@ begin
   end;
   temprs.Clear;
   temprs.Position := 0;
-  //showmessage('http创建成功成功');
-  {try
+  // showmessage('http创建成功成功');
+  { try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/upversion.txt', temprs);
-  except
-        mainForm.idhttp1.Disconnect;
-        if checkupdate = 1 then
-          Synchronize(checkupdatefail);
-        exit;
-  end;}
-  //showmessage('得到版本号成功');
+    except
+    mainForm.idhttp1.Disconnect;
+    if checkupdate = 1 then
+    Synchronize(checkupdatefail);
+    exit;
+    end; }
+  // showmessage('得到版本号成功');
   temprs.Position := 0;
   MYMD5 := hashmyself;
-  newVersionMD5 := temprs.readString(length(MYMD5));
+  newVersionMD5 := temprs.ReadString(length(MYMD5));
   temprs.Free;
-  if CompareStr(MYMD5, NewVersionMD5) <> 0 then
+  if CompareStr(MYMD5, newVersionMD5) <> 0 then
   begin
-    Synchronize(ifupdate);
+    synchronize(ifupdate);
   end;
 end;
 
@@ -1794,10 +1785,10 @@ end;
 
 procedure ifupdate;
 begin
-  if (MessageBox(Application.Handle, '主程序有新版本！现在要更新吗？',  '检测到更新', MB_OKCancel) = 1) then
-    begin
-     displayupdate;
-    end;
+  if (MessageBox(application.Handle, '主程序有新版本！现在要更新吗？', '检测到更新', MB_OKCancel) = 1) then
+  begin
+    displayupdate;
+  end;
 end;
 
 procedure displayupdate;
@@ -1807,12 +1798,12 @@ end;
 
 procedure setwebbrowser;
 begin
-  //mainForm.WebBrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
+  // mainForm.WebBrowser1.Navigate('http://www.upwinded.com/upedit/upeditpage.html');
 end;
 
 procedure UPcheckUpdate;
 begin
-  //showmessage('hash成功');
+  // showmessage('hash成功');
 end;
 
 procedure displayanoce;
