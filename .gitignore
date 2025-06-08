@@ -12,3 +12,4 @@ Code/lib/x86_64-win64/
 *.rsm
 UPedit.ini
 Code/kdef/__history
+*.local
