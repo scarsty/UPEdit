@@ -725,9 +725,9 @@ begin
   K50memorylist.num := ini.ReadInteger('50memory','memnum',0);
   setlength(K50memorylist.addr, K50memorylist.num);
   setlength(K50memorylist.note, K50memorylist.num);
-  strlist := Tstringlist.create;
   for I := 0 to K50memorylist.num - 1 do
   begin
+    strlist := Tstringlist.create;
     tempstr := ini.ReadString('50memory','mem' + inttostr(I),'');
     strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
     if strnum = 2 then
@@ -740,8 +740,8 @@ begin
       K50memorylist.addr[I] := 0;
       K50memorylist.note[I] := '';
     end;
+    strlist.Free;
   end;
-  strlist.Free;
 end;
 
 function hashMySelf: string;

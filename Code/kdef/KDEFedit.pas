@@ -2833,11 +2833,11 @@ begin
               end;
             25:
               begin
-                result := result + '保存给定地址数据[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
+                result := result + '保存给定地址数据[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
               end;
             26:
               begin
-                result := result + '读取给定地址数据[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
+                result := result + '读取给定地址数据[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
               end;
             27:
               begin
