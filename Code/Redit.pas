@@ -943,7 +943,7 @@ end;
 
 procedure TForm5.FormResize(Sender: TObject);
 begin
-  checklistbox1.Columns := checklistbox1.Width div 300 +1;
+  checklistbox1.Columns := checklistbox1.Width div 400 +1;
 end;
 
 procedure TForm5.RadioButton1Click(Sender: TObject);
@@ -1234,6 +1234,7 @@ begin
 
     end;
   end;
+
 end;
 
 procedure TForm5.Edit1KeyPress(Sender: TObject; var Key: Char);

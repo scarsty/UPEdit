@@ -213,7 +213,6 @@ begin
               strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
               if strnum = 11 then
               begin
-
                 with Wini.Wterm[i1] do
                 begin
                   datanum := strtoint64(strlist.Strings[0]);
@@ -1237,7 +1236,7 @@ end;
 
 procedure TForm10.FormResize(Sender: TObject);
 begin
-  listbox1.Columns := listbox1.Width div 300 +1;
+  listbox1.Columns := listbox1.Width div 400 +1;
 end;
 
 procedure TForm10.Image1MouseDown(Sender: TObject; Button: TMouseButton;
