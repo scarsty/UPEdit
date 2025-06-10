@@ -334,15 +334,15 @@ begin
   newVersionMD5 := temprs.readString(length(MYMD5));
   newVersion := newVersionMD5;
   temprs.Free;
-  if CompareStr(MYMD5, NewVersionMD5) <> 0 then
-  begin
-    if (MessageBox(Application.Handle, '主程序有新版本！现在要更新主程序吗？如果选择"取消"请自行选择更新方式！',  '检测到更新', MB_OKCancel) = 1) then
-    begin
-      Button4Click(sender);
-    end;
-  end
-  else
-    showmessage('已经是最新版本，不需要更新！');
+  //if CompareStr(MYMD5, NewVersionMD5) <> 0 then
+  //begin
+    //if (MessageBox(Application.Handle, '主程序有新版本！现在要更新主程序吗？如果选择"取消"请自行选择更新方式！',  '检测到更新', MB_OKCancel) = 1) then
+    //begin
+    //  Button4Click(sender);
+    //end;
+  //end
+  //else
+    //showmessage('已经是最新版本，不需要更新！');
   idhttp2.Free;
 end;
 

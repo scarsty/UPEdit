@@ -1774,7 +1774,7 @@ begin
   temprs.Free;
   if CompareStr(MYMD5, newVersionMD5) <> 0 then
   begin
-    synchronize(ifupdate);
+    //synchronize(ifupdate);
   end;
 end;
 
