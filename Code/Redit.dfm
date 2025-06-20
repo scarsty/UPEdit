@@ -204,7 +204,7 @@ object Form5: TForm5
       Ctl3D = True
       Flat = False
       ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
-      ItemHeight = 17
+      ItemHeight = 13
       ParentCtl3D = False
       TabOrder = 1
       OnClick = CheckListBox1Click
