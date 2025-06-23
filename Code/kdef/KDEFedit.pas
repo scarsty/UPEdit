@@ -744,7 +744,7 @@ begin
   if Ncount <> Kdefini.talkarrange then
   begin
     Kdefini.talkarrange := Ncount;
-    ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+    ini := Tinifile.Create(StartPath + iniFilename);
     ini.WriteInteger('Kdef','talkarrange', Kdefini.talkarrange);
     ini.Free;
   end;
@@ -988,7 +988,7 @@ begin
   eventamount := 0;
   eventcopy.copyevent := -1;
   eventcopy.copyattrib := -1;
-  ini := TIniFile.Create(ExtractFilePath(Paramstr(0)) + iniFileName);
+  ini := TIniFile.Create(StartPath + iniFileName);
   kdefini.talkarrange := ini.ReadInteger('Kdef','talkarrange',12);
   ini.Free;
   edit2.Text := inttostr(kdefini.talkarrange);
@@ -1351,7 +1351,7 @@ var
 begin
   result := false;
   try
-    filename := ExtractFilePath(Paramstr(0)) + iniFileName;
+    filename := StartPath + iniFileName;
     ini := TIniFile.Create(filename);
     kdefini.KDEFnum := ini.ReadInteger('KdefAttrib','number',0);
     if kdefini.KDEFnum < 0 then

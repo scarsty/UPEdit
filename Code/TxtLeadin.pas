@@ -108,7 +108,7 @@ end;
 procedure TForm91.Button2Click(Sender: TObject);
 begin
   txtname := edit1.Text;
-  openscript(ExtractFilePath(Paramstr(0)) +'lua.txt');
+  openscript(StartPath +'lua.txt');
 end;
 
 procedure TForm91.FormClose(Sender: TObject; var Action: TCloseAction);

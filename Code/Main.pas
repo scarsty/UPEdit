@@ -479,18 +479,26 @@ var
   I, strnum, temp, I2: integer;
   inihead: word;
   Mnu: HMenu;
+  tempchar: array [0 .. 1024] of char;
 begin
-
-  application.Title := Appname; // titlestr;
-  // application.
+  application.Title := Appname; // titlestr;  // application.
 
   Mnu := GetSystemMenu(application.Handle, false);
   AppendMenu(Mnu, MF_SEPARATOR, 0, nil);
   AppendMenu(Mnu, MF_STRING, WM_ABOUT, pchar('¹ØÓÚ...'));
 
   try
-
-    filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+    StartPath := GetCurrentDir + '\';
+    if paramcount > 0 then
+    begin
+      filename := paramstr(1);
+      if filename.EndsWith('.ini') then
+      begin
+        StartPath := ExtractFilePath(filename);
+        iniFilename := ExtractFileName(filename);
+      end;
+    end;
+    filename := StartPath + iniFilename;
     temp := fileopen(filename, fmopenread);
     fileseek(temp, 0, 0);
     fileread(temp, inihead, 2);
@@ -501,7 +509,7 @@ begin
     fileclose(temp);
     ini := Tinifile.Create(filename);
     appfirstrun := ini.ReadBool('run', 'firstrun', true);
-    updatepath := ini.ReadString('run', 'updatapath', ExtractFilePath(Paramstr(0)));
+    updatepath := ini.ReadString('run', 'updatapath', StartPath);
     gamepath := ini.ReadString('run', 'gamepath', '\');
     if length(gamepath) > 0 then
       if gamepath[length(gamepath)] <> '\' then
@@ -1086,7 +1094,7 @@ begin
   N20.Checked := Panel1.Visible;
   topcolumn := Panel1.Visible;
   try
-    ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+    ini := Tinifile.Create(StartPath + iniFilename);
     ini.Writebool('run', 'topcolumn', topcolumn);
   finally
     ini.Free;
@@ -1102,7 +1110,7 @@ begin
   N21.Checked := Panel2.Visible;
   leftcolumn := Panel2.Visible;
   try
-    ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+    ini := Tinifile.Create(StartPath + iniFilename);
     ini.Writebool('run', 'leftcolumn', leftcolumn);
   finally
     ini.Free;
@@ -1195,7 +1203,7 @@ begin
       gamepath := gamepath + '\';
 
     MainForm.Caption := titlestr + ' - ' + gamepath;
-    filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+    filename := StartPath + iniFilename;
     // gamepath := dir;
     ini := Tinifile.Create(filename);
     ini.WriteString('run', 'gamepath', gamepath);
@@ -1453,7 +1461,7 @@ end;
 procedure TUPeditMainForm.AppOnMessage(var Msg: tagMSG; var Handled: Boolean);
 var
   // FileName: String;
-  filename: Array [0 .. 255] of Char;
+  filename: Array [0 .. 255] of char;
   num, I: integer;
   FormImz: TImzForm;
   Form91: TForm91;
@@ -1664,7 +1672,7 @@ begin
   N21.Checked := Panel2.Visible;
   leftcolumn := Panel2.Visible;
   try
-    ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+    ini := Tinifile.Create(StartPath + iniFilename);
     ini.Writebool('run', 'leftcolumn', leftcolumn);
   finally
     ini.Free;
@@ -1774,7 +1782,7 @@ begin
   temprs.Free;
   if CompareStr(MYMD5, newVersionMD5) <> 0 then
   begin
-    //synchronize(ifupdate);
+    // synchronize(ifupdate);
   end;
 end;
 

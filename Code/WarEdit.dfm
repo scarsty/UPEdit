@@ -25,7 +25,7 @@ object Form10: TForm10
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 697
+    Width = 703
     Height = 102
     Align = alTop
     BevelOuter = bvNone
@@ -125,16 +125,16 @@ object Form10: TForm10
   object Panel2: TPanel
     Left = 0
     Top = 102
-    Width = 173
-    Height = 391
+    Width = 179
+    Height = 408
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
     object ListBox1: TListBox
       Left = 1
       Top = 1
-      Width = 179
-      Height = 414
+      Width = 177
+      Height = 406
       Align = alClient
       Columns = 3
       DoubleBuffered = True
@@ -153,13 +153,15 @@ object Form10: TForm10
     end
   end
   object Panel3: TPanel
-    Left = 173
+    Left = 179
     Top = 102
     Width = 524
-    Height = 391
+    Height = 408
     Align = alRight
     BevelOuter = bvNone
     TabOrder = 2
+    ExplicitLeft = 173
+    ExplicitHeight = 391
     object StatusBar1: TStatusBar
       Left = 0
       Top = 397
@@ -235,10 +237,12 @@ object Form10: TForm10
   end
   object StatusBar2: TStatusBar
     Left = 0
-    Top = 493
-    Width = 697
+    Top = 510
+    Width = 703
     Height = 20
     Panels = <>
+    ExplicitTop = 493
+    ExplicitWidth = 697
   end
   object OpenDialog1: TOpenDialog
     Left = 16

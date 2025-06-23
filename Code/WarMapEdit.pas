@@ -175,7 +175,7 @@ var
   ini: Tinifile;
 begin
   //
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     WarEditMode := TMapEditMode(ini.ReadInteger('File','WarMode', integer(WarEditMode)));
@@ -190,7 +190,7 @@ var
   ini: Tinifile;
 begin
   //
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     ini.WriteInteger('File','WarMode', integer(WarEditMode));

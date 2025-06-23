@@ -106,7 +106,7 @@ end;
 
 procedure TForm90.FormCreate(Sender: TObject);
 begin
-  Edit1.Text := ExtractFilePath(Paramstr(0));
+  Edit1.Text := StartPath;
   CYheaddir := edit1.Text;
   self.Cursor := fmcursor;
 end;

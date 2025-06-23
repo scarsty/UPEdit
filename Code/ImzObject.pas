@@ -432,7 +432,7 @@ begin
   PNGready := false;
   try
     try
-      ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+      ini := Tinifile.Create(StartPath + iniFileName);
       indexfile := imzindexfilename;
       indexfile := ini.ReadString('File', 'ImzIndexFileName', indexFile);
     finally

@@ -353,7 +353,7 @@ var
   ini: Tinifile;
   I: integer;
 begin
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     Dini.num := ini.ReadInteger('D_Modify','num', 0);
@@ -371,7 +371,7 @@ var
   filename: string;
   ini: Tinifile;
 begin
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     undoAmount := ini.ReadInteger('Run','undoAmount',undoAmount);
@@ -387,7 +387,7 @@ var
   ini: Tinifile;
   I: integer;
 begin
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     ini.WriteInteger('Run', 'undoAmount', undoAmount);
@@ -402,7 +402,7 @@ var
   ini: Tinifile;
   I: integer;
 begin
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   try
     ini := TIniFile.Create(filename);
     ini.WriteInteger('File', 'SceneMode', integer(EMode));

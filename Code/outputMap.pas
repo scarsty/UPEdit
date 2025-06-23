@@ -502,8 +502,8 @@ end;
 procedure TForm93.FormCreate(Sender: TObject);
 begin
   outmapfont := TFOnt.Create;
-  savedialog1.InitialDir := ExtractFilePath(Paramstr(0));
-  Edit1.Text := ExtractFilePath(Paramstr(0)) + Edit1.Text;
+  savedialog1.InitialDir := StartPath;
+  Edit1.Text := StartPath + Edit1.Text;
   outmapfont.Assign(self.Font);
   outmapfont.Color := outmapcolor;
   Checkbox1.Checked := Mmapoutputname;

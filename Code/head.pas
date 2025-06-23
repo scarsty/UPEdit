@@ -451,7 +451,8 @@ var
 
   GameVersion : integer = 0;  //0, Ô­°æ£» 1£¬Ë®ä°
 
-const
+  StartPath: string;
+
   iniFileName: string = 'Upedit.ini';
 
 function MultiToUnicode(str: PAnsiChar; codepage: integer): widestring;
@@ -720,7 +721,7 @@ var
   strlist: Tstringlist;
   tempstr: string;
 begin
-  Filename := ExtractFilePath(Paramstr(0)) + 'UPedit.ini';
+  Filename := ExtractFilePath(Paramstr(0)) + iniFileName;
   ini := TIniFile.Create(filename);
   K50memorylist.num := ini.ReadInteger('50memory','memnum',0);
   setlength(K50memorylist.addr, K50memorylist.num);

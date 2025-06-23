@@ -1458,14 +1458,14 @@ end;
 procedure readini;
 var
   iniF: Tinifile;
-  inifilename, tempstr: string;
+  inifilename1, tempstr: string;
   strlist: Tstringlist;
   i1, i2: integer;
   strnum, diff: integer;
 begin
   try
-    inifilename := ExtractFilePath(Paramstr(0)) + 'UPedit.ini';
-    iniF := Tinifile.Create(inifilename);
+    inifilename1 := StartPath + iniFileName;
+    iniF := Tinifile.Create(inifilename1);
     typenumber := iniF.ReadInteger('R_Modify', 'TypeNumber', 0);
     // edit1.Text := inttostr(typenumber);
     if typenumber > 0 then

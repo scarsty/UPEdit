@@ -224,7 +224,7 @@ begin
     if not DirectoryExists(dir) then
       ForceDirectories(dir);
     try
-      ini := TiniFile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+      ini := TiniFile.Create(StartPath + iniFileName);
       outputPNGindexName := ini.ReadString('File', 'ImzIndexFileName', 'index.ka');
     finally
       ini.Free;
@@ -261,7 +261,7 @@ end;
 
 procedure TForm88.FormCreate(Sender: TObject);
 begin
-  Edit1.Text := ExtractFilePath(Paramstr(0));
+  Edit1.Text := StartPath;
   dir := edit1.Text;
 end;
 

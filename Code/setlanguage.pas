@@ -45,7 +45,7 @@ begin
   else
     checkupdate := 0;
 
-  Filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  Filename := StartPath + iniFilename;
   ini := TIniFile.Create(filename);
   ini.WriteInteger('run','talkcode',talkcode);
   ini.WriteInteger('run','talkinvert',talkinvert);

@@ -316,7 +316,7 @@ begin
     image2.Canvas.Brush.Color := grpLISTBACKGROUND;
     image2.Canvas.FillRect(image2.Canvas.ClipRect);
     try
-      ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+      ini := Tinifile.Create(StartPath + iniFilename);
       ini.Writeinteger('file','GRPListBackGround',GRPListBackGround);
     finally
       ini.Free;
@@ -330,7 +330,7 @@ begin
     image2.Canvas.FillRect(image2.Canvas.ClipRect);
     display;
     try
-      ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+      ini := Tinifile.Create(StartPath + iniFilename);
       ini.Writeinteger('file','GRPListBackGround',GRPListBackGround);
     finally
       ini.Free;
@@ -355,7 +355,7 @@ begin
     image3.Canvas.Brush.Color := GRPlistTextCol;
     image3.Canvas.FillRect(image3.Canvas.ClipRect);
     try
-      ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+      ini := Tinifile.Create(StartPath + iniFilename);
       ini.Writeinteger('file','GRPlistTextCol',GRPlistTextCol);
     finally
       ini.Free;
@@ -369,7 +369,7 @@ begin
     image3.Canvas.FillRect(image3.Canvas.ClipRect);
     display;
     try
-      ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+      ini := Tinifile.Create(StartPath + iniFilename);
       ini.Writeinteger('file','GRPlistTextCol',GRPlistTextCol);
     finally
       ini.Free;
@@ -1457,7 +1457,7 @@ var
 begin
   GRPlistselect := RadioGroup1.ItemIndex;
   try
-    ini := Tinifile.Create(ExtractFilePath(Paramstr(0)) + iniFilename);
+    ini := Tinifile.Create(StartPath + iniFilename);
     ini.Writeinteger('file','GRPselect',GRPlistselect);
   finally
     ini.Free;

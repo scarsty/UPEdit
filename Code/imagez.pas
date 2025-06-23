@@ -197,7 +197,7 @@ var
 begin
   Path := Edit1.Text;
   if Path = '' then
-    Path := ExtractFilePath(paramstr(0));
+    Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
   if SelectDirectory('设置打包目录', dir, Path) then
@@ -219,14 +219,14 @@ var
 begin
   indexfile := imzindexfilename;
   try
-    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    ini := Tinifile.Create(StartPath + iniFileName);
     indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
   end;
   Path := Edit1.Text;
   if Path = '' then
-    Path := ExtractFilePath(paramstr(0));
+    Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
   if not DirectoryExists(Path) then
@@ -316,7 +316,7 @@ begin
     Edit1.Text := ExtractFilePath(OpenDialog1.filename);
     Button5Click(Sender);
   end;
-  SetCurrentDirectory(Pchar(ExtractFilePath(paramstr(0))));
+  SetCurrentDirectory(Pchar(StartPath));
 end;
 
 procedure TImzForm.Button4Click(Sender: TObject);
@@ -369,7 +369,7 @@ begin
       begin
         if ExtractFileDrive(Edit2.Text) = '' then
         begin
-          Edit2.Text := ExtractFilePath(paramstr(0)) + Edit2.Text;
+          Edit2.Text := StartPath + Edit2.Text;
         end
         else
           ForceDirectories(ExtractFilePath(Edit2.Text));
@@ -377,7 +377,7 @@ begin
     end
     else
     begin
-      Edit2.Text := ExtractFilePath(paramstr(0)) + Edit2.Text;
+      Edit2.Text := StartPath + Edit2.Text;
     end;
 
     SaveImzToFile(@imz, Edit2.Text);
@@ -420,14 +420,14 @@ var
 begin
   indexfile := imzindexfilename;
   try
-    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    ini := Tinifile.Create(StartPath + iniFileName);
     indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
   end;
   tpath := Path;
   if tpath = '' then
-    tpath := ExtractFilePath(paramstr(0));
+    tpath := StartPath;
   if tpath[length(tpath)] <> '\' then
     tpath := tpath + '\';
   try
@@ -465,7 +465,7 @@ var
 begin
   Path := ExtractFilePath(Edit2.Text);
   if Path = '' then
-    Path := ExtractFilePath(paramstr(0));
+    Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
   if SelectDirectory(Path, outdir) then
@@ -497,7 +497,7 @@ begin
 
   indexfile := imzindexfilename;
   try
-    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    ini := Tinifile.Create(StartPath + iniFileName);
     indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;
@@ -508,7 +508,7 @@ begin
 
   dir := Edit1.Text;
   if dir = '' then
-    dir := ExtractFilePath(paramstr(0));
+    dir := StartPath;
 
   if dir[length(dir)] <> '\' then
     dir := dir + '\';
@@ -922,7 +922,7 @@ var
 begin
   indexfile := imzindexfilename;
   try
-    ini := Tinifile.Create(ExtractFilePath(paramstr(0)) + iniFileName);
+    ini := Tinifile.Create(StartPath + iniFileName);
     indexfile := ini.ReadString('File', 'ImzIndexFileName', indexfile);
   finally
     ini.Free;

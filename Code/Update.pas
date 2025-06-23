@@ -109,7 +109,7 @@ begin
     if dir[length(dir)] <> '\' then
       dir :=dir + '\';
     edit1.Text := dir;
-    //filename := ExtractFilePath(Paramstr(0)) + 'UPedit.ini';
+    //filename := StartPath + 'UPedit.ini';
     // ini := TIniFile.Create(filename);
     updatepath := Edit1.Text;
   end;
@@ -147,12 +147,12 @@ begin
     begin
       if not(fileexists(filenamearray[I])) or (messagebox(Form87.Handle,Pwidechar('文件"' + Filenamearray[I] + '"已经存在是否覆盖？'), '文件已存在', MB_OKCancel) = 1) then
       begin
-        Writeln(DBat,'copy ' + ExtractFilePath(Paramstr(0))+ filenamearray[I] + '.tmp ' + ExtractFilePath(Paramstr(0)) + filenamearray[I]);
+        Writeln(DBat,'copy ' + StartPath+ filenamearray[I] + '.tmp ' + StartPath + filenamearray[I]);
       end;
-      Writeln(DBat,'del ' + ExtractFilePath(Paramstr(0)) + filenamearray[I] + '.tmp');
+      Writeln(DBat,'del ' + StartPath + filenamearray[I] + '.tmp');
     end;
     writeln(Dbat,'@ping 127.0.0.1 -n 2 >nul ');
-    Writeln(DBat,'start "" "' + ExtractFilePath(Paramstr(0)) + 'UPedit.exe'+'"');
+    Writeln(DBat,'start "" "' + StartPath + 'UPedit.exe'+'"');
 
     Writeln(DBat,'del %0'); //删除BAT文件自身
     Writeln(DBat,'exit');
@@ -249,7 +249,7 @@ begin
         setlength(filedata, offset[I]);
         copymemory(@filedata[0],@data[Pdata],offset[I]);
         inc(Pdata,offset[I]);
-        FH := filecreate(ExtractFilePath(Paramstr(0)) + filenamearray[I]+'.tmp');
+        FH := filecreate(StartPath + filenamearray[I]+'.tmp');
         filewrite(FH, filedata[0], Offset[I]);
         fileclose(FH);
       end;
@@ -444,7 +444,7 @@ begin
   if updatepath[length(updatepath)] <> '\' then
       updatepath := updatepath + '\';
 
-  filename := ExtractFilePath(Paramstr(0)) + iniFilename;
+  filename := StartPath + iniFilename;
   ini := TIniFile.Create(filename);
   ini.writestring('run', 'updatapath',updatepath);
   ini.Free;
@@ -516,9 +516,9 @@ begin
   begin
     if not canexit then
     begin
-      updaters.SaveToFile(ExtractFilePath(Paramstr(0)) + 'upedit.exe.tmp');
+      updaters.SaveToFile(StartPath + 'upedit.exe.tmp');
       updaters.free;
-      UpdateMD5 := hashFile(ExtractFilePath(Paramstr(0)) + 'upedit.exe.tmp');
+      UpdateMD5 := hashFile(StartPath + 'upedit.exe.tmp');
 
       if newVersion = '' then
       begin
@@ -560,7 +560,7 @@ end;
 procedure restart;
 begin
   application.Terminate;
-  WinExec( Pansichar(Ansistring(ExtractFilePath(Paramstr(0)) + 'UpdateUPedit.bat')),SW_HIDE);
+  WinExec( Pansichar(Ansistring(StartPath + 'UpdateUPedit.bat')),SW_HIDE);
 end;
 
 procedure showdownloaderror;
@@ -585,14 +585,14 @@ begin
   if (MessageBox(Form87.Handle, '文件下载完成！现在程序需要自动重启才能完成更新！是否马上重启？',  '下载完成', MB_OKCancel) = 1) then
   begin
     //ShellExecute(Handle,'open',Pwidechar('Explorer.exe'),PWidechar( '/select,'  + updatepath + Updatefilename), nil,1);
-    AssignFile(DBat, ExtractFilePath(Paramstr(0)) + 'UpdateUPedit.bat');
+    AssignFile(DBat, StartPath + 'UpdateUPedit.bat');
     Rewrite(DBat);
     Writeln(DBat,'@echo off');
     Writeln(DBat,'TASKKILL /F /IM '+ParamStr(0));
     writeln(Dbat,'@ping 127.0.0.1 -n 3 >nul ');
     Writeln(DBat,'del '+ParamStr(0)); //写入删除主程序的命令
-    Writeln(DBat,'copy ' +ExtractFilePath(Paramstr(0))+'UPedit.exe.tmp ' + ParamStr(0));
-    Writeln(DBat,'del '+ExtractFilePath(Paramstr(0))+'UPedit.exe.tmp');
+    Writeln(DBat,'copy ' +StartPath+'UPedit.exe.tmp ' + ParamStr(0));
+    Writeln(DBat,'del '+StartPath+'UPedit.exe.tmp');
     Writeln(DBat,'start "" "' + ParamStr(0)+'"');
 
     Writeln(DBat,'del %0'); //删除BAT文件自身
