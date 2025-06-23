@@ -1614,33 +1614,83 @@ var
   sql: utf8string;
   DB: TSQLite3Database;
   Stmt, stmt_struct, stmt_data: TSQLite3Statement;
-  I, j: integer;
+  i1, j, j1, j2, i2, i3, i4, i5: integer;
+  value_i: integer;
+  value_i16: smallint;
+  value_str: utf8string;
 begin
-  dbfile := dbfile + '.db'; // temp
+  // dbfile := dbfile + '.db'; // temp
   DeleteFile(dbfile);
   DB := TSQLite3Database.Create;
   try
     DB.Open(dbfile);
-
-    for I := 0 to length(Rini) - 1 do
+    for i1 := 0 to length(Rini) - 1 do
     begin
-      sql := 'create table ' + typename[I] + '(';
-      for j := 0 to length(Rini[I].Rterm) - 1 do
+      sql := 'create table ' + typename[i1] + '(';
+      for j := 0 to length(Rini[i1].Rterm) - 1 do
       begin
-        sql := sql + Rini[I].Rterm[j].name;
-        if Rini[I].Rterm[j].isstr <> 0 then
+        for j1 := 0 to Rini[i1].Rterm[j].datanum - 1 do
         begin
-          sql := sql + ' test,';
-        end
-        else
-        begin
-          sql := sql + ' int,'
+          for j2 := 0 to Rini[i1].Rterm[j].incnum -1 do
+          begin
+            sql := sql +'"' + Rini[i1].Rterm[j+j2].name;
+            if Rini[i1].Rterm[j].datanum > 1 then
+              sql := sql + inttostr(j1);
+            if Rini[i1].Rterm[j].isstr <> 0 then
+            begin
+              sql := sql + '" text,';
+            end
+            else
+            begin
+              sql := sql + '" int,'
+            end;
+          end;
         end;
       end;
-      sql[length(sql) - 1] := ' ';
+      sql[length(sql)] := ' ';
       sql := sql + ')';
+      //showmessage(sql);
+      DB.Execute(sql);
+
+      for i2 := 0 to PRF.Rtype[i1].datanum - 1 do
+      begin
+        sql := 'insert into ' + typename[i1] + ' values(';
+        for i3 := 0 to PRF.Rtype[i1].Rdata[i2].num - 1 do
+        begin
+          for i4 := 0 to PRF.Rtype[i1].Rdata[i2].Rdataline[i3].len - 1 do
+          begin
+            for i5 := 0 to PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].incnum - 1 do
+            begin
+              if PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datalen > 0 then
+              begin
+                if Rini[i1].Rterm[i3].isstr <> 0 then
+                begin
+                  value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
+                  sql := sql + '"' + value_str + '",'
+                end
+                else
+                begin
+                  if PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datalen = 2 then
+                  begin
+                    move(PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], value_i16, 2);
+                    value_i := value_i16;
+                  end;
+                  if PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datalen = 4 then
+                  begin
+                    move(PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], value_i, 4);
+                  end;
+                  sql := sql + inttostr(value_i) + ',';
+                end;
+              end;
+            end;
+          end;
+        end;
+        sql[length(sql)] := ' ';
+        sql := sql + ')';
+        // showmessage(sql);
+        DB.Execute(sql);
+      end;
     end;
-    DB.Execute(sql);
   finally
     DB.Free;
   end;
