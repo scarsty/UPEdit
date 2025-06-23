@@ -8,7 +8,8 @@ uses
   {XLSFonts4, XLSReadWriteII4, SheetData4,} CheckLst, math,
   System.IOUtils,
   // VCL.FlexCel.Core, FlexCel.XlsAdapter;
-  xlsxio;
+  xlsxio,
+  SQLite3, SQLite3Wrap;
 
 type
 
@@ -94,7 +95,7 @@ var
 
 procedure copyRdata(source, dest: PRdata);
 function readR(idx, grp: string; PRF: PRfile): boolean;
-function readDB(db: string; PRF: PRfile): boolean;
+function readDB(dbfile: string; PRF: PRfile): boolean;
 procedure readini;
 procedure calnamepos(PRF: PRfile);
 procedure saveR(idx, grp: string; PRF: PRfile);
@@ -349,7 +350,7 @@ begin
     // XLSReadWriteII41.Filename := opendialog1.Filename;
     // XLSReadWriteII41.Read;
     // xls := TXlsFile.Create (opendialog1.Filename);
-    xls := xlsxioread_open(pansichar(UnicodeToMulti(pwidechar(OpenDialog1.filename), 65001)));
+    xls := xlsxioread_open(pansichar(UnicodeToMulti(pwidechar(OpenDialog1.filename), 936)));
     RFile.typenumber := typenumber;
     for i1 := 0 to RFile.typenumber - 1 do
     begin
@@ -1130,9 +1131,18 @@ begin
   end;
 end;
 
-function readDB(db: string; PRF: PRfile): boolean;
-
+function readDB(dbfile: string; PRF: PRfile): boolean;
+var
+  DB: TSQLite3Database;
+  Stmt: TSQLite3Statement;
+  IDs: array[1..6] of Integer;
 begin
+DB := TSQLite3Database.Create;
+  try
+    DB.Open(dbfile);
+  finally
+    DB.Free;
+  end;
 
 end;
 

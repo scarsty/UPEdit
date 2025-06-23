@@ -25,12 +25,11 @@ object Form10: TForm10
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 705
+    Width = 697
     Height = 102
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 697
     object Label1: TLabel
       Left = 25
       Top = 25
@@ -126,13 +125,11 @@ object Form10: TForm10
   object Panel2: TPanel
     Left = 0
     Top = 102
-    Width = 181
-    Height = 416
+    Width = 173
+    Height = 391
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 173
-    ExplicitHeight = 391
     object ListBox1: TListBox
       Left = 1
       Top = 1
@@ -153,20 +150,16 @@ object Form10: TForm10
       TabOrder = 0
       OnClick = ListBox1Click
       OnDblClick = ListBox1DblClick
-      ExplicitWidth = 171
-      ExplicitHeight = 389
     end
   end
   object Panel3: TPanel
-    Left = 181
+    Left = 173
     Top = 102
     Width = 524
-    Height = 416
+    Height = 391
     Align = alRight
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitLeft = 173
-    ExplicitHeight = 391
     object StatusBar1: TStatusBar
       Left = 0
       Top = 397
@@ -242,12 +235,10 @@ object Form10: TForm10
   end
   object StatusBar2: TStatusBar
     Left = 0
-    Top = 518
-    Width = 705
+    Top = 493
+    Width = 697
     Height = 20
     Panels = <>
-    ExplicitTop = 493
-    ExplicitWidth = 697
   end
   object OpenDialog1: TOpenDialog
     Left = 16

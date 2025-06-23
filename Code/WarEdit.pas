@@ -510,7 +510,7 @@ begin
 //      XLSReadWriteII41.Read;
 //xls := TXlsFile.Create (opendialog1.Filename);
 //xls.ActiveSheetByName := 'Sheet1';
-      xls := xlsxioread_open(pansichar(UnicodeToMulti(pwidechar(opendialog1.Filename), 65001)));
+      xls := xlsxioread_open(pansichar(UnicodeToMulti(pwidechar(opendialog1.Filename), 936)));
       sheet := xlsxioread_sheet_open(xls, 'Sheet1', XLSXIOREAD_SKIP_EMPTY_ROWS);
       i2 := 0;
       //while True do
