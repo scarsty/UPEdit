@@ -209,6 +209,8 @@ object Form5: TForm5
       TabOrder = 1
       OnClick = CheckListBox1Click
       OnDblClick = CheckListBox1DblClick
+      ExplicitWidth = 740
+      ExplicitHeight = 457
     end
   end
   object Panel3: TPanel

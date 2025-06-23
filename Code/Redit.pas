@@ -95,6 +95,7 @@ var
 
 procedure copyRdata(source, dest: PRdata);
 function readR(idx, grp: string; PRF: PRfile): boolean;
+function getRows(var stmt_data: TSQLite3Statement): integer;
 function readDB(dbfile: string; PRF: PRfile): boolean;
 procedure readini;
 procedure calnamepos(PRF: PRfile);
@@ -1037,6 +1038,7 @@ begin
   if grp.EndsWith('.db') then
   begin
     result := readDB(grp, PRF);
+    exit;
   end;
   if fileexists(idx) and fileexists(grp) then
   begin
@@ -1131,19 +1133,158 @@ begin
   end;
 end;
 
+function getRows(var stmt_data: TSQLite3Statement): integer;
+begin
+  result := 0;
+  while stmt_data.Step = SQLITE_ROW do
+  begin
+    result := result + 1;
+  end;
+  stmt_data.Reset;
+end;
+
 function readDB(dbfile: string; PRF: PRfile): boolean;
 var
   DB: TSQLite3Database;
-  Stmt: TSQLite3Statement;
-  IDs: array[1..6] of Integer;
+  Stmt, stmt_struct, stmt_data: TSQLite3Statement;
+  IDs: array [1 .. 6] of integer;
+  i1, j, table_num, term_num, diff: integer;
+  tname, type1: string;
 begin
-DB := TSQLite3Database.Create;
+  DB := TSQLite3Database.Create;
   try
     DB.Open(dbfile);
+    Stmt := DB.Prepare('select name from sqlite_master where type="table"');
+    table_num := getRows(Stmt);
+    typenumber := table_num;
+    setlength(Rini, table_num);
+    setlength(typename, table_num);
+    setlength(typedataitem, table_num);
+    PRF.typenumber := typenumber;
+    setlength(PRF.Rtype, PRF.typenumber);
+
+    i1 := 0;
+    while Stmt.Step = SQLITE_ROW do
+    begin
+      tname := Stmt.ColumnText(0); // 表的名字
+      typename[i1] := tname;
+      typedataitem[i1] := term_num;
+      // 表结构
+      stmt_struct := DB.Prepare('PRAGMA table_info(' + tname + ')');
+      term_num := getRows(stmt_struct);
+      setlength(Rini[i1].Rterm, term_num);
+      typename[i1] := tname;
+      typedataitem[i1] := term_num;
+
+      PRF.Rtype[i1].datanum := 0;
+      PRF.Rtype[i1].namepos := -1;
+      PRF.Rtype[i1].mappos := -1;
+      setlength(PRF.Rtype[i1].Rdata, 0);
+
+      j := 0;
+      diff := 0;
+      while stmt_struct.Step = SQLITE_ROW do
+      begin
+        with Rini[i1].Rterm[j] do
+        begin
+          name := stmt_struct.ColumnText(1);
+          isstr := 0;
+          type1 := stmt_struct.ColumnText(2);
+          datanum := 1;
+          incnum := 1;
+          datalen := 4;
+          isname := 0;
+          quote := -1;
+          note := '';
+          if type1 = 'TEXT' then
+          begin
+            isstr := 1;
+            datalen := 100;
+          end;
+          if name = '名字' then
+          begin
+            isname := 1;
+          end;
+          diff := diff + datalen;
+        end;
+        j := j + 1;
+      end;
+      stmt_struct.Free;
+
+      // 读取数据
+      stmt_data := DB.Prepare('select * from ' + tname);
+
+      PRF.Rtype[i1].namepos := -1;
+      Size := 0;
+      for i2 := 0 to typedataitem[i1] - 1 do
+      begin
+        if Rini[i1].Rterm[i2].datanum > 0 then
+          for i3 := 0 to Rini[i1].Rterm[i2].incnum - 1 do
+          begin
+            inc(Size, Rini[i1].Rterm[i2].datanum * Rini[i1].Rterm[i2 + i3].datalen);
+          end;
+      end;
+      if i1 = 0 then
+      begin
+        templen := max(offset[i1] div Size, 1);
+      end
+      else
+        templen := max((offset[i1] - offset[i1 - 1]) div Size, 1);
+      for i2 := 0 to templen - 1 do
+      begin
+        addnewRdata(PRF, i1, nil);
+      end;
+
+      if i1 <> 0 then
+        fileseek(F, offset[i1 - 1], 0);
+      // setlength(PRF.Rtype[i1].Rdata, PRF.Rtype[i1].datanum);
+      for i2 := 0 to PRF.Rtype[i1].datanum - 1 do
+      begin
+        // temp := 0;
+        // for i3 := 0 to typedataitem[i1] - 1 do
+        // if Rini[i1].Rterm[i3].datanum > 0 then
+        // inc(temp);
+        // PRF.Rtype[i1].Rdata[i2].num := temp;
+        // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline, temp);
+        temp := -1;
+        for i3 := 0 to typedataitem[i1] - 1 do
+        begin
+          if Rini[i1].Rterm[i3].datanum > 0 then
+          begin
+            inc(temp);
+            if (i3 = 0) and (Rini[i1].Rterm[i3].isname = 1) then
+              PRF.Rtype[i1].namepos := temp;
+
+            // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].len := Rini[i1].Rterm[i3].datanum;
+            // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray, Rini[i1].Rterm[i3].datanum);
+            // setlength(Rfile[i1].Rdata[i2].Rdataline[i3].datatype, Rini[i1].Rterm[i3].incnum);
+            // setlength(Rfile[i1].Rdata[i2].Rdataline[i3].Rarray, Rini[i1].Rterm[i3].incnum);
+            for i4 := 0 to Rini[i1].Rterm[i3].datanum - 1 do
+            begin
+              // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].incnum :=  Rini[i1].Rterm[i3].incnum;
+              // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray, Rini[i1].Rterm[i3].incnum);
+              for i5 := 0 to Rini[i1].Rterm[i3].incnum - 1 do
+              begin
+                // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].datatype := Rini[i1].Rterm[i3 + i5].isstr;
+                // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].datalen := Rini[i1].Rterm[i3 + i5].datalen;
+                // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data, Rini[i1].Rterm[i3 + i5].datalen);
+                if Rini[i1].Rterm[i3 + i5].datalen > 0 then
+                  fileread(F, PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], Rini[i1].Rterm[i3 + i5].datalen);
+              end;
+            end;
+
+          end;
+        end;
+      end;
+
+      stmt_data.Free;
+      i1 := i1 + 1;
+    end;
+    Stmt.Free;
   finally
     DB.Free;
   end;
-
+  result := true;
 end;
 
 procedure TForm5.Edit2KeyPress(Sender: TObject; var Key: Char);
@@ -1390,10 +1531,10 @@ begin
 
         end;
       end;
-      strlist.free;
+      strlist.Free;
 
     end;
-    iniF.free;
+    iniF.Free;
   except
     // showmessage('读取ini文件错误！');
     exit;
