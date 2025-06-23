@@ -100,6 +100,7 @@ function readDB(dbfile: string; PRF: PRfile): boolean;
 procedure readini;
 procedure calnamepos(PRF: PRfile);
 procedure saveR(idx, grp: string; PRF: PRfile);
+procedure saveDB(dbfile: string; PRF: PRfile);
 procedure addnewRdata(PRF: PRfile; CRType: integer; PRD: PRdata);
 
 implementation
@@ -1148,8 +1149,9 @@ var
   DB: TSQLite3Database;
   Stmt, stmt_struct, stmt_data: TSQLite3Statement;
   IDs: array [1 .. 6] of integer;
-  i1, j, table_num, term_num, diff: integer;
+  i1, j, table_num, term_num, diff, Size, templen, i2, i3, i4, i5, temp, value: integer;
   tname, type1: string;
+  str: utf8string;
 begin
   DB := TSQLite3Database.Create;
   try
@@ -1201,7 +1203,7 @@ begin
             isstr := 1;
             datalen := 100;
           end;
-          if name = '名字' then
+          if (name = '名字') or (name = '名称') or (name = '物品名') then
           begin
             isname := 1;
           end;
@@ -1215,37 +1217,16 @@ begin
       stmt_data := DB.Prepare('select * from ' + tname);
 
       PRF.Rtype[i1].namepos := -1;
-      Size := 0;
-      for i2 := 0 to typedataitem[i1] - 1 do
-      begin
-        if Rini[i1].Rterm[i2].datanum > 0 then
-          for i3 := 0 to Rini[i1].Rterm[i2].incnum - 1 do
-          begin
-            inc(Size, Rini[i1].Rterm[i2].datanum * Rini[i1].Rterm[i2 + i3].datalen);
-          end;
-      end;
-      if i1 = 0 then
-      begin
-        templen := max(offset[i1] div Size, 1);
-      end
-      else
-        templen := max((offset[i1] - offset[i1 - 1]) div Size, 1);
+      templen := getRows(stmt_data);
+      // 数据行数
       for i2 := 0 to templen - 1 do
       begin
         addnewRdata(PRF, i1, nil);
       end;
 
-      if i1 <> 0 then
-        fileseek(F, offset[i1 - 1], 0);
-      // setlength(PRF.Rtype[i1].Rdata, PRF.Rtype[i1].datanum);
       for i2 := 0 to PRF.Rtype[i1].datanum - 1 do
       begin
-        // temp := 0;
-        // for i3 := 0 to typedataitem[i1] - 1 do
-        // if Rini[i1].Rterm[i3].datanum > 0 then
-        // inc(temp);
-        // PRF.Rtype[i1].Rdata[i2].num := temp;
-        // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline, temp);
+        stmt_data.Step;
         temp := -1;
         for i3 := 0 to typedataitem[i1] - 1 do
         begin
@@ -1254,29 +1235,28 @@ begin
             inc(temp);
             if (i3 = 0) and (Rini[i1].Rterm[i3].isname = 1) then
               PRF.Rtype[i1].namepos := temp;
-
-            // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].len := Rini[i1].Rterm[i3].datanum;
-            // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray, Rini[i1].Rterm[i3].datanum);
-            // setlength(Rfile[i1].Rdata[i2].Rdataline[i3].datatype, Rini[i1].Rterm[i3].incnum);
-            // setlength(Rfile[i1].Rdata[i2].Rdataline[i3].Rarray, Rini[i1].Rterm[i3].incnum);
             for i4 := 0 to Rini[i1].Rterm[i3].datanum - 1 do
             begin
-              // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].incnum :=  Rini[i1].Rterm[i3].incnum;
-              // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray, Rini[i1].Rterm[i3].incnum);
               for i5 := 0 to Rini[i1].Rterm[i3].incnum - 1 do
               begin
-                // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].datatype := Rini[i1].Rterm[i3 + i5].isstr;
-                // PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].datalen := Rini[i1].Rterm[i3 + i5].datalen;
-                // setlength(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data, Rini[i1].Rterm[i3 + i5].datalen);
                 if Rini[i1].Rterm[i3 + i5].datalen > 0 then
-                  fileread(F, PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], Rini[i1].Rterm[i3 + i5].datalen);
+                  if Rini[i1].Rterm[i3 + i5].isstr = 0 then
+                  begin
+                    value := stmt_data.ColumnInt(i3);
+                    move(value, PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], 4);
+                  end
+                  else
+                  begin
+                    fillchar(PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], Rini[i1].Rterm[i3 + i5].datalen, 0);
+                    str := stmt_data.ColumnText(i3);
+                    move(str[1], PRF.Rtype[i1].Rdata[i2].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], length(str));
+                  end;
               end;
             end;
 
           end;
         end;
       end;
-
       stmt_data.Free;
       i1 := i1 + 1;
     end;
@@ -1483,8 +1463,6 @@ var
   i1, i2: integer;
   strnum, diff: integer;
 begin
-  //
-
   try
     inifilename := ExtractFilePath(Paramstr(0)) + 'UPedit.ini';
     iniF := Tinifile.Create(inifilename);
@@ -1596,7 +1574,11 @@ var
   offset: array of integer;
   F: integer;
 begin
-  //
+  if grp.EndsWith('.db') then
+  begin
+    saveDB(grp, PRF);
+    exit;
+  end;
   setlength(offset, PRF.typenumber);
   F := filecreate(grp);
   offset[0] := 0;
@@ -1623,11 +1605,45 @@ begin
   fileclose(F);
   F := filecreate(idx);
   fileseek(F, 0, 0);
-
   filewrite(F, offset[0], PRF.typenumber * 4);
-
   fileclose(F);
+end;
 
+procedure saveDB(dbfile: string; PRF: PRfile);
+var
+  sql: utf8string;
+  DB: TSQLite3Database;
+  Stmt, stmt_struct, stmt_data: TSQLite3Statement;
+  I, j: integer;
+begin
+  dbfile := dbfile + '.db'; // temp
+  DeleteFile(dbfile);
+  DB := TSQLite3Database.Create;
+  try
+    DB.Open(dbfile);
+
+    for I := 0 to length(Rini) - 1 do
+    begin
+      sql := 'create table ' + typename[I] + '(';
+      for j := 0 to length(Rini[I].Rterm) - 1 do
+      begin
+        sql := sql + Rini[I].Rterm[j].name;
+        if Rini[I].Rterm[j].isstr <> 0 then
+        begin
+          sql := sql + ' test,';
+        end
+        else
+        begin
+          sql := sql + ' int,'
+        end;
+      end;
+      sql[length(sql) - 1] := ' ';
+      sql := sql + ')';
+    end;
+    DB.Execute(sql);
+  finally
+    DB.Free;
+  end;
 end;
 
 end.
