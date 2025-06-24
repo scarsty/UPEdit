@@ -488,7 +488,6 @@ begin
   AppendMenu(Mnu, MF_STRING, WM_ABOUT, pchar('¹ØÓÚ...'));
 
   try
-    StartPath := GetCurrentDir + '\';
     if paramcount > 0 then
     begin
       filename := paramstr(1);
@@ -498,6 +497,8 @@ begin
         iniFilename := ExtractFileName(filename);
       end;
     end;
+    if StartPath = '' then
+      StartPath := GetCurrentDir + '\';
     filename := StartPath + iniFilename;
     temp := fileopen(filename, fmopenread);
     fileseek(temp, 0, 0);

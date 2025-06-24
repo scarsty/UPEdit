@@ -456,6 +456,7 @@
             <Form>inctGuide</Form>
         </DCCReference>
         <DCCReference Include="xlsxio.pas"/>
+        <DCCReference Include="iniu8.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
@@ -487,6 +488,12 @@
             </Platforms>
             <Deployment Version="4">
                 <DeployFile LocalName="UPEdit.exe" Configuration="Debug" Class="ProjectOutput"/>
+                <DeployFile LocalName="debug\UPEdit.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>UPEdit.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
                 <DeployClass Name="AdditionalDebugSymbols">
                     <Platform Name="iOSSimulator">
                         <Operation>1</Operation>
