@@ -1624,6 +1624,7 @@ begin
   DB := TSQLite3Database.Create;
   try
     DB.Open(dbfile);
+    DB.BeginTransaction;
     for i1 := 0 to length(Rini) - 1 do
     begin
       sql := 'create table ' + typename[i1] + '(';
@@ -1651,7 +1652,6 @@ begin
       sql := sql + ')';
       // showmessage(sql);
       DB.Execute(sql);
-
       for i2 := 0 to PRF.Rtype[i1].datanum - 1 do
       begin
         sql := 'insert into ' + typename[i1] + ' values(';
@@ -1700,6 +1700,7 @@ begin
         DB.Execute(sql);
       end;
     end;
+    DB.Commit;
   finally
     DB.Free;
   end;

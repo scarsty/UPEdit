@@ -3,7 +3,7 @@
         <ProjectGuid>{9FF8CD97-3B76-4269-8CC1-7D92CA3D0457}</ProjectGuid>
         <MainSource>UPEdit.dpr</MainSource>
         <Base>True</Base>
-        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Config Condition="'$(Config)'==''">Release</Config>
         <TargetedPlatforms>3</TargetedPlatforms>
         <AppType>Application</AppType>
         <FrameworkType>VCL</FrameworkType>
