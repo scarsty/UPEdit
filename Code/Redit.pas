@@ -1631,9 +1631,9 @@ begin
       begin
         for j1 := 0 to Rini[i1].Rterm[j].datanum - 1 do
         begin
-          for j2 := 0 to Rini[i1].Rterm[j].incnum -1 do
+          for j2 := 0 to Rini[i1].Rterm[j].incnum - 1 do
           begin
-            sql := sql +'"' + Rini[i1].Rterm[j+j2].name;
+            sql := sql + '"' + Rini[i1].Rterm[j + j2].name;
             if Rini[i1].Rterm[j].datanum > 1 then
               sql := sql + inttostr(j1);
             if Rini[i1].Rterm[j].isstr <> 0 then
@@ -1642,14 +1642,14 @@ begin
             end
             else
             begin
-              sql := sql + '" int,'
+              sql := sql + '" integer,'
             end;
           end;
         end;
       end;
       sql[length(sql)] := ' ';
       sql := sql + ')';
-      //showmessage(sql);
+      // showmessage(sql);
       DB.Execute(sql);
 
       for i2 := 0 to PRF.Rtype[i1].datanum - 1 do
@@ -1665,7 +1665,16 @@ begin
               begin
                 if Rini[i1].Rterm[i3].isstr <> 0 then
                 begin
-                  value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
+                  case datacode of
+                    0:
+                      value_str := MultiToUnicode(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], 936);
+                    1:
+                      value_str := MultiToUnicode(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], 950);
+                    2:
+                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);   //这个估计不对，但似乎用不上
+                  else
+                    value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
+                  end;
                   sql := sql + '"' + value_str + '",'
                 end
                 else
