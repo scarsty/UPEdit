@@ -163,6 +163,7 @@ procedure displayanoce;
 procedure ifupdate;
 procedure checkupdatefail;
 procedure AppInitial;
+function FileVersion(const FileName: TFileName): string;
 
 var
   MainForm: TUPeditMainForm;
@@ -176,8 +177,8 @@ var
   // ²à±ßÀ¸
   // m_bNewWindow: boolean = false;
   // mainwebshow: boolean = false;
-const
-  titlestr: string = 'UPedit Formal Ver 1.xxx';
+
+  titlestr: string = 'UPedit Formal Ver ';
   Appname: string = 'UPedit Formal';
   WM_ABOUT: integer = 2000;
 
@@ -226,16 +227,16 @@ end;
 
 procedure TUPeditMainForm.Onmymessage(var t: TWmCopyData);
 var
-  filename: string;
+  FileName: string;
   // tempForm: ^TForm;
   FormImz: TImzForm;
   Form91: TForm91;
   form1: TForm1;
-  FOrm3: TForm3;
+  Form3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
   opentempstr: string;
-  I, I2, I3: integer;
+  i, i2, i3: integer;
   tempdata: Pbyte;
 begin
   tempstr := strpas(PAnsiChar(t.CopyDataStruct.lpData));
@@ -254,11 +255,11 @@ begin
   begin
     if not CFormImz then
     begin
-      for I := 0 to self.MDIChildCount - 1 do
-        if self.MDIChildren[I].Handle = MdiChildHandle[13] then
+      for i := 0 to self.MDIChildCount - 1 do
+        if self.MDIChildren[i].Handle = MdiChildHandle[13] then
         begin
           // self.MDIChildren[I].Show;
-          FormImz := TImzForm(self.MDIChildren[I]);
+          FormImz := TImzForm(self.MDIChildren[i]);
           FormImz.IMZcanCopyPNG := true;
           try
 
@@ -268,15 +269,15 @@ begin
             FormImz.imzcopypng.frame := max(0, Pinteger(tempdata + 12)^);
             setlength(FormImz.imzcopypng.framelen, FormImz.imzcopypng.frame);
             setlength(FormImz.imzcopypng.framedata, FormImz.imzcopypng.frame);
-            I3 := 16;
-            for I2 := 0 to FormImz.imzcopypng.frame - 1 do
+            i3 := 16;
+            for i2 := 0 to FormImz.imzcopypng.frame - 1 do
             begin
-              FormImz.imzcopypng.framelen[I2] := max(0, Pinteger(tempdata + I3)^);
-              inc(I3, 4);
-              setlength(FormImz.imzcopypng.framedata[I2].data, FormImz.imzcopypng.framelen[I2]);
-              if FormImz.imzcopypng.framelen[I2] > 0 then
-                copymemory(@FormImz.imzcopypng.framedata[I2].data[0], (tempdata + I3), FormImz.imzcopypng.framelen[I2]);
-              inc(I3, FormImz.imzcopypng.framelen[I2]);
+              FormImz.imzcopypng.framelen[i2] := max(0, Pinteger(tempdata + i3)^);
+              inc(i3, 4);
+              setlength(FormImz.imzcopypng.framedata[i2].data, FormImz.imzcopypng.framelen[i2]);
+              if FormImz.imzcopypng.framelen[i2] > 0 then
+                copymemory(@FormImz.imzcopypng.framedata[i2].data[0], (tempdata + i3), FormImz.imzcopypng.framelen[i2]);
+              inc(i3, FormImz.imzcopypng.framelen[i2]);
             end;
           except
 
@@ -289,36 +290,36 @@ begin
   end
   else
   begin
-    filename := widestring(tempstr);
-    if fileexists(filename) then
+    FileName := widestring(tempstr);
+    if fileexists(FileName) then
     begin
-      if SameText(ExtractFileExt(filename), '.pic') then
+      if SameText(ExtractFileExt(FileName), '.pic') then
       begin
         if CForm4 then
         begin
           Form4 := TForm4.Create(application);
           CForm4 := false;
           MdiChildHandle[4] := Form4.Handle;
-          Form4.openfile(filename);
-          Form4.OpenDialog1.filename := filename;
+          Form4.openfile(FileName);
+          Form4.OpenDialog1.FileName := FileName;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[4] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[4] then
             begin
-              self.MDIChildren[I].Show;
-              Form4 := TForm4(self.MDIChildren[I]);
+              self.MDIChildren[i].Show;
+              Form4 := TForm4(self.MDIChildren[i]);
 
               // form4 := PForm4(tempform)^;
-              Form4.openfile(filename);
-              Form4.OpenDialog1.filename := filename;
+              Form4.openfile(FileName);
+              Form4.OpenDialog1.FileName := FileName;
               Break;
             end;
         end;
 
       end
-      else if SameText(ExtractFileExt(filename), '.txt') then
+      else if SameText(ExtractFileExt(FileName), '.txt') then
       begin
         if CForm91 then
         begin
@@ -326,124 +327,124 @@ begin
           Form91 := TForm91.Create(application);
 
           MdiChildHandle[11] := Form91.Handle;
-          Form91.Edit1.Text := filename;
-          Form91.OpenDialog1.filename := filename;
+          Form91.Edit1.Text := FileName;
+          Form91.OpenDialog1.FileName := FileName;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[11] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[11] then
             begin
-              self.MDIChildren[I].Show;
-              Form91 := TForm91(self.MDIChildren[I]);
+              self.MDIChildren[i].Show;
+              Form91 := TForm91(self.MDIChildren[i]);
               // Form91 := PForm91(tempform)^;
-              Form91.Edit1.Text := filename;
-              Form91.OpenDialog1.filename := filename;
+              Form91.Edit1.Text := FileName;
+              Form91.OpenDialog1.FileName := FileName;
               Break;
             end;
         end;
       end
-      else if SameText(ExtractFileExt(filename), '.grp') then
+      else if SameText(ExtractFileExt(FileName), '.grp') then
       begin
-        opentempstr := ChangeFileExt(filename, '.idx');
+        opentempstr := ChangeFileExt(FileName, '.idx');
         if CForm3 then
         begin
           CForm3 := false;
-          FOrm3 := TForm3.Create(application);
-          FOrm3.WindowState := wsmaximized;
-          MdiChildHandle[3] := FOrm3.Handle;
-          FOrm3.Edit1.Text := opentempstr;
-          FOrm3.Edit2.Text := filename;
-          FOrm3.displaygrplist;
+          Form3 := TForm3.Create(application);
+          Form3.WindowState := wsmaximized;
+          MdiChildHandle[3] := Form3.Handle;
+          Form3.Edit1.Text := opentempstr;
+          Form3.Edit2.Text := FileName;
+          Form3.displaygrplist;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[3] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[3] then
             begin
-              self.MDIChildren[I].Show;
-              FOrm3 := TForm3(self.MDIChildren[I]);
+              self.MDIChildren[i].Show;
+              Form3 := TForm3(self.MDIChildren[i]);
               // Form3 := PForm3(tempform)^;
-              FOrm3.ComboBox1.ItemIndex := -1;
-              FOrm3.Edit1.Text := opentempstr;
-              FOrm3.Edit2.Text := filename;
-              FOrm3.displaygrplist;
+              Form3.ComboBox1.ItemIndex := -1;
+              Form3.Edit1.Text := opentempstr;
+              Form3.Edit2.Text := FileName;
+              Form3.displaygrplist;
               Break;
             end;
         end;
       end
-      else if SameText(ExtractFileExt(filename), '.idx') then
+      else if SameText(ExtractFileExt(FileName), '.idx') then
       begin
-        opentempstr := ChangeFileExt(filename, '.grp');
+        opentempstr := ChangeFileExt(FileName, '.grp');
         if CForm3 then
         begin
           CForm3 := false;
-          FOrm3 := TForm3.Create(application);
-          FOrm3.WindowState := wsmaximized;
-          MdiChildHandle[3] := FOrm3.Handle;
-          FOrm3.Edit1.Text := filename;
-          FOrm3.Edit2.Text := opentempstr;
-          FOrm3.displaygrplist;
+          Form3 := TForm3.Create(application);
+          Form3.WindowState := wsmaximized;
+          MdiChildHandle[3] := Form3.Handle;
+          Form3.Edit1.Text := FileName;
+          Form3.Edit2.Text := opentempstr;
+          Form3.displaygrplist;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[3] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[3] then
             begin
-              self.MDIChildren[I].Show;
-              FOrm3 := TForm3(self.MDIChildren[I]);
+              self.MDIChildren[i].Show;
+              Form3 := TForm3(self.MDIChildren[i]);
               // Form3 := PForm3(tempform)^;
-              FOrm3.Edit1.Text := filename;
-              FOrm3.Edit2.Text := opentempstr;
-              FOrm3.displaygrplist;
-              FOrm3.ComboBox1.ItemIndex := -1;
+              Form3.Edit1.Text := FileName;
+              Form3.Edit2.Text := opentempstr;
+              Form3.displaygrplist;
+              Form3.ComboBox1.ItemIndex := -1;
               Break;
             end;
         end;
       end
-      else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif') or
-        SameText(ExtractFileExt(filename), '.jpeg') then
+      else if SameText(ExtractFileExt(FileName), '.png') or SameText(ExtractFileExt(FileName), '.jpg') or SameText(ExtractFileExt(FileName), '.bmp') or SameText(ExtractFileExt(FileName), '.gif') or
+        SameText(ExtractFileExt(FileName), '.jpeg') then
       begin
         if CForm1 then
         begin
           CForm1 := false;
           form1 := TForm1.Create(application);
           MdiChildHandle[2] := form1.Handle;
-          picname := filename;
+          picname := FileName;
           form1.picdisplay;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[2] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[2] then
             begin
-              self.MDIChildren[I].Show;
-              form1 := TForm1(self.MDIChildren[I]);
+              self.MDIChildren[i].Show;
+              form1 := TForm1(self.MDIChildren[i]);
               // Form1 :=PForm1(tempform)^;
-              picname := filename;
+              picname := FileName;
               form1.picdisplay;
               Break;
             end;
         end;
       end
-      else if SameText(ExtractFileExt(filename), '.imz') then
+      else if SameText(ExtractFileExt(FileName), '.imz') then
       begin
         if CFormImz then
         begin
           CFormImz := false;
           FormImz := TImzForm.Create(application);
-          FormImz.Edit2.Text := filename;
+          FormImz.Edit2.Text := FileName;
           FormImz.Button5.Click;
           MdiChildHandle[13] := FormImz.Handle;
         end
         else
         begin
-          for I := 0 to self.MDIChildCount - 1 do
-            if self.MDIChildren[I].Handle = MdiChildHandle[13] then
+          for i := 0 to self.MDIChildCount - 1 do
+            if self.MDIChildren[i].Handle = MdiChildHandle[13] then
             begin
-              self.MDIChildren[I].Show;
-              FormImz := TImzForm(self.MDIChildren[I]);
-              FormImz.Edit2.Text := filename;
+              self.MDIChildren[i].Show;
+              FormImz := TImzForm(self.MDIChildren[i]);
+              FormImz.Edit2.Text := FileName;
               FormImz.SetEditMode(zImzMode);
               FormImz.Button5.Click;
               Break;
@@ -473,16 +474,14 @@ end;
 procedure AppInitial;
 var
   ini: Tinifile;
-  filename: string;
+  FileName: string;
   tempstr: widestring;
   strlist: Tstringlist;
-  I, strnum, temp, I2: integer;
+  i, strnum, temp, i2: integer;
   inihead: word;
   Mnu: HMenu;
-  tempchar: array [0 .. 1024] of char;
 begin
-  application.Title := Appname; // titlestr;  // application.
-
+  titlestr := titlestr + FileVersion(ParamStr(0));
   Mnu := GetSystemMenu(application.Handle, false);
   AppendMenu(Mnu, MF_SEPARATOR, 0, nil);
   AppendMenu(Mnu, MF_STRING, WM_ABOUT, pchar('¹ØÓÚ...'));
@@ -490,17 +489,17 @@ begin
   try
     if paramcount > 0 then
     begin
-      filename := paramstr(1);
-      if filename.EndsWith('.ini') then
+      FileName := ParamStr(1);
+      if FileName.EndsWith('.ini') then
       begin
-        StartPath := ExtractFilePath(filename);
-        iniFilename := ExtractFileName(filename);
+        StartPath := ExtractFilePath(FileName);
+        iniFilename := ExtractFileName(FileName);
       end;
     end;
     if StartPath = '' then
       StartPath := GetCurrentDir + '\';
-    filename := StartPath + iniFilename;
-    temp := fileopen(filename, fmopenread);
+    FileName := StartPath + iniFilename;
+    temp := fileopen(FileName, fmopenread);
     fileseek(temp, 0, 0);
     fileread(temp, inihead, 2);
     if inihead = $FEFF then
@@ -508,7 +507,7 @@ begin
     else
       inicode := 1;
     fileclose(temp);
-    ini := Tinifile.Create(filename);
+    ini := Tinifile.Create(FileName);
     appfirstrun := ini.ReadBool('run', 'firstrun', true);
     updatepath := ini.ReadString('run', 'updatapath', StartPath);
     gamepath := ini.ReadString('run', 'gamepath', '\');
@@ -524,7 +523,7 @@ begin
     checkupdate := ini.Readinteger('run', 'checkupdate', 0);
     leftcolumn := ini.ReadBool('run', 'leftcolumn', false);
     topcolumn := ini.ReadBool('run', 'topcolumn', false);
-    list_begin_num :=ini.Readinteger('run', 'listbeginnum', 0);
+    list_begin_num := ini.Readinteger('run', 'listbeginnum', 0);
 
     GameVersion := ini.Readinteger('run', 'GameVersion', GameVersion);
 
@@ -579,40 +578,40 @@ begin
       setlength(grplistname, grplistnum);
       setlength(grplistSection, grplistnum);
       strlist := Tstringlist.Create;
-      for I := 0 to grplistnum - 1 do
+      for i := 0 to grplistnum - 1 do
       begin
-        tempstr := ini.ReadString('file', 'file' + inttostr(I), '');
+        tempstr := ini.ReadString('file', 'file' + inttostr(i), '');
         strlist.Clear;
         // wtempstr := @tempstr;
         strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
         if strnum = 3 then
         begin
-          grplistidx[I] := strlist.Strings[0];
-          grplistgrp[I] := strlist.Strings[1];
-          grplistname[I] := strlist.Strings[2];
+          grplistidx[i] := strlist.Strings[0];
+          grplistgrp[i] := strlist.Strings[1];
+          grplistname[i] := strlist.Strings[2];
         end;
-        tempstr := ini.ReadString('file', 'Section' + inttostr(I), '');
+        tempstr := ini.ReadString('file', 'Section' + inttostr(i), '');
         strlist.Clear;
         strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
         if ((strnum div 3) > 0) and (strnum mod 3 = 0) then
         begin
-          grplistSection[I].num := strnum div 3;
-          setlength(grplistSection[I].tag, grplistSection[I].num);
-          setlength(grplistSection[I].beginnum, grplistSection[I].num);
-          setlength(grplistSection[I].endnum, grplistSection[I].num);
-          for I2 := 0 to grplistSection[I].num - 1 do
+          grplistSection[i].num := strnum div 3;
+          setlength(grplistSection[i].tag, grplistSection[i].num);
+          setlength(grplistSection[i].beginnum, grplistSection[i].num);
+          setlength(grplistSection[i].endnum, grplistSection[i].num);
+          for i2 := 0 to grplistSection[i].num - 1 do
           begin
-            grplistSection[I].tag[I2] := strlist.Strings[I2 * 3];
-            grplistSection[I].beginnum[I2] := strtoint(strlist.Strings[I2 * 3 + 1]);
-            if strlist.Strings[I2 * 3 + 2] = 'end' then
-              grplistSection[I].endnum[I2] := -2
+            grplistSection[i].tag[i2] := strlist.Strings[i2 * 3];
+            grplistSection[i].beginnum[i2] := strtoint(strlist.Strings[i2 * 3 + 1]);
+            if strlist.Strings[i2 * 3 + 2] = 'end' then
+              grplistSection[i].endnum[i2] := -2
             else
-              grplistSection[I].endnum[I2] := strtoint(strlist.Strings[I2 * 3 + 2]);
+              grplistSection[i].endnum[i2] := strtoint(strlist.Strings[i2 * 3 + 2]);
           end;
         end
         else
         begin
-          grplistSection[I].num := 0;
+          grplistSection[i].num := 0;
         end;
       end;
       strlist.Free;
@@ -641,8 +640,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(Ridxfilename, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          Ridxfilename[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          Ridxfilename[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -655,8 +654,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(Rfilename, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          Rfilename[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          Rfilename[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -669,8 +668,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(SIDX, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          SIDX[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          SIDX[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -683,8 +682,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(SGRP, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          SGRP[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          SGRP[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -697,8 +696,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(DIDX, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          DIDX[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          DIDX[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -711,8 +710,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(DGRP, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          DGRP[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          DGRP[i] := strlist.Strings[i];
       end;
     end;
     strlist.Clear;
@@ -725,8 +724,8 @@ begin
       if Rfilenum > 0 then
       begin
         setlength(Rfilenote, Rfilenum);
-        for I := 0 to Rfilenum - 1 do
-          Rfilenote[I] := strlist.Strings[I];
+        for i := 0 to Rfilenum - 1 do
+          Rfilenote[i] := strlist.Strings[i];
       end;
     end;
     Rfilenum := temp;
@@ -827,31 +826,31 @@ end;
 
 procedure TUPeditMainForm.grp1Click(Sender: TObject);
 var
-  FOrm3: TForm3;
-  I: integer;
+  Form3: TForm3;
+  i: integer;
 begin
   if CForm3 then
   begin
     CForm3 := false;
-    FOrm3 := TForm3.Create(application);
-    FOrm3.WindowState := wsmaximized;
-    MdiChildHandle[3] := FOrm3.Handle;
+    Form3 := TForm3.Create(application);
+    Form3.WindowState := wsmaximized;
+    MdiChildHandle[3] := Form3.Handle;
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[3] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[3] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.GRP2Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[3] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[3] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.HelpAbout1Execute(Sender: TObject);
@@ -861,7 +860,7 @@ end;
 
 procedure TUPeditMainForm.IMZ1Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
   FormImz: TImzForm;
 begin
   if CFormImz then
@@ -872,9 +871,9 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[13] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[13] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
@@ -945,17 +944,17 @@ end;
 
 procedure TUPeditMainForm.N10Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[5] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[5] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N11Click(Sender: TObject);
 var
   Form11: TForm11;
-  I: integer;
+  i: integer;
 begin
   if CForm11 then
   begin
@@ -965,25 +964,25 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[6] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[6] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N12Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[6] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[6] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N13Click(Sender: TObject);
 var
   Form12: TForm12;
-  I: integer;
+  i: integer;
 begin
   if CForm12 then
   begin
@@ -993,25 +992,25 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[7] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[7] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N14Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[7] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[7] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N15Click(Sender: TObject);
 var
   Form13: TForm13;
-  I: integer;
+  i: integer;
 begin
   if CForm13 then
   begin
@@ -1021,25 +1020,25 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[8] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[8] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N16Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[8] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[8] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N17Click(Sender: TObject);
 var
   Form86: TForm86;
-  I: integer;
+  i: integer;
 begin
   if CForm86 then
   begin
@@ -1049,19 +1048,19 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[9] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[9] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N18Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[9] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[9] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N19Click(Sender: TObject);
@@ -1072,7 +1071,7 @@ end;
 procedure TUPeditMainForm.N1Click(Sender: TObject);
 var
   form1: TForm1;
-  I: integer;
+  i: integer;
 begin
   if CForm1 then
   begin
@@ -1082,9 +1081,9 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[2] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[2] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
@@ -1123,7 +1122,7 @@ end;
 procedure TUPeditMainForm.N22Click(Sender: TObject);
 var
   Form89: TForm89;
-  I: integer;
+  i: integer;
 begin
   if CForm89 then
   begin
@@ -1133,19 +1132,19 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[10] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[10] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N23Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[10] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[10] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N24Click(Sender: TObject);
@@ -1193,7 +1192,7 @@ procedure TUPeditMainForm.setpath;
 var
   dir: string;
   ini: Tinifile;
-  filename: string;
+  FileName: string;
   outdir: TArray<string>;
 begin
   N28.Enabled := false;
@@ -1205,9 +1204,9 @@ begin
       gamepath := gamepath + '\';
 
     MainForm.Caption := titlestr + ' - ' + gamepath;
-    filename := StartPath + iniFilename;
+    FileName := StartPath + iniFilename;
     // gamepath := dir;
-    ini := Tinifile.Create(filename);
+    ini := Tinifile.Create(FileName);
     ini.WriteString('run', 'gamepath', gamepath);
     ini.Free;
     if readR(gamepath + Ridxfilename[0], gamepath + Rfilename[0], @useR) then
@@ -1229,7 +1228,7 @@ end;
 procedure TUPeditMainForm.N31Click(Sender: TObject);
 var
   Form91: TForm91;
-  I: integer;
+  i: integer;
 begin
   if CForm91 then
   begin
@@ -1239,19 +1238,19 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[11] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[11] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.N32Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[11] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[11] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N33Click(Sender: TObject);
@@ -1271,7 +1270,7 @@ end;
 procedure TUPeditMainForm.N4Click(Sender: TObject);
 var
   Form7: TForm7;
-  I: integer;
+  i: integer;
 begin
   if CForm7 then
   begin
@@ -1281,9 +1280,9 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[1] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[1] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
@@ -1320,26 +1319,26 @@ end;
 
 procedure TUPeditMainForm.N7Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[1] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[1] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N8Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[2] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[2] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.N9Click(Sender: TObject);
 var
   Form10: TForm10;
-  I: integer;
+  i: integer;
 begin
   if Cform10 then
   begin
@@ -1349,16 +1348,16 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[5] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[5] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.pic1Click(Sender: TObject);
 var
   Form4: TForm4;
-  I: integer;
+  i: integer;
 begin
   if CForm4 then
   begin
@@ -1368,24 +1367,24 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[4] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[4] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.Pic2Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[4] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[4] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.PNG1Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
   if CForm94 then
   begin
@@ -1395,16 +1394,16 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[12] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[12] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.R1Click(Sender: TObject);
 var
   Form5: TForm5;
-  I: integer;
+  i: integer;
 begin
   if CForm5 then
   begin
@@ -1414,19 +1413,19 @@ begin
   end
   else
   begin
-    for I := 0 to self.MDIChildCount - 1 do
-      if self.MDIChildren[I].Handle = MdiChildHandle[0] then
-        self.MDIChildren[I].Show;
+    for i := 0 to self.MDIChildCount - 1 do
+      if self.MDIChildren[i].Handle = MdiChildHandle[0] then
+        self.MDIChildren[i].Show;
   end;
 end;
 
 procedure TUPeditMainForm.R2Click(Sender: TObject);
 var
-  I: integer;
+  i: integer;
 begin
-  for I := 0 to self.MDIChildCount - 1 do
-    if self.MDIChildren[I].Handle = MdiChildHandle[0] then
-      self.MDIChildren[I].Show;
+  for i := 0 to self.MDIChildCount - 1 do
+    if self.MDIChildren[i].Handle = MdiChildHandle[0] then
+      self.MDIChildren[i].Show;
 end;
 
 procedure TUPeditMainForm.TrayIcon1Click(Sender: TObject);
@@ -1463,12 +1462,12 @@ end;
 procedure TUPeditMainForm.AppOnMessage(var Msg: tagMSG; var Handled: Boolean);
 var
   // FileName: String;
-  filename: Array [0 .. 255] of char;
-  num, I: integer;
+  FileName: array [0 .. 255] of char;
+  num, i: integer;
   FormImz: TImzForm;
   Form91: TForm91;
   form1: TForm1;
-  FOrm3: TForm3;
+  Form3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
   opentempstr: string;
@@ -1499,36 +1498,36 @@ begin
         num := DragQueryFile(Msg.wParam, $FFFFFFFF, nil, 0);
         if num > 0 then
         begin
-          DragQueryFile(Msg.wParam, 0, filename, 255);
-          if fileexists(filename) then
+          DragQueryFile(Msg.wParam, 0, FileName, 255);
+          if fileexists(FileName) then
           begin
-            if SameText(ExtractFileExt(filename), '.pic') then
+            if SameText(ExtractFileExt(FileName), '.pic') then
             begin
               if CForm4 then
               begin
                 Form4 := TForm4.Create(application);
                 CForm4 := false;
                 MdiChildHandle[4] := Form4.Handle;
-                Form4.openfile(filename);
-                Form4.OpenDialog1.filename := filename;
+                Form4.openfile(FileName);
+                Form4.OpenDialog1.FileName := FileName;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[4] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[4] then
                   begin
-                    self.MDIChildren[I].Show;
-                    Form4 := TForm4(self.MDIChildren[I]);
+                    self.MDIChildren[i].Show;
+                    Form4 := TForm4(self.MDIChildren[i]);
 
                     // form4 := PForm4(tempform)^;
-                    Form4.openfile(filename);
-                    Form4.OpenDialog1.filename := filename;
+                    Form4.openfile(FileName);
+                    Form4.OpenDialog1.FileName := FileName;
                     Break;
                   end;
               end;
 
             end
-            else if SameText(ExtractFileExt(filename), '.txt') then
+            else if SameText(ExtractFileExt(FileName), '.txt') then
             begin
               if CForm91 then
               begin
@@ -1536,124 +1535,124 @@ begin
                 Form91 := TForm91.Create(application);
 
                 MdiChildHandle[11] := Form91.Handle;
-                Form91.Edit1.Text := filename;
-                Form91.OpenDialog1.filename := filename;
+                Form91.Edit1.Text := FileName;
+                Form91.OpenDialog1.FileName := FileName;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[11] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[11] then
                   begin
-                    self.MDIChildren[I].Show;
-                    Form91 := TForm91(self.MDIChildren[I]);
+                    self.MDIChildren[i].Show;
+                    Form91 := TForm91(self.MDIChildren[i]);
                     // Form91 := PForm91(tempform)^;
-                    Form91.Edit1.Text := filename;
-                    Form91.OpenDialog1.filename := filename;
+                    Form91.Edit1.Text := FileName;
+                    Form91.OpenDialog1.FileName := FileName;
                     Break;
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(filename), '.grp') then
+            else if SameText(ExtractFileExt(FileName), '.grp') then
             begin
-              opentempstr := ChangeFileExt(filename, '.idx');
+              opentempstr := ChangeFileExt(FileName, '.idx');
               if CForm3 then
               begin
                 CForm3 := false;
-                FOrm3 := TForm3.Create(application);
-                FOrm3.WindowState := wsmaximized;
-                MdiChildHandle[3] := FOrm3.Handle;
-                FOrm3.Edit1.Text := opentempstr;
-                FOrm3.Edit2.Text := filename;
-                FOrm3.displaygrplist;
+                Form3 := TForm3.Create(application);
+                Form3.WindowState := wsmaximized;
+                MdiChildHandle[3] := Form3.Handle;
+                Form3.Edit1.Text := opentempstr;
+                Form3.Edit2.Text := FileName;
+                Form3.displaygrplist;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[3] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[3] then
                   begin
-                    self.MDIChildren[I].Show;
-                    FOrm3 := TForm3(self.MDIChildren[I]);
+                    self.MDIChildren[i].Show;
+                    Form3 := TForm3(self.MDIChildren[i]);
                     // Form3 := PForm3(tempform)^;
-                    FOrm3.Edit1.Text := opentempstr;
-                    FOrm3.Edit2.Text := filename;
-                    FOrm3.displaygrplist;
-                    FOrm3.ComboBox1.ItemIndex := -1;
+                    Form3.Edit1.Text := opentempstr;
+                    Form3.Edit2.Text := FileName;
+                    Form3.displaygrplist;
+                    Form3.ComboBox1.ItemIndex := -1;
                     Break;
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(filename), '.idx') then
+            else if SameText(ExtractFileExt(FileName), '.idx') then
             begin
-              opentempstr := ChangeFileExt(filename, '.grp');
+              opentempstr := ChangeFileExt(FileName, '.grp');
               if CForm3 then
               begin
                 CForm3 := false;
-                FOrm3 := TForm3.Create(application);
-                FOrm3.WindowState := wsmaximized;
-                MdiChildHandle[3] := FOrm3.Handle;
-                FOrm3.Edit1.Text := filename;
-                FOrm3.Edit2.Text := opentempstr;
-                FOrm3.displaygrplist;
+                Form3 := TForm3.Create(application);
+                Form3.WindowState := wsmaximized;
+                MdiChildHandle[3] := Form3.Handle;
+                Form3.Edit1.Text := FileName;
+                Form3.Edit2.Text := opentempstr;
+                Form3.displaygrplist;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[3] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[3] then
                   begin
-                    self.MDIChildren[I].Show;
-                    FOrm3 := TForm3(self.MDIChildren[I]);
+                    self.MDIChildren[i].Show;
+                    Form3 := TForm3(self.MDIChildren[i]);
                     // Form3 := PForm3(tempform)^;
-                    FOrm3.Edit1.Text := filename;
-                    FOrm3.Edit2.Text := opentempstr;
-                    FOrm3.displaygrplist;
-                    FOrm3.ComboBox1.ItemIndex := -1;
+                    Form3.Edit1.Text := FileName;
+                    Form3.Edit2.Text := opentempstr;
+                    Form3.displaygrplist;
+                    Form3.ComboBox1.ItemIndex := -1;
                     Break;
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(filename), '.png') or SameText(ExtractFileExt(filename), '.jpg') or SameText(ExtractFileExt(filename), '.bmp') or SameText(ExtractFileExt(filename), '.gif')
-              or SameText(ExtractFileExt(filename), '.jpeg') then
+            else if SameText(ExtractFileExt(FileName), '.png') or SameText(ExtractFileExt(FileName), '.jpg') or SameText(ExtractFileExt(FileName), '.bmp') or SameText(ExtractFileExt(FileName), '.gif')
+              or SameText(ExtractFileExt(FileName), '.jpeg') then
             begin
               if CForm1 then
               begin
                 CForm1 := false;
                 form1 := TForm1.Create(application);
                 MdiChildHandle[2] := form1.Handle;
-                picname := filename;
+                picname := FileName;
                 form1.picdisplay;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[2] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[2] then
                   begin
-                    self.MDIChildren[I].Show;
-                    form1 := TForm1(self.MDIChildren[I]);
+                    self.MDIChildren[i].Show;
+                    form1 := TForm1(self.MDIChildren[i]);
                     // Form1 :=PForm1(tempform)^;
-                    picname := filename;
+                    picname := FileName;
                     form1.picdisplay;
                     Break;
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(filename), '.imz') then
+            else if SameText(ExtractFileExt(FileName), '.imz') then
             begin
               if CFormImz then
               begin
                 CFormImz := false;
                 FormImz := TImzForm.Create(application);
-                FormImz.Edit2.Text := filename;
+                FormImz.Edit2.Text := FileName;
                 FormImz.Button5.Click;
                 MdiChildHandle[13] := FormImz.Handle;
               end
               else
               begin
-                for I := 0 to self.MDIChildCount - 1 do
-                  if self.MDIChildren[I].Handle = MdiChildHandle[13] then
+                for i := 0 to self.MDIChildCount - 1 do
+                  if self.MDIChildren[i].Handle = MdiChildHandle[13] then
                   begin
-                    self.MDIChildren[I].Show;
-                    FormImz := TImzForm(self.MDIChildren[I]);
-                    FormImz.Edit2.Text := filename;
+                    self.MDIChildren[i].Show;
+                    FormImz := TImzForm(self.MDIChildren[i]);
+                    FormImz.Edit2.Text := FileName;
                     FormImz.SetEditMode(zImzMode);
                     FormImz.Button5.Click;
                     Break;
@@ -1819,6 +1818,30 @@ end;
 procedure displayanoce;
 begin
   MainForm.Label2.Caption := anoce;
+end;
+
+function FileVersion(const FileName: TFileName): string;
+var
+  VerInfoSize: Cardinal;
+  VerValueSize: Cardinal;
+  Dummy: Cardinal;
+  PVerInfo: Pointer;
+  PVerValue: PVSFixedFileInfo;
+begin
+  Result := '';
+  VerInfoSize := GetFileVersionInfoSize(pchar(FileName), Dummy);
+  GetMem(PVerInfo, VerInfoSize);
+  try
+    if GetFileVersionInfo(pchar(FileName), 0, VerInfoSize, PVerInfo) then
+      if VerQueryValue(PVerInfo, '\', Pointer(PVerValue), VerValueSize) then
+        with PVerValue^ do
+          Result := Format('%d.%d.%d.%d', [HiWord(dwFileVersionMS), // Major
+            LoWord(dwFileVersionMS), // Minor
+            HiWord(dwFileVersionLS), // Release
+            LoWord(dwFileVersionLS)]); // Build
+  finally
+    FreeMem(PVerInfo, VerInfoSize);
+  end;
 end;
 
 end.

@@ -41,7 +41,7 @@ object UPeditMainForm: TUPeditMainForm
     Color = clWhite
     TabOrder = 0
     Visible = False
-    ExplicitWidth = 776
+    ExplicitWidth = 770
     object Label2: TLabel
       Left = 111
       Top = 2
@@ -77,7 +77,7 @@ object UPeditMainForm: TUPeditMainForm
     BevelOuter = bvNone
     TabOrder = 1
     Visible = False
-    ExplicitHeight = 561
+    ExplicitHeight = 544
     object WebBrowser1: TWebBrowser
       Left = 0
       Top = 23
@@ -86,9 +86,9 @@ object UPeditMainForm: TUPeditMainForm
       Align = alClient
       TabOrder = 0
       OnNewWindow2 = WebBrowser1NewWindow2
-      ExplicitHeight = 538
+      ExplicitHeight = 521
       ControlData = {
-        4C00000081140000252D00000000000000000000000000000000000000000000
+        4C000000A60E00003F2000000000000000000000000000000000000000000000
         000000004C000000000000000000000001000000E0D057007335CF11AE690800
         2B2E12620A000000000000004C0000000114020000000000C000000000000046
         8000000000000000000000000000000000000000000000000000000000000000
@@ -122,8 +122,8 @@ object UPeditMainForm: TUPeditMainForm
     object WebBrowser2: TWebBrowser
       Left = 3
       Top = 2
-      Width = 60
-      Height = 75
+      Width = 84
+      Height = 105
       TabOrder = 0
       ControlData = {
         4C000000F6040000340600000000000000000000000000000000000000000000
@@ -140,7 +140,7 @@ object UPeditMainForm: TUPeditMainForm
     Height = 33
     Align = alTop
     TabOrder = 3
-    ExplicitWidth = 776
+    ExplicitWidth = 770
     object Label3: TLabel
       Left = 25
       Top = 3
