@@ -13,3 +13,6 @@ Code/lib/x86_64-win64/
 UPedit.ini
 Code/kdef/__history
 *.local
+*.bat
+*.zip
+Code/__recovery

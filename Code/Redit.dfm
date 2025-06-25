@@ -30,7 +30,7 @@ object Form5: TForm5
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 852
+    ExplicitWidth = 858
     object Label1: TLabel
       Left = 25
       Top = 25
@@ -182,16 +182,16 @@ object Form5: TForm5
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 742
-    ExplicitHeight = 282
+    ExplicitWidth = 748
+    ExplicitHeight = 299
     object StatusBar1: TStatusBar
       Left = 1
       Top = 286
       Width = 748
       Height = 20
       Panels = <>
-      ExplicitTop = 261
-      ExplicitWidth = 740
+      ExplicitTop = 278
+      ExplicitWidth = 746
     end
     object CheckListBox1: TCheckListBox
       Left = 1
@@ -204,13 +204,13 @@ object Form5: TForm5
       Ctl3D = True
       Flat = False
       ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
-      ItemHeight = 13
+      ItemHeight = 17
       ParentCtl3D = False
       TabOrder = 1
       OnClick = CheckListBox1Click
       OnDblClick = CheckListBox1DblClick
-      ExplicitWidth = 740
-      ExplicitHeight = 260
+      ExplicitWidth = 746
+      ExplicitHeight = 277
     end
   end
   object Panel3: TPanel
@@ -221,7 +221,7 @@ object Form5: TForm5
     Align = alLeft
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitHeight = 282
+    ExplicitHeight = 299
     object Label3: TLabel
       Left = 11
       Top = 265

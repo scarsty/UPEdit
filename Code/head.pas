@@ -382,6 +382,7 @@ var
   language: integer;
 
   inicode: integer;
+  list_begin_num: integer;
   talkidx, talkgrp: string;
   useR: TRFile;
   kdefidx, kdefgrp: string;

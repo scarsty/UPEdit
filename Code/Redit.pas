@@ -1169,6 +1169,8 @@ begin
     while Stmt.Step = SQLITE_ROW do
     begin
       tname := Stmt.ColumnText(0); // 表的名字
+      if tname = 'bindata' then
+        continue;
       typename[i1] := tname;
       typedataitem[i1] := term_num;
       // 表结构
@@ -1636,7 +1638,7 @@ begin
           begin
             sql := sql + '"' + Rini[i1].Rterm[j + j2].name;
             if Rini[i1].Rterm[j].datanum > 1 then
-              sql := sql + inttostr(j1);
+              sql := sql + inttostr(j1+list_begin_num);
             if Rini[i1].Rterm[j].isstr <> 0 then
             begin
               sql := sql + '" text,';

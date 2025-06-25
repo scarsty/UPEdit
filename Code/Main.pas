@@ -524,6 +524,7 @@ begin
     checkupdate := ini.Readinteger('run', 'checkupdate', 0);
     leftcolumn := ini.ReadBool('run', 'leftcolumn', false);
     topcolumn := ini.ReadBool('run', 'topcolumn', false);
+    list_begin_num :=ini.Readinteger('run', 'listbeginnum', 0);
 
     GameVersion := ini.Readinteger('run', 'GameVersion', GameVersion);
 
