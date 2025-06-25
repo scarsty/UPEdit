@@ -2,7 +2,7 @@
   Left = 0
   Top = 0
   Caption = #22330#26223#22320#22270#32534#36753
-  ClientHeight = 703
+  ClientHeight = 470
   ClientWidth = 792
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -12,24 +12,23 @@
   Font.Style = []
   FormStyle = fsMDIChild
   KeyPreview = True
-  OldCreateOrder = False
   Position = poDesigned
   Visible = True
   WindowState = wsMaximized
   OnClose = FormClose
   OnCreate = FormCreate
   OnKeyDown = FormKeyDown
-  PixelsPerInch = 96
   TextHeight = 13
   object Panel1: TPanel
     Left = 0
     Top = 0
     Width = 198
-    Height = 678
+    Height = 445
     Align = alLeft
     DoubleBuffered = False
     ParentDoubleBuffered = False
     TabOrder = 0
+    ExplicitHeight = 670
     object Label1: TLabel
       Left = 10
       Top = -1
@@ -306,19 +305,23 @@
   end
   object StatusBar1: TStatusBar
     Left = 0
-    Top = 678
+    Top = 445
     Width = 792
     Height = 25
     Panels = <>
+    ExplicitTop = 670
+    ExplicitWidth = 790
   end
   object Panel8: TPanel
     Left = 198
     Top = 0
     Width = 594
-    Height = 678
+    Height = 445
     Align = alClient
     BevelOuter = bvNone
     TabOrder = 2
+    ExplicitWidth = 592
+    ExplicitHeight = 670
     object Panel9: TPanel
       Left = 0
       Top = 0
@@ -327,6 +330,7 @@
       Align = alTop
       TabOrder = 0
       Visible = False
+      ExplicitWidth = 592
       object Label23: TLabel
         Left = 136
         Top = 8
@@ -410,15 +414,17 @@
       Left = 0
       Top = 69
       Width = 594
-      Height = 609
+      Height = 376
       Align = alClient
       BevelOuter = bvLowered
       TabOrder = 1
+      ExplicitWidth = 592
+      ExplicitHeight = 601
       object ScrollBox1: TScrollBox
         Left = 1
         Top = 1
         Width = 592
-        Height = 607
+        Height = 374
         Align = alClient
         TabOrder = 0
         object Image1: TImage

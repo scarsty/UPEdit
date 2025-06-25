@@ -48,7 +48,7 @@ type
 
   TRdata = record
     num: smallint;
-    Rdataline: Array of TRdataline; // 每个人物或物品、场景等包括的成员
+    Rdataline: array of TRdataline; // 每个人物或物品、场景等包括的成员
   end;
 
   PRdata = ^TRdata;
@@ -164,40 +164,40 @@ type
   Pevent = ^Tevent;
   Pattrib = ^Tattrib;
 
-  Teventcopy = Record
+  Teventcopy = record
     copyevent: integer;
     copyattrib: integer; // -1没复制，1可复制
-  End;
-
-  TInstructGuideComboboxList = Record
-    Value: integer;
-    str: String;
   end;
 
-  TInstructGuideCombobox = Record
+  TInstructGuideComboboxList = record
+    Value: integer;
+    str: string;
+  end;
+
+  TInstructGuideCombobox = record
     ListAmount: integer;
     List: array of TInstructGuideComboboxList;
   end;
 
-  TInstructGuideComboboxes = Record
+  TInstructGuideComboboxes = record
     Amount: integer;
     Combobox: array of TInstructGuideCombobox;
   end;
 
-  TInstructGuideParam = Record
-    QuoteLabel: String;
+  TInstructGuideParam = record
+    QuoteLabel: string;
     QuoteType: integer;
     QuoteCount: integer;
   end;
 
-  TInstructGuideIterm = Record
+  TInstructGuideIterm = record
     ParamAmount: integer;
     NeedGuide: integer;
     Param: array of TInstructGuideParam;
-    GuideStr: String;
+    GuideStr: string;
   end;
 
-  TInstructGuide = Record
+  TInstructGuide = record
     Amount: integer;
     Instruct: array of TInstructGuideIterm;
   end;
@@ -277,7 +277,7 @@ type
     Pmapevent = ^Tmapevent;
 
     TDfile = record mapnum: integer;
-    mapevent: Array of Tmapevent;
+    mapevent: array of Tmapevent;
   end;
 
   TGRPlistSection = record
@@ -467,7 +467,7 @@ function displayname(str: string): string;
 procedure readMcol;
 procedure read50memory;
 function hashMySelf: string;
-function hashFile(Filename: String): string;
+function hashFile(Filename: string): string;
 function calPNG(Pdata: Pbyte): integer;
 function SelectFolderDialog(const Handle: integer; const Caption: string; const InitFolder: string; var SelectedFolder: string): boolean;
 procedure WriteRDataStr(RDataSingle: PRdatasingle; data: widestring);
@@ -520,7 +520,7 @@ end;
 function readOutstr(str: Pointer; len: integer): widestring;
 var
   tempAnsiString: Ansistring;
-  I: integer;
+  i: integer;
 begin
   case datacode of
     0:
@@ -566,12 +566,12 @@ begin
         setlength(result, len div sizeof(widechar)); // + 1);
         copymemory(@result[1], str, (len div sizeof(widechar)) * sizeof(widechar));
         // result[Len div 2 + 1] := #0;
-        for I := 1 to len div sizeof(widechar) do
+        for i := 1 to len div sizeof(widechar) do
         begin
-          if result[I] = #0 then
+          if result[i] = #0 then
           begin
-            setlength(result, I - 1);
-            if I = 1 then
+            setlength(result, i - 1);
+            if i = 1 then
             begin
               result := '';
             end;
@@ -589,7 +589,7 @@ end;
 function writeinstr(str: widestring; data: Pointer; len: integer): Pointer;
 var
   tempAnsiString: Ansistring;
-  len1, I: integer;
+  len1, i: integer;
   function GB2Big(GB: string): string;
   var
     len: integer;
@@ -689,26 +689,26 @@ end;
 
 procedure readMcol;
 var
-  H, I, len: integer;
+  H, i, len: integer;
 begin
   try
     Mcollen := 256;
     H := FIleopen(gamepath + palette, fmopenread);
     len := fileseek(H, 0, 2);
     fileseek(H, 0, 0);
-    for I := 0 to 256 - 1 do
+    for i := 0 to 256 - 1 do
     begin
       try
-        fileread(H, McolR[I], 1);
-        fileread(H, McolG[I], 1);
-        fileread(H, McolB[I], 1);
-        McolB[I] := McolB[I] shl 2;
-        McolG[I] := McolG[I] shl 2;
-        McolR[I] := McolR[I] shl 2;
+        fileread(H, McolR[i], 1);
+        fileread(H, McolG[i], 1);
+        fileread(H, McolB[i], 1);
+        McolB[i] := McolB[i] shl 2;
+        McolG[i] := McolG[i] shl 2;
+        McolR[i] := McolR[i] shl 2;
       except
-        McolB[I] := 0;
-        McolG[I] := 0;
-        McolR[I] := 0;
+        McolB[i] := 0;
+        McolG[i] := 0;
+        McolR[i] := 0;
       end;
     end;
     fileclose(H);
@@ -719,7 +719,7 @@ end;
 
 procedure read50memory;
 var
-  I, strnum: integer;
+  i, strnum: integer;
   ini: Tinifile;
   Filename: string;
   strlist: Tstringlist;
@@ -730,20 +730,20 @@ begin
   K50memorylist.num := ini.ReadInteger('50memory', 'memnum', 0);
   setlength(K50memorylist.addr, K50memorylist.num);
   setlength(K50memorylist.note, K50memorylist.num);
-  for I := 0 to K50memorylist.num - 1 do
+  for i := 0 to K50memorylist.num - 1 do
   begin
     strlist := Tstringlist.Create;
-    tempstr := ini.ReadString('50memory', 'mem' + inttostr(I), '');
+    tempstr := ini.ReadString('50memory', 'mem' + inttostr(i), '');
     strnum := ExtractStrings([' '], [], PWideChar(tempstr), strlist);
     if strnum = 2 then
     begin
-      K50memorylist.addr[I] := strtoint('$' + strlist.Strings[0]);
-      K50memorylist.note[I] := strlist.Strings[1];
+      K50memorylist.addr[i] := strtoint('$' + strlist.Strings[0]);
+      K50memorylist.note[i] := strlist.Strings[1];
     end
     else
     begin
-      K50memorylist.addr[I] := 0;
-      K50memorylist.note[I] := '';
+      K50memorylist.addr[i] := 0;
+      K50memorylist.note[i] := '';
     end;
     strlist.Free;
   end;
@@ -761,7 +761,7 @@ begin
   MyMD5.Free;
 end;
 
-function hashFile(Filename: String): string;
+function hashFile(Filename: string): string;
 var
   MyMD5: TIdHashMessageDigest5;
   FileStream: TFileStream;
@@ -828,7 +828,7 @@ end;
 
 procedure WriteRDataInt(RDataSingle: PRdatasingle; data: int64);
 var
-  I: integer;
+  i: integer;
 begin
   if RDataSingle^.datalen = 1 then
   begin
@@ -854,17 +854,17 @@ begin
   else if (RDataSingle^.datalen = 5) or (RDataSingle^.datalen = 6) or (RDataSingle^.datalen = 7) then
   begin
     PInteger(@RDataSingle.data[0])^ := integer(data);
-    for I := 5 to RDataSingle^.datalen do
+    for i := 5 to RDataSingle^.datalen do
     begin
-      RDataSingle.data[I - 1] := 0;
+      RDataSingle.data[i - 1] := 0;
     end;
   end
   else if RDataSingle^.datalen > 8 then
   begin
     PInt64(@RDataSingle.data[0])^ := data;
-    for I := 9 to RDataSingle^.datalen do
+    for i := 9 to RDataSingle^.datalen do
     begin
-      RDataSingle.data[I - 1] := 0;
+      RDataSingle.data[i - 1] := 0;
     end;
   end;
 end;
@@ -911,7 +911,7 @@ end;
 function ReadTalkStr(ATalkStr: PTalkStr): widestring;
 var
   tempAnsiString: Ansistring;
-  I: integer;
+  i: integer;
 begin
   case talkcode of
     0:
@@ -945,12 +945,12 @@ begin
         setlength(result, ATalkStr.len div sizeof(widechar)); // + 1);
         // result[ATalkStr.Len div 2 + 1] := #0;
         copymemory(@result[1], @ATalkStr.str[0], (ATalkStr.len div sizeof(widechar)) * sizeof(widechar));
-        for I := 1 to ATalkStr.len div sizeof(widechar) do
+        for i := 1 to ATalkStr.len div sizeof(widechar) do
         begin
-          if result[I] = #0 then
+          if result[i] = #0 then
           begin
-            setlength(result, I - 1);
-            if I = 1 then
+            setlength(result, i - 1);
+            if i = 1 then
             begin
               result := '';
             end;
