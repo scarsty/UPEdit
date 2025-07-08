@@ -34,3 +34,19 @@ An Editor for All Heroes of Kam Yung's Stories
   
   xls支持的列数最多到256，改用tms flexcel可以支持xlsx。
   后该插件过期，改为自己手动写xlsxio和libxlsxwriter的pas文件。
+
+  -----------------
+
+  使用数据库的时候，为了固定处理方便，增加以下几个选项：
+
+  ```ini
+  ;表格名称，空格分开
+    Types=base role item submap magic shop bag
+  ;每个表格是名字的字段
+    TypeNameName=null 名字 物品名 名称 名称 null null
+  ;以下是处理引用，含有下面名字的即视为引用，需前后使用|包围，不包含数字部分
+    TypeRef1=|使用人|仅修炼人物|
+    TypeRef2=|物品编号|武器|防具|装备物品|携带物品|修炼物品|练出物品|
+    TypeRef3=|跳转场景|
+    TypeRef4=|装备武功|二组装备武功|所会武功|练出武功|
+```

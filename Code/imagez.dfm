@@ -134,8 +134,8 @@ object ImzForm: TImzForm
         OnClick = Button5Click
       end
       object CheckBox1: TCheckBox
-        Left = 154
-        Top = 93
+        Left = 155
+        Top = 80
         Width = 73
         Height = 17
         Caption = #21160#30011#25928#26524
@@ -166,6 +166,16 @@ object ImzForm: TImzForm
           'PNG'#21387#32553#21253)
         TabOrder = 6
         OnClick = RadioGroup1Click
+      end
+      object Button11: TButton
+        Left = 153
+        Top = 110
+        Width = 75
+        Height = 26
+        Caption = #25112#26007#24103#25968
+        Enabled = False
+        TabOrder = 7
+        OnClick = Button11Click
       end
     end
     object GroupBox3: TGroupBox

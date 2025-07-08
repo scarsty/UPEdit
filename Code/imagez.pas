@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, PNGimage, StdCtrls, fileCtrl, math, Menus, head, inifiles, imzObject, libzip;
+  Dialogs, ExtCtrls, PNGimage, StdCtrls, fileCtrl, math, Menus, head, inifiles, imzObject, libzip, FightFrameForm;
 
 type
 
@@ -55,6 +55,7 @@ type
     Edit7: TEdit;
     ComboBox3: TComboBox;
     N8: TMenuItem;
+    Button11: TButton;
     procedure FormResize(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
@@ -97,6 +98,7 @@ type
     procedure Button10Click(Sender: TObject);
     procedure Button9Click(Sender: TObject);
     procedure N8Click(Sender: TObject);
+    procedure Button11Click(Sender: TObject);
   public
     { Public declarations }
     imz: Timz;
@@ -187,6 +189,40 @@ begin
         imz.imzPNG[I].y := imz.imzPNG[I].y * setint;
       4:
         imz.imzPNG[I].y := imz.imzPNG[I].y div setint;
+    end;
+  end;
+end;
+
+procedure TImzForm.Button11Click(Sender: TObject);
+var
+  zip: pzip_t;
+  str: ansistring;
+begin
+  if pos('.zip', Edit2.Text) <> 0 then
+  begin
+    zip := zip_open(@utf8string(Edit2.Text)[1]);
+    if zip <> nil then
+      FightFrameForm1.content := zip_express(zip, 'fightframe.txt');
+    zip_close(zip);
+  end
+  else
+  begin
+    FightFrameForm1.content := readfile(Edit2.Text + '/fightframe.txt');
+  end;
+  FightFrameForm1.ShowModal();
+  str := FightFrameForm1.content;
+  if str <> '' then
+  begin
+    if pos('.zip', Edit2.Text) <> 0 then
+    begin
+      zip := zip_open(@utf8string(Edit2.Text)[1], 0, 0);
+      if zip <> nil then
+        zip_compress(zip, 'fightframe.txt', @str[1], length(str));
+      zip_close(zip);
+    end
+    else
+    begin
+      writefile(Edit2.Text + '/fightframe.txt', str);
     end;
   end;
 end;
@@ -386,7 +422,9 @@ end;
 
 procedure TImzForm.Button5Click(Sender: TObject);
 begin
-  //
+  Button11.Enabled := false;
+  if pos('fight', Edit2.Text) <> 0 then
+    Button11.Enabled := true;
   firstpicnum := 0;
   nowpic := -1;
   linenum := 0;

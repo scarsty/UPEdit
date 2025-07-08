@@ -86,6 +86,8 @@ var
   Rini: array of TRini;
   typenumber: integer;
   typename: array of string;
+  typenamename: array of string;
+  typerefstring: array of string;
   typedataitem: array of integer;
   Rinitial: boolean = false;
   Rselect: array of Tselect;
@@ -598,7 +600,7 @@ var
   temp: integer;
 begin
   if MessageBox(Self.Handle, '导出Excel需要本机已经安装Excel，并且导出时间较长，过程中请不要进行操作。确实要导出吗？', '导出Excel', MB_OKCANCEL) = 1 then
-  BEGIN
+  begin
     ExcelApp := CreateOleObject('Excel.Application');
     ExcelApp.Caption := 'UPedit导出Excel操作';
     ExcelApp.visible := true;
@@ -681,7 +683,7 @@ begin
     ExcelApp := Unassigned;
     SetForegroundWindow(application.Handle);
     showmessage('导出Excel完成！请到Excel程序中保存文件！');
-  END;
+  end;
 end;
 
 procedure TForm5.Button6Click(Sender: TObject);
@@ -1150,7 +1152,7 @@ var
   Stmt, stmt_struct, stmt_data: TSQLite3Statement;
   IDs: array [1 .. 6] of integer;
   i1, j, table_num, term_num, diff, Size, templen, i2, i3, i4, i5, temp, value: integer;
-  tname, type1: string;
+  tname, type1, name, name1: string;
   str: utf8string;
 begin
   DB := TSQLite3Database.Create;
@@ -1158,6 +1160,7 @@ begin
     DB.Open(dbfile);
     Stmt := DB.Prepare('select name from sqlite_master where type="table"');
     table_num := getRows(Stmt);
+    table_num := typenumber;
     typenumber := table_num;
     setlength(Rini, table_num);
     setlength(typename, table_num);
@@ -1169,6 +1172,7 @@ begin
     while Stmt.Step = SQLITE_ROW do
     begin
       tname := Stmt.ColumnText(0); // 表的名字
+      tname := typename[i1];
       if tname = 'bindata' then
         continue;
       typename[i1] := tname;
@@ -1205,9 +1209,27 @@ begin
             isstr := 1;
             datalen := 100;
           end;
-          if (name = '名字') or (name = '名称') or (name = '物品名') then
+          if (name = typenamename[i1]) then
           begin
             isname := 1;
+          end;
+          name1 := name;
+          for i2 := 1 to length(name) do
+          begin
+            if (name[i2] in ['0' .. '9']) then
+            begin
+              name1 := copy(name, 1, i2 - 1);
+              break;
+            end;
+          end;
+          name1 := '|' + name1 + '|';
+          for i2 := 0 to typenumber - 1 do
+          begin
+            if pos(name1, typerefstring[i2]) <> 0 then
+            begin
+              quote := i2;
+              break;
+            end;
           end;
           diff := diff + datalen;
         end;
@@ -1273,7 +1295,7 @@ procedure TForm5.Edit2KeyPress(Sender: TObject; var Key: Char);
 var
   NumEdit1: dWord;
 begin
-  If Key = #13 then
+  if Key = #13 then
   begin
     Button1Click(Sender);
   end
@@ -1409,7 +1431,7 @@ procedure TForm5.Edit1KeyPress(Sender: TObject; var Key: Char);
 var
   NumEdit1: dWord;
 begin
-  If Key = #13 then
+  if Key = #13 then
   begin
     Button1Click(Sender);
   end
@@ -1461,9 +1483,9 @@ procedure readini;
 var
   iniF: Tinifile;
   inifilename1, tempstr: string;
-  strlist: Tstringlist;
+  strlist, strlist1: Tstringlist;
   i1, i2: integer;
-  strnum, diff: integer;
+  strnum, strnum1, diff: integer;
 begin
   try
     inifilename1 := StartPath + iniFileName;
@@ -1475,7 +1497,27 @@ begin
       setlength(Rini, typenumber);
       setlength(typedataitem, typenumber);
       setlength(typename, typenumber);
+      setlength(typenamename, typenumber);
+      setlength(typerefstring, typenumber);
       strlist := Tstringlist.Create;
+      strlist1 := Tstringlist.Create;
+
+      tempstr := iniF.ReadString('R_Modify', 'types', '');
+
+      if tempstr <> '' then
+      begin
+        strnum := ExtractStrings([' '], [], pwidechar(tempstr), strlist);
+        strnum1 := ExtractStrings([' '], [], pwidechar(iniF.ReadString('R_Modify', 'TypeNameName', '')), strlist1);
+        for i1 := 0 to strnum - 1 do
+        begin
+          typename[i1] := strlist.strings[i1];
+          if i1 < strnum1 then
+            typenamename[i1] := strlist1.strings[i1];
+          typerefstring[i1] := iniF.ReadString('R_Modify', 'Typeref' + inttostr(i1), '');
+        end;
+        exit;
+      end;
+
       for i1 := 0 to typenumber - 1 do
       begin
         typename[i1] := iniF.ReadString('R_Modify', 'typename' + inttostr(i1), '');
@@ -1638,7 +1680,7 @@ begin
           begin
             sql := sql + '"' + Rini[i1].Rterm[j + j2].name;
             if Rini[i1].Rterm[j].datanum > 1 then
-              sql := sql + inttostr(j1+list_begin_num);
+              sql := sql + inttostr(j1 + list_begin_num);
             if Rini[i1].Rterm[j].isstr <> 0 then
             begin
               sql := sql + '" text,';
@@ -1673,7 +1715,7 @@ begin
                     1:
                       value_str := MultiToUnicode(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], 950);
                     2:
-                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);   //这个估计不对，但似乎用不上
+                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]); // 这个估计不对，但似乎用不上
                   else
                     value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
                   end;

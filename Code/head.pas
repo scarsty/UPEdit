@@ -478,6 +478,9 @@ function ReadRDataStr(RDataSingle: PRdatasingle): widestring;
 function ReadTalkStr(ATalkStr: PTalkStr): widestring;
 procedure WriteTalkStr(ATalkStr: PTalkStr; str: widestring);
 
+function ReadFile(const filename: string): Ansistring;
+procedure WriteFile(const filename: string; const data: Ansistring);
+
 implementation
 
 function calPNG(Pdata: Pbyte): integer;
@@ -997,6 +1000,42 @@ begin
     end;
   end;
   tempAnsiString := '';
+end;
+
+function ReadFile(const filename: string): Ansistring;
+var
+  H: integer;
+  len: integer;
+begin
+  result := '';
+  if not fileexists(filename) then
+    exit;
+  H := Fileopen(filename, fmopenread);
+  if H < 0 then
+    exit;
+  len := fileseek(H, 0, 2);
+  fileseek(H, 0, 0);
+  if len > 0 then
+  begin
+    setlength(result, len);
+    fileread(H, PAnsiChar(result)[0], len);
+  end
+  else
+    result := '';
+  fileclose(H);
+end;  
+
+procedure WriteFile(const filename: string; const data: Ansistring);
+var
+  H: integer;
+begin
+  H := Fileopen(filename, fmOpenWrite or fmShareDenyNone);
+  if H < 0 then
+    exit;
+  fileseek(H, 0, 0);
+  if length(data) > 0 then
+    filewrite(H, PAnsiChar(data)[0], length(data));
+  fileclose(H);
 end;
 
 end.

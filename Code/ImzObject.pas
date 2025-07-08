@@ -3,7 +3,7 @@ unit ImzObject;
 interface
 
 uses
-  Sysutils, Windows, Head, inifiles, Graphics, PNGimage, Classes, dialogs;
+  Sysutils, Windows, Head, inifiles, Graphics, PNGimage, Classes, dialogs, libzip;
 
 Type
   TImzFile = Class
@@ -369,11 +369,84 @@ function TImzFile.ReadImzFromFile(tempimz: pimz; Fname: string): boolean;
 var
   FH, I, I2: integer;
   offset, frameoffset: array of integer;
+  zip: pzip_t;
+  INI: Tinifile;
+  str: ansistring;
+  fnameu8:utf8string;
 begin
   //
   if PNGready then
     ReleaseAllPNG;
   PNGready := false;
+
+  if fname.EndsWith('.zip') then
+  begin
+  try
+      ini := Tinifile.Create(StartPath + iniFileName);
+      indexfile := imzindexfilename;
+      indexfile := ini.ReadString('File', 'ImzIndexFileName', indexFile);
+    finally
+      ini.Free;
+    end;
+    fnameu8:=fname;
+    zip:= zip_open(@fnameu8[1]);
+
+    str:=zip_express(zip, indexfile);
+    tempimz.PNGnum := length(str) shr 2;
+      setlength(tempimz.imzPNG, tempimz.PNGnum);
+      for I := 0 to tempimz.PNGnum - 1 do
+      begin
+        tempimz.imzPNG[I].x := psmallint(@str[1+i*4])^;
+        tempimz.imzPNG[I].y := psmallint(@str[3+i*4])^;
+      end;
+
+      for I := 0 to tempimz.PNGnum - 1 do
+    begin
+      tempimz.imzPNG[I].frame := 0;
+      if zip_has_file(zip, inttostr(I) + '.png') then
+      begin
+        tempimz.imzPNG[I].frame := 1;
+        setlength(tempImz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
+        setlength(tempImz.imzPNG[I].framedata, tempimz.imzPNG[I].frame);
+        try
+          str := zip_express(zip, inttostr(I) + '.png');
+          tempImz.imzPNG[I].framelen[0] := length(str);
+          setlength(tempImz.imzPNG[I].framedata[0].data, tempImz.imzPNG[I].framelen[0]);
+          move(str[1], tempImz.imzPNG[I].framedata[0].data[0], tempImz.imzPNG[I].framelen[0]);
+        finally
+
+        end;
+      end
+      else
+      begin
+        i2 := 0;
+        while (zip_has_file(zip, inttostr(I) + '_' + inttostr(i2) + '.png')) do
+          inc(i2);
+        tempimz.imzPNG[I].frame := i2;
+        setlength(tempImz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
+        setlength(tempImz.imzPNG[I].framedata, tempimz.imzPNG[I].frame);
+        for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
+        begin
+          try
+            str := zip_express(zip,  inttostr(I) + '_' + inttostr(i2) + '.png');
+            tempImz.imzPNG[I].framelen[I2] := length(str);
+            setlength(tempImz.imzPNG[I].framedata[I2].data, tempImz.imzPNG[I].framelen[I2]);
+            move(str[1], tempImz.imzPNG[I].framedata[I2].data[0], tempImz.imzPNG[I].framelen[I2]);
+          finally
+
+          end;
+        end;
+      end;
+    end;
+
+    CalImzLen(tempimz);
+    result := true;
+
+    zip_close(zip);
+    exit;
+  end;
+
+
   try
     FH := Fileopen(Fname, fmopenread);
     fileread(FH, tempimz.PNGnum, 4);
