@@ -108,7 +108,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <Debugger_CWD>D:\kys-all\前传\UPedit</Debugger_CWD>
+        <Debugger_CWD>D:\kys-all\_cpp\cpp版资源\UPedit</Debugger_CWD>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.2.0.2;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
@@ -136,7 +136,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <AppDPIAwarenessMode>PerMonitorV2</AppDPIAwarenessMode>
-        <Debugger_CWD>D:\kys-all\相关开发\jysdl-bh\UPedit</Debugger_CWD>
+        <Debugger_CWD>D:\kys-all\_cpp\cpp版资源\UPedit</Debugger_CWD>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Locale>1033</VerInfo_Locale>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
@@ -461,6 +461,7 @@
         <DCCReference Include="kdef\InstructGuide.pas">
             <Form>inctGuide</Form>
         </DCCReference>
+        <DCCReference Include="FightFrameForm.pas"/>
         <DCCReference Include="xlsxio.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
@@ -508,6 +509,12 @@
                 </DeployFile>
                 <DeployFile LocalName="UPEdit.exe" Configuration="Debug" Class="ProjectOutput"/>
                 <DeployFile LocalName="debug\UPEdit.exe" Configuration="Debug" Class="ProjectOutput">
+                    <Platform Name="Win64">
+                        <RemoteName>UPEdit.exe</RemoteName>
+                        <Overwrite>true</Overwrite>
+                    </Platform>
+                </DeployFile>
+                <DeployFile LocalName="release\UPEdit.exe" Configuration="Release" Class="ProjectOutput">
                     <Platform Name="Win64">
                         <RemoteName>UPEdit.exe</RemoteName>
                         <Overwrite>true</Overwrite>
