@@ -1547,7 +1547,7 @@ var
   pointx, pointy, MX, MY, I3: Integer;
   Picwidth, picheight: smallint;
   pos: TPosition;
-  BuildingList, CenterList: array [0 .. 1000] of TPosition;
+  BuildingList, CenterList: array [0 .. 48000] of TPosition;
 begin
   pointx := Mmapopbmp2.width div 2;
   pointy := (Mmapopbmp2.height - 200) div 2;
