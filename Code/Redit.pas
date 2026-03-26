@@ -99,6 +99,7 @@ procedure copyRdata(source, dest: PRdata);
 function readR(idx, grp: string; PRF: PRfile): boolean;
 function getRows(var stmt_data: TSQLite3Statement): integer;
 function readDB(dbfile: string; PRF: PRfile): boolean;
+procedure autoAdjustBagSlotFromIdx(const idx: string);
 procedure readini;
 procedure calnamepos(PRF: PRfile);
 procedure saveR(idx, grp: string; PRF: PRfile);
@@ -1043,6 +1044,7 @@ begin
     result := readDB(grp, PRF);
     exit;
   end;
+  autoAdjustBagSlotFromIdx(idx);
   if fileexists(idx) and fileexists(grp) then
   begin
     try
@@ -1134,6 +1136,69 @@ begin
       exit;
     end;
   end;
+end;
+
+procedure autoAdjustBagSlotFromIdx(const idx: string);
+var
+  F, firstOffset: integer;
+  i2, i3, candidateIdx: integer;
+  unitSize, fixedSize, calcSlots: integer;
+  nameLower: string;
+begin
+  if (typenumber <= 0) or (length(Rini) <= 0) then
+    exit;
+  if (length(Rini[0].Rterm) <= 0) or (length(typedataitem) <= 0) then
+    exit;
+  if (typedataitem[0] <= 0) or not fileexists(idx) then
+    exit;
+
+  candidateIdx := -1;
+  for i2 := 0 to typedataitem[0] - 1 do
+  begin
+    nameLower := lowercase(Rini[0].Rterm[i2].name);
+    if (Rini[0].Rterm[i2].datanum > 0) and (Rini[0].Rterm[i2].incnum > 1) and (Rini[0].Rterm[i2].quote = 2) and
+      ((pos('ÎïÆ·', Rini[0].Rterm[i2].name) > 0) or (pos('item', nameLower) > 0)) then
+    begin
+      candidateIdx := i2;
+      break;
+    end;
+  end;
+  if candidateIdx < 0 then
+    exit;
+
+  F := fileopen(idx, fmopenread);
+  if F < 0 then
+    exit;
+  try
+    if fileread(F, firstOffset, 4) <> 4 then
+      exit;
+  finally
+    fileclose(F);
+  end;
+
+  if firstOffset <= 0 then
+    exit;
+
+  unitSize := 0;
+  for i3 := 0 to Rini[0].Rterm[candidateIdx].incnum - 1 do
+    if (candidateIdx + i3 < length(Rini[0].Rterm)) then
+      inc(unitSize, max(Rini[0].Rterm[candidateIdx + i3].datalen, 0));
+  if unitSize <= 0 then
+    exit;
+
+  fixedSize := 0;
+  for i2 := 0 to typedataitem[0] - 1 do
+  begin
+    if (i2 = candidateIdx) or (Rini[0].Rterm[i2].datanum <= 0) then
+      continue;
+    for i3 := 0 to Rini[0].Rterm[i2].incnum - 1 do
+      if (i2 + i3 < length(Rini[0].Rterm)) then
+        inc(fixedSize, Rini[0].Rterm[i2].datanum * max(Rini[0].Rterm[i2 + i3].datalen, 0));
+  end;
+
+  calcSlots := (firstOffset - fixedSize) div unitSize;
+  if (calcSlots > 0) and ((firstOffset - fixedSize) mod unitSize = 0) then
+    Rini[0].Rterm[candidateIdx].datanum := calcSlots;
 end;
 
 function getRows(var stmt_data: TSQLite3Statement): integer;
