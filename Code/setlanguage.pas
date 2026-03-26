@@ -15,8 +15,11 @@ type
     RadioGroup2: TRadioGroup;
     RadioGroup3: TRadioGroup;
     RadioGroup4: TRadioGroup;
+    Label2: TLabel;
+    Edit1: TEdit;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
   private
     { Private declarations }
   public
@@ -34,6 +37,7 @@ procedure TForm8.Button1Click(Sender: TObject);
 var
   Filename:string;
   ini: TiniFile;
+  TileScale: integer;
 begin
   talkcode := max(RadioGroup1.ItemIndex, 0);
   datacode := max(RadioGroup2.ItemIndex, 0);
@@ -47,10 +51,16 @@ begin
 
   Filename := StartPath + iniFilename;
   ini := TIniFile.Create(filename);
+  TileScale := StrToIntDef(Edit1.Text, 1);
+  if TileScale < 1 then
+    TileScale := 1
+  else if TileScale > 8 then
+    TileScale := 8;
   ini.WriteInteger('run','talkcode',talkcode);
   ini.WriteInteger('run','talkinvert',talkinvert);
   ini.WriteInteger('run','datacode',datacode);
   ini.writeInteger('run','checkupdate',checkupdate);
+  ini.WriteInteger('run','TileScale', TileScale);
 
   ini.Free;
   self.Close;
@@ -59,6 +69,20 @@ end;
 procedure TForm8.Button2Click(Sender: TObject);
 begin
   self.Close;
+end;
+
+procedure TForm8.FormCreate(Sender: TObject);
+var
+  Filename: string;
+  ini: TIniFile;
+begin
+  Filename := StartPath + iniFilename;
+  ini := TIniFile.Create(filename);
+  try
+    Edit1.Text := IntToStr(ini.ReadInteger('run', 'TileScale', 1));
+  finally
+    ini.Free;
+  end;
 end;
 
 end.

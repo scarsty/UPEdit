@@ -28,7 +28,6 @@ object Form13: TForm13
     Height = 764
     Align = alLeft
     TabOrder = 0
-    ExplicitHeight = 756
     object Label1: TLabel
       Left = 25
       Top = 8

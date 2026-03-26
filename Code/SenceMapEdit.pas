@@ -159,6 +159,7 @@ procedure copyscenemap(source,destination:Pmap);
 procedure copyscenemapevent(source,destination:Pmapevent);
 
 var
+  TileScale: integer = 1;
 
   undoAmount: integer = 10; //默认撤销次数
   undotimes : integer = 0;
@@ -206,6 +207,41 @@ uses
    main,grplist,kdefedit;
 
 {$R *.dfm}
+
+function ClampTileScale(Value: integer): integer;
+begin
+  if Value < 1 then
+    Result := 1
+  else if Value > 8 then
+    Result := 8
+  else
+    Result := Value;
+end;
+
+function TileW: integer;
+begin
+  Result := 18 * TileScale;
+end;
+
+function TileH: integer;
+begin
+  Result := 9 * TileScale;
+end;
+
+function TilePadding: integer;
+begin
+  Result := 150 * TileScale;
+end;
+
+function TileOffsetX: integer;
+begin
+  Result := 75 * TileScale;
+end;
+
+function TileOffsetY: integer;
+begin
+  Result := 110 * TileScale;
+end;
 
 procedure SetupSceneExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
 var
@@ -506,6 +542,7 @@ begin
     ini := TIniFile.Create(filename);
     undoAmount := ini.ReadInteger('Run','undoAmount',undoAmount);
     SceneEditMode := TMapEditMode(ini.ReadInteger('File','SceneMode', integer(SceneEditMode)));
+    TileScale := ClampTileScale(ini.ReadInteger('Run', 'TileScale', TileScale));
   finally
     ini.Free;
   end;
@@ -991,7 +1028,7 @@ begin
         //copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup);
         scenemapfile.map[combobox2.ItemIndex].maplayer[scenelayer].pic[scenetempy][scenetempx] := 0;
         needupdate := true;
-        Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * 18, scenetempx, scenetempy);
+        Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
         copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
         copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
        // displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
@@ -1110,7 +1147,7 @@ begin
                 if (scenetempx - ix >= 0) and (scenetempx-ix < scenemapfile.map[combobox2.ItemIndex].x) and (scenetempy-iy >=0) and (-iy + scenetempy < scenemapfile.map[combobox2.ItemIndex].y) then
                   scenemapfile.map[combobox2.ItemIndex].maplayer[I].pic[scenetempy - iy][scenetempx - ix] := scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1];
           needupdate := true;
-          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * 18, scenetempx, scenetempy);
+          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
           copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
           copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
         end
@@ -1125,7 +1162,7 @@ begin
           //warbufbmp.PixelFormat := pf32bit;
           //scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
           //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * 18, scenetempx, scenetempy);
+          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
           copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
           copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
         end
@@ -1138,7 +1175,7 @@ begin
               if (scenetempx - ix >= 0) and (scenetempx-ix < scenemapfile.map[combobox2.ItemIndex].x) and (scenetempy-iy >=0) and (-iy + scenetempy < scenemapfile.map[combobox2.ItemIndex].y) then
                 scenemapfile.map[combobox2.ItemIndex].maplayer[scenelayer].pic[scenetempy - iy][scenetempx - ix] := scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1];
           needupdate := true;
-          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * 18, scenetempx, scenetempy);
+          Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
           copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
           copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
           //displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
@@ -1462,11 +1499,11 @@ begin
   if not scenelock then
   begin
   pointx := image1.Width DIV 2;
-  pointy := image1.Height div 2 - 31 * 18;
-  //Axp := ((mousex - pointx) div 18 + (mouseY - pointy div 2 + 9) div 9) div 2;
-  //Ayp := -((mousex - pointx) div 18 - (mouseY - pointy div 2 + 9) div 9) div 2;
-  Axp := Round(((mousex - pointx) / 18 + (mouseY - pointy + 9) / 9) / 2);
-  Ayp := Round(-((mousex - pointx) / 18 - (mouseY - pointy + 9) / 9) / 2);
+  pointy := image1.Height div 2 - 31 * TileW;
+  //Axp := ((mousex - pointx) div 18 + (mouseY - pointy div 2 + TileH) div 9) div 2;
+  //Ayp := -((mousex - pointx) div 18 - (mouseY - pointy div 2 + TileH) div 9) div 2;
+  Axp := Round(((mousex - pointx) / TileW + (mouseY - pointy + TileH) / TileH) / 2);
+  Ayp := Round(-((mousex - pointx) / TileW - (mouseY - pointy + TileH) / TileH) / 2);
   candraw := false;
 
 
@@ -1506,8 +1543,8 @@ begin
               for ix := highendx to scenestillx do
                 for iy := highendy to scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end
             else
@@ -1515,8 +1552,8 @@ begin
               for ix := highendx to scenestillx do
                 for iy := highendy downto scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end;
             end;
@@ -1527,16 +1564,16 @@ begin
               for ix := highendx downto scenestillx do
                 for iy := highendy to scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end
             else
               for ix := highendx downto scenestillx do
                 for iy := highendy downto scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end;
           end;
@@ -1552,7 +1589,7 @@ begin
   if candraw then
   begin
     pointx := image1.Width DIV 2;
-    pointy := image1.Height div 2 - 31 * 18;
+    pointy := image1.Height div 2 - 31 * TileW;
     statusbar1.Canvas.Brush.Color := clbtnface;
     statusbar1.Canvas.FillRect(statusbar1.Canvas.ClipRect);
     statusbar1.Repaint;
@@ -1576,8 +1613,8 @@ begin
             for ix := scenetempx to scenestillx do
               for iy := scenetempy to scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
@@ -1585,8 +1622,8 @@ begin
             for ix := scenetempx to scenestillx do
               for iy := scenetempy downto scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
           end;
@@ -1597,16 +1634,16 @@ begin
             for ix := scenetempx downto scenestillx do
               for iy := scenetempy to scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
             for ix := scenetempx downto scenestillx do
               for iy := scenetempy downto scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
         end;
@@ -1618,8 +1655,8 @@ begin
       begin
       if ((nowscenegrpnum > 0) and (scenelayer <> 6) and (scenelayer <> 5) and (scenelayer <> 4)) or ((nowscenegrpnum >= 0) and (scenelayer = 0))  then
       begin
-        posx := axp * 18 - ayp * 18  + pointx;
-        posy := axp * 9 + ayp * 9 + pointy;
+        posx := axp * TileW - ayp * TileW  + pointx;
+        posy := axp * TileH + ayp * TileH + pointy;
         case SceneEditMode of
           RLEMode:
             begin
@@ -1642,8 +1679,8 @@ begin
            for iy := scenecopymap.y - 1 downto 0 do
              if (scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] > 0) or ((scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] = 0) and (scenelayer = 0)) then
              begin
-               posx := (scenetempx - ix) * 18 - (scenetempy - iy) * 18  + pointx;
-               posy := (scenetempx - ix) * 9 + (scenetempy - Iy) * 9 + pointy;
+               posx := (scenetempx - ix) * TileW - (scenetempy - iy) * TileW  + pointx;
+               posy := (scenetempx - ix) * TileH + (scenetempy - Iy) * TileH + pointy;
                //McoldrawRLE8(@scenegrp[scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenebufbmp, posx,posy, true);
                case SceneEditMode of
                  RLEMode:
@@ -1683,8 +1720,8 @@ begin
             for ix := scenetempx to scenestillx do
               for iy := scenetempy to scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
@@ -1692,8 +1729,8 @@ begin
             for ix := scenetempx to scenestillx do
               for iy := scenetempy downto scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
           end;
@@ -1704,16 +1741,16 @@ begin
             for ix := scenetempx downto scenestillx do
               for iy := scenetempy to scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
             for ix := scenetempx downto scenestillx do
               for iy := scenetempy downto scenestilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
         end;
@@ -1725,8 +1762,8 @@ begin
              for iy := scenecopymap.y - 1 downto 0 do
                if (scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] > 0) or ((scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] = 0) and (I = 0)) then
                begin
-                 posx := (scenetempx - ix) * 18 - (scenetempy - iy) * 18  + pointx;
-                 posy := (scenetempx - ix) * 9 + (scenetempy - Iy) * 9 + pointy;
+                 posx := (scenetempx - ix) * TileW - (scenetempy - iy) * TileW  + pointx;
+                 posy := (scenetempx - ix) * TileH + (scenetempy - Iy) * TileH + pointy;
                  if I = 1 then
                    posy := posy - scenecopymap.maplayer[4].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1]
                  else if I = 2 then
@@ -1765,8 +1802,8 @@ begin
               for ix := highendx to scenestillx do
                 for iy := highendy to scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end
             else
@@ -1774,8 +1811,8 @@ begin
               for ix := highendx to scenestillx do
                 for iy := highendy downto scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end;
             end;
@@ -1786,16 +1823,16 @@ begin
               for ix := highendx downto scenestillx do
                 for iy := highendy to scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end
             else
               for ix := highendx downto scenestillx do
                 for iy := highendy downto scenestilly do
                 begin
-                  posx := ix * 18 - Iy * 18  + pointx;
-                  posy := ix * 9 + Iy * 9 + pointy;
+                  posx := ix * TileW - Iy * TileW  + pointx;
+                  posy := ix * TileH + Iy * TileH + pointy;
                   drawsquare(posx,posy);
                 end;
           end;
@@ -2023,14 +2060,14 @@ begin
     exit;
   end;
 
-  SaveDialog1.Filter := 'Image files (*.bmp;*.png)|*.bmp;*.png|Bitmap files (*.bmp)|*.bmp|PNG files (*.png)|*.png';
+  SaveDialog1.Filter := 'Bitmap files (*.bmp)|*.bmp|PNG files (*.png)|*.png';
   if not SaveDialog1.Execute then
     exit;
 
   FileName := SaveDialog1.FileName;
   if ExtractFileExt(FileName) = '' then
   begin
-    if SaveDialog1.FilterIndex = 3 then
+    if SaveDialog1.FilterIndex = 2 then
       FileName := FileName + '.png'
     else
       FileName := FileName + '.bmp';
@@ -2041,13 +2078,13 @@ begin
   CurrentEvent := @Dfile.mapevent[ComboBox2.ItemIndex];
   ExportBitmap := TBitmap.Create;
   try
-    SetupSceneExportBitmap(ExportBitmap, (CurrentMap.x + CurrentMap.y) * 18 + 150, (CurrentMap.x + CurrentMap.y) * 9 + 150, ExportAsPng);
+    SetupSceneExportBitmap(ExportBitmap, (CurrentMap.x + CurrentMap.y) * TileW + TilePadding, (CurrentMap.x + CurrentMap.y) * TileH + TilePadding, ExportAsPng);
 
     for XIndex := CurrentMap.x - 1 downto 0 do
       for YIndex := CurrentMap.y - 1 downto 0 do
       begin
-        PosX := (CurrentMap.x - XIndex) * 18 - (CurrentMap.y - YIndex) * 18 + CurrentMap.y * 18 + 75;
-        PosY := (CurrentMap.x - XIndex) * 9 + (CurrentMap.y - YIndex) * 9 + 110;
+        PosX := (CurrentMap.x - XIndex) * TileW - (CurrentMap.y - YIndex) * TileW + CurrentMap.y * TileW + TileOffsetX;
+        PosY := (CurrentMap.x - XIndex) * TileH + (CurrentMap.y - YIndex) * TileH + TileOffsetY;
 
         if IncludeGround then
         begin
@@ -2361,15 +2398,15 @@ begin
       end;
       try
         scenetempbmp := Tbitmap.Create;
-        SetupSceneExportBitmap(scenetempbmp, (scenecopymap.x + scenecopymap.y) * 18 + 150, (scenecopymap.x + scenecopymap.y) * 9 + 150, true);
+        SetupSceneExportBitmap(scenetempbmp, (scenecopymap.x + scenecopymap.y) * TileW + TilePadding, (scenecopymap.x + scenecopymap.y) * TileH + TilePadding, true);
 
         for I := 0 to 2 do
           for Ix := scenecopymap.x - 1 downto 0 do
              for iy := scenecopymap.y - 1 downto 0 do
                if (scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] > 0) or ((scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] = 0) and (I = 0)) then
                begin
-                 posx := (scenecopymap.x - ix) * 18 - (scenecopymap.y - iy) * 18  + scenecopymap.y * 18 + 75;
-                 posy := (scenecopymap.x - ix) * 9 + (scenecopymap.y - Iy) * 9 + 110;
+                 posx := (scenecopymap.x - ix) * TileW - (scenecopymap.y - iy) * TileW  + scenecopymap.y * TileW + TileOffsetX;
+                 posy := (scenecopymap.x - ix) * TileH + (scenecopymap.y - Iy) * TileH + TileOffsetY;
                  if I = 1 then
                    posy := posy - scenecopymap.maplayer[4].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1]
                  else if I = 2 then
@@ -2556,13 +2593,13 @@ begin
      (Pdata + (X + 2 * I))^ := 23;
      (Pdata + (X + 2 * I + 1))^ := 23;
   end;
-   Pdata := scenebufbmp.ScanLine[Y - 9];
-   (Pdata + (X - 18))^ := 23;
+   Pdata := scenebufbmp.ScanLine[Y - TileH];
+   (Pdata + (X - TileW))^ := 23;
    (Pdata + (X + 17))^ := 23;
 
   for I := 1 to 8 do
   begin
-     Pdata := scenebufbmp.ScanLine[Y - 9 - I];
+     Pdata := scenebufbmp.ScanLine[Y - TileH - I];
      (Pdata + (X - 19 + 2 * I))^ := 23;
      (Pdata + (X - 19 + 2 * I + 1))^ := 23;
      (Pdata + (X+ 17- 2 * I))^ := 23;
@@ -2593,13 +2630,13 @@ begin
      Pcardinal(Pdata + (X + 2 * I)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X + 2 * I + 1)* 4)^ := $FF0000;
   end;
-   Pdata := scenebufbmpPNG.ScanLine[Y - 9];
-   Pcardinal(Pdata + (X - 18)* 4)^ := $FF0000;
+   Pdata := scenebufbmpPNG.ScanLine[Y - TileH];
+   Pcardinal(Pdata + (X - TileW)* 4)^ := $FF0000;
    Pcardinal(Pdata + (X + 17)* 4)^ := $FF0000;
 
   for I := 1 to 8 do
   begin
-     Pdata := scenebufbmpPNG.ScanLine[Y - 9 - I];
+     Pdata := scenebufbmpPNG.ScanLine[Y - TileH - I];
      Pcardinal(Pdata + (X - 19 + 2 * I)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X - 19 + 2 * I + 1)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X+ 17- 2 * I)* 4)^ := $FF0000;
@@ -2638,13 +2675,13 @@ begin
      (Pdata + (X + 2 * I + 1))^ := 83;
 
   end;
-   Pdata := sceneopbmp2.ScanLine[Y - 9];
-   (Pdata + (X - 18))^ := 83;
+   Pdata := sceneopbmp2.ScanLine[Y - TileH];
+   (Pdata + (X - TileW))^ := 83;
    (Pdata + (X + 17))^ := 83;
 
   for I := 1 to 8 do
   begin
-     Pdata := sceneopbmp2.ScanLine[Y - 9 - I];
+     Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
      (Pdata + (X - 19 + 2 * I))^ := 83;
      (Pdata + (X - 19 + 2 * I + 1))^ := 83;
      (Pdata + (X+ 17- 2 * I))^ := 83;
@@ -2675,13 +2712,13 @@ begin
      Pcardinal(Pdata + (X + 2 * I + 1)* 4)^ := clpurple;
 
   end;
-   Pdata := sceneopbmp2.ScanLine[Y - 9];
-   Pcardinal(Pdata + (X - 18)* 4)^ := clpurple;
+   Pdata := sceneopbmp2.ScanLine[Y - TileH];
+   Pcardinal(Pdata + (X - TileW)* 4)^ := clpurple;
    Pcardinal(Pdata + (X + 17)* 4)^ := clpurple;
 
   for I := 1 to 8 do
   begin
-     Pdata := sceneopbmp2.ScanLine[Y - 9 - I];
+     Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
      Pcardinal(Pdata + (X - 19 + 2 * I)* 4)^ := clpurple;
      Pcardinal(Pdata + (X - 19 + 2 * I + 1)* 4)^ := clpurple;
      Pcardinal(Pdata + (X+ 17- 2 * I)* 4)^ := clpurple;
@@ -2790,7 +2827,7 @@ begin
       fillchar(ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4, #0);
 
   pointx := sceneOPBMP2.Width DIV 2;
-  pointy := sceneopbmp2.Height div 2 - 31 * 18;
+  pointy := sceneopbmp2.Height div 2 - 31 * TileW;
   sceneopbmp2.Canvas.Brush.Style := bssolid;
   sceneopbmp2.Canvas.Brush.Color := clblack;
   sceneopbmp2.Canvas.FillRect(sceneopbmp2.Canvas.ClipRect);
@@ -2801,8 +2838,8 @@ begin
     begin
       if needupdate = true then
         exit;
-      posx := ix * 18 - I * 18  + pointx;
-      posy := ix * 9 + I * 9 + pointy;
+      posx := ix * TileW - I * TileW  + pointx;
+      posy := ix * TileH + I * TileH + pointy;
       try
       if (sceneopmap.maplayer[0].pic[I][ix] div 2 >= 0) and ((scenelayer = 6) or (not checkbox4.Checked) or (checkbox4.Checked and (0 = scenelayer))) then
         //McoldrawRLE8(@scenegrp[sceneopmap.maplayer[0].pic[I][ix] div 2].data[0],scenegrp[sceneopmap.maplayer[0].pic[I][ix] div 2].size,sceneopbmp2, posx, posy, true);
@@ -2891,8 +2928,8 @@ begin
     begin
       if needupdate = true then
         exit;
-      posx := i * 18 - Iy * 18  + pointx;
-      posy := i * 9 + Iy * 9 + pointy;
+      posx := i * TileW - Iy * TileW  + pointx;
+      posy := i * TileH + Iy * TileH + pointy;
       try
       if (sceneopmap.maplayer[0].pic[Iy][i] div 2 >= 0) and ((scenelayer = 6) or (not checkbox4.Checked) or (checkbox4.Checked and (0 = scenelayer))) then
         //McoldrawRLE8(@scenegrp[sceneopmap.maplayer[0].pic[Iy][i] div 2].data[0],scenegrp[sceneopmap.maplayer[0].pic[Iy][i] div 2].size,sceneopbmp2, posx, posy, true);
@@ -2989,11 +3026,11 @@ begin
     for iy := 0 to sceneopmap.y - 1 do
       if sceneopmap.maplayer[3].pic[Iy][ix] >= 0 then
       begin
-        posx := ix * 18 - Iy * 18  + pointx;
-        posy := ix * 9 + Iy * 9 + pointy;
+        posx := ix * TileW - Iy * TileW  + pointx;
+        posy := ix * TileH + Iy * TileH + pointy;
         evtnum := max(evtnum, sceneopmap.maplayer[3].pic[Iy][ix]);
         sceneopbmp2.Canvas.Brush.Style := bsclear;
-        sceneopbmp2.Canvas.TextOut(posx - 5, posy - 18, '['+inttostr(sceneopmap.maplayer[3].pic[Iy][ix]) + ']');
+        sceneopbmp2.Canvas.TextOut(posx - 5, posy - TileW, '['+inttostr(sceneopmap.maplayer[3].pic[Iy][ix]) + ']');
       end;
   inc(evtnum);
   if checkbox3.Checked then
@@ -3001,8 +3038,8 @@ begin
     for ix := 0 to sceneopmap.x - 1 do
       for iy := 0 to sceneopmap.y - 1 do
       begin
-        posx := ix * 18 - Iy * 18  + pointx;
-        posy := ix * 9 + Iy * 9 + pointy;
+        posx := ix * TileW - Iy * TileW  + pointx;
+        posy := ix * TileH + Iy * TileH + pointy;
         drawsquare2(posx,posy, sceneopbmp2);
       end;
   end;
@@ -3140,3 +3177,6 @@ begin
 end;
 
 end.
+
+
+

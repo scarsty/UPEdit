@@ -28,7 +28,6 @@
     DoubleBuffered = False
     ParentDoubleBuffered = False
     TabOrder = 0
-    ExplicitHeight = 670
     object Label1: TLabel
       Left = 10
       Top = -1

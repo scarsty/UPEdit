@@ -246,8 +246,9 @@ object Form93: TForm93
     Top = 272
   end
   object SaveDialog1: TSaveDialog
-    Filter = 'bmp'#22270#29255'|*.bmp'
+    Filter = 'BMP'#22270#29255'|*.bmp|PNG'#22270#29255'|*.png'
     Left = 312
+    OnTypeChange = SaveDialog1TypeChange
     Top = 272
   end
 end

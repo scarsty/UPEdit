@@ -80,6 +80,7 @@ type
   end;
 
 var
+  TileScale: integer = 1;
   waropbmp: Tbitmap;
   warbufbmp: Tbitmap;
   wargrp: array of Tgrppic;
@@ -113,6 +114,41 @@ uses
    main,grplist;
 
 {$R *.dfm}
+
+function ClampTileScale(Value: integer): integer;
+begin
+  if Value < 1 then
+    Result := 1
+  else if Value > 8 then
+    Result := 8
+  else
+    Result := Value;
+end;
+
+function TileW: integer;
+begin
+  Result := 18 * TileScale;
+end;
+
+function TileH: integer;
+begin
+  Result := 9 * TileScale;
+end;
+
+function TilePadding: integer;
+begin
+  Result := 150 * TileScale;
+end;
+
+function TileOffsetX: integer;
+begin
+  Result := 75 * TileScale;
+end;
+
+function TileOffsetY: integer;
+begin
+  Result := 110 * TileScale;
+end;
 
 procedure SetupWarExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
 var
@@ -308,6 +344,7 @@ begin
   try
     ini := TIniFile.Create(filename);
     WarEditMode := TMapEditMode(ini.ReadInteger('File','WarMode', integer(WarEditMode)));
+    TileScale := ClampTileScale(ini.ReadInteger('Run', 'TileScale', TileScale));
   finally
     ini.Free;
   end;
@@ -555,15 +592,15 @@ begin
       end;
       try
         wartempbmp := Tbitmap.Create;
-        SetupWarExportBitmap(wartempbmp, (warcopymap.x + warcopymap.y) * 18 + 150, (warcopymap.x + warcopymap.y) * 9 + 150, true);
+        SetupWarExportBitmap(wartempbmp, (warcopymap.x + warcopymap.y) * TileW + TilePadding, (warcopymap.x + warcopymap.y) * TileH + TilePadding, true);
 
         for I := 0 to warcopymap.layernum - 1 do
           for Ix := warcopymap.x - 1 downto 0 do
              for iy := warcopymap.y - 1 downto 0 do
                if (warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] > 0) or ((warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] = 0) and (I = 0)) then
                begin
-                 posx := (warcopymap.x - ix) * 18 - (warcopymap.y - iy) * 18  + warcopymap.y * 18 + 75;
-                 posy := (warcopymap.x - ix) * 9 + (warcopymap.y - Iy) * 9 + 110;
+                 posx := (warcopymap.x - ix) * TileW - (warcopymap.y - iy) * TileW  + warcopymap.y * TileW + TileOffsetX;
+                 posy := (warcopymap.x - ix) * TileH + (warcopymap.y - Iy) * TileH + TileOffsetY;
 
                  //McoldrawRLE8(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenetempbmp, posx,posy, true);
                  case WarEditMode of
@@ -614,14 +651,14 @@ begin
     exit;
   end;
 
-  SaveDialog1.Filter := 'Image files (*.bmp;*.png)|*.bmp;*.png|Bitmap files (*.bmp)|*.bmp|PNG files (*.png)|*.png';
+  SaveDialog1.Filter := 'Bitmap files (*.bmp)|*.bmp|PNG files (*.png)|*.png';
   if not SaveDialog1.Execute then
     exit;
 
   FileName := SaveDialog1.FileName;
   if ExtractFileExt(FileName) = '' then
   begin
-    if SaveDialog1.FilterIndex = 3 then
+    if SaveDialog1.FilterIndex = 2 then
       FileName := FileName + '.png'
     else
       FileName := FileName + '.bmp';
@@ -631,13 +668,13 @@ begin
   CurrentMap := @warmapfile.map[ComboBox1.ItemIndex];
   ExportBitmap := TBitmap.Create;
   try
-    SetupWarExportBitmap(ExportBitmap, (CurrentMap.x + CurrentMap.y) * 18 + 150, (CurrentMap.x + CurrentMap.y) * 9 + 150, ExportAsPng);
+    SetupWarExportBitmap(ExportBitmap, (CurrentMap.x + CurrentMap.y) * TileW + TilePadding, (CurrentMap.x + CurrentMap.y) * TileH + TilePadding, ExportAsPng);
 
     for XIndex := CurrentMap.x - 1 downto 0 do
       for YIndex := CurrentMap.y - 1 downto 0 do
       begin
-        PosX := (CurrentMap.x - XIndex) * 18 - (CurrentMap.y - YIndex) * 18 + CurrentMap.y * 18 + 75;
-        PosY := (CurrentMap.x - XIndex) * 9 + (CurrentMap.y - YIndex) * 9 + 110;
+        PosX := (CurrentMap.x - XIndex) * TileW - (CurrentMap.y - YIndex) * TileW + CurrentMap.y * TileW + TileOffsetX;
+        PosY := (CurrentMap.x - XIndex) * TileH + (CurrentMap.y - YIndex) * TileH + TileOffsetY;
 
         if ExportGroundCheckBox.Checked then
         begin
@@ -1168,11 +1205,11 @@ begin
   if not WarmapInitial then
     exit;
   pointx := image1.Width DIV 2;
-  pointy := image1.Height div 2 - 31 * 18;
-  //Axp := ((mousex - pointx) div 18 + (mouseY - pointy div 2 + 9) div 9) div 2;
-  //Ayp := -((mousex - pointx) div 18 - (mouseY - pointy div 2 + 9) div 9) div 2;
-  Axp := Round(((mousex - pointx) / 18 + (mouseY - pointy + 9) / 9) / 2);
-  Ayp := Round(-((mousex - pointx) / 18 - (mouseY - pointy + 9) / 9) / 2);
+  pointy := image1.Height div 2 - 31 * TileW;
+  //Axp := ((mousex - pointx) div 18 + (mouseY - pointy div 2 + TileH) div 9) div 2;
+  //Ayp := -((mousex - pointx) div 18 - (mouseY - pointy div 2 + TileH) div 9) div 2;
+  Axp := Round(((mousex - pointx) / TileW + (mouseY - pointy + TileH) / TileH) / 2);
+  Ayp := Round(-((mousex - pointx) / TileW - (mouseY - pointy + TileH) / TileH) / 2);
   if needupdate then
   begin
     needupdate := false;
@@ -1226,8 +1263,8 @@ begin
             for ix := wartempx to warstillx do
               for iy := wartempy to warstilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
@@ -1235,8 +1272,8 @@ begin
             for ix := wartempx to warstillx do
               for iy := wartempy downto warstilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
           end;
@@ -1247,16 +1284,16 @@ begin
             for ix := wartempx downto warstillx do
               for iy := wartempy to warstilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end
           else
             for ix := wartempx downto warstillx do
               for iy := wartempy downto warstilly do
               begin
-                posx := ix * 18 - Iy * 18  + pointx;
-                posy := ix * 9 + Iy * 9 + pointy;
+                posx := ix * TileW - Iy * TileW  + pointx;
+                posy := ix * TileH + Iy * TileH + pointy;
                 drawsquare(posx,posy);
               end;
         end;
@@ -1266,8 +1303,8 @@ begin
     begin
       if (nowwargrpnum > 0) or ((nowwargrpnum >= 0) and (warlayer = 0)) then
       begin
-        posx := axp * 18 - ayp * 18  + pointx;
-        posy := axp * 9 + ayp * 9 + pointy;
+        posx := axp * TileW - ayp * TileW  + pointx;
+        posy := axp * TileH + ayp * TileH + pointy;
         case WarEditMode of
           RLEMode:
             begin
@@ -1289,8 +1326,8 @@ begin
            for iy := warcopymap.y - 1 downto 0 do
              if (warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] > 0) or ((warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] = 0) and (warlayer = 0)) then
              begin
-               posx := (wartempx - ix) * 18 - (wartempy - iy) * 18  + pointx;
-               posy := (wartempx - ix) * 9 + (wartempy - Iy) * 9 + pointy;
+               posx := (wartempx - ix) * TileW - (wartempy - iy) * TileW  + pointx;
+               posy := (wartempx - ix) * TileH + (wartempy - Iy) * TileH + pointy;
                case WarEditMode of
                  RLEMode:
                    begin
@@ -1322,8 +1359,8 @@ begin
              for I := 0 to warcopymap.layernum - 1 do
              if (warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] > 0) or ((warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] = 0) and (I = 0)) then
              begin
-               posx := (wartempx - ix) * 18 - (wartempy - iy) * 18  + pointx;
-               posy := (wartempx - ix) * 9 + (wartempy - Iy) * 9 + pointy;
+               posx := (wartempx - ix) * TileW - (wartempy - iy) * TileW  + pointx;
+               posy := (wartempx - ix) * TileH + (wartempy - Iy) * TileH + pointy;
                case WarEditMode of
                  RLEMode:
                    begin
@@ -1456,7 +1493,7 @@ begin
       fillchar(warPNGbuf.data[I][0], warPNGbuf.width * 4, #0);
 
   pointx := WAROPBMP2.Width DIV 2;
-  pointy := waropbmp2.Height div 2 - 31 * 18;
+  pointy := waropbmp2.Height div 2 - 31 * TileW;
   waropbmp2.Canvas.Brush.Color := clblack;
   waropbmp2.Canvas.FillRect(waropbmp2.Canvas.ClipRect);
   for i := 0 to min(waropmap.x ,waropmap.y) - 1 do
@@ -1465,8 +1502,8 @@ begin
     begin
       if needupdate then
         exit;
-      posx := ix * 18 - I * 18  + pointx;
-      posy := ix * 9 + I * 9 + pointy;
+      posx := ix * TileW - I * TileW  + pointx;
+      posy := ix * TileH + I * TileH + pointy;
       for I2 := 0 to waropmap.layernum - 1 do
       begin
         try
@@ -1493,8 +1530,8 @@ begin
     begin
       if needupdate then
         exit;
-      posx := i * 18 - Iy * 18  + pointx;
-      posy := i * 9 + Iy * 9 + pointy;
+      posx := i * TileW - Iy * TileW  + pointx;
+      posy := i * TileH + Iy * TileH + pointy;
       for I2 := 0 to waropmap.layernum - 1 do
       begin
         try
@@ -1681,20 +1718,20 @@ begin
     //warbufbmp.Canvas.Pixels[X + 2 * I - 1, Y - I] := clred;
    // warbufbmp.Canvas.Pixels[X + 2 * I, Y - I] := clred;
   end;
-   Pdata := warbufbmp.ScanLine[Y - 9];
-   (Pdata + (X - 18))^ := 23;
+   Pdata := warbufbmp.ScanLine[Y - TileH];
+   (Pdata + (X - TileW))^ := 23;
    (Pdata + (X + 17))^ := 23;
-   { (Pdata + (X - 18) * 3)^ := 0;
-    (Pdata + (X - 18) * 3 +1)^ := 0;
-    (Pdata + (X - 18) * 3 +2)^ := $FF;
+   { (Pdata + (X - TileW) * 3)^ := 0;
+    (Pdata + (X - TileW) * 3 +1)^ := 0;
+    (Pdata + (X - TileW) * 3 +2)^ := $FF;
     (Pdata + (X + 17) * 3)^ := 0;
     (Pdata + (X + 17) * 3 +1)^ := 0;
     (Pdata + (X + 17) * 3 +2)^ := $FF;  }
-  //warbufbmp.Canvas.Pixels[X - 18, Y - 9] := clred;
-  //warbufbmp.Canvas.Pixels[X + 17, Y - 9] := clred;
+  //warbufbmp.Canvas.Pixels[X - TileW, Y - TileH] := clred;
+  //warbufbmp.Canvas.Pixels[X + 17, Y - TileH] := clred;
   for I := 1 to 8 do
   begin
-     Pdata := warbufbmp.ScanLine[Y - 9 - I];
+     Pdata := warbufbmp.ScanLine[Y - TileH - I];
      (Pdata + (X - 19 + 2 * I))^ := 23;
      (Pdata + (X - 19 + 2 * I + 1))^ := 23;
      (Pdata + (X+ 17- 2 * I))^ := 23;
@@ -1712,10 +1749,10 @@ begin
     (Pdata + (X + 17 - 2 * I + 1) * 3)^ := 0;
     (Pdata + (X + 17 - 2 * I + 1) * 3 +1)^ := 0;
     (Pdata + (X + 17 - 2 * I + 1) * 3 +2)^ := $FF;   }
-    //warbufbmp.Canvas.Pixels[X - 19 + 2 * I, Y - 9 - I] := clred;
-    //warbufbmp.Canvas.Pixels[X - 19 + 2 * I + 1, Y - 9 - I] := clred;
-    //warbufbmp.Canvas.Pixels[X + 17 - 2 * I, Y - 9 - I] := clred;
-    //warbufbmp.Canvas.Pixels[X + 17 - 2 * I + 1, Y - 9 - I] := clred;
+    //warbufbmp.Canvas.Pixels[X - 19 + 2 * I, Y - TileH - I] := clred;
+    //warbufbmp.Canvas.Pixels[X - 19 + 2 * I + 1, Y - TileH - I] := clred;
+    //warbufbmp.Canvas.Pixels[X + 17 - 2 * I, Y - TileH - I] := clred;
+    //warbufbmp.Canvas.Pixels[X + 17 - 2 * I + 1, Y - TileH - I] := clred;
   end;
   Pdata := warbufbmp.ScanLine[Y - 17];
     (Pdata + x)^ := 23;
@@ -1750,13 +1787,13 @@ begin
      Pcardinal(Pdata + (X + 2 * I)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X + 2 * I + 1)* 4)^ := $FF0000;
   end;
-   Pdata := warbufbmpPNG.ScanLine[Y - 9];
-   Pcardinal(Pdata + (X - 18)* 4)^ := $FF0000;
+   Pdata := warbufbmpPNG.ScanLine[Y - TileH];
+   Pcardinal(Pdata + (X - TileW)* 4)^ := $FF0000;
    Pcardinal(Pdata + (X + 17)* 4)^ := $FF0000;
 
   for I := 1 to 8 do
   begin
-     Pdata := warbufbmpPNG.ScanLine[Y - 9 - I];
+     Pdata := warbufbmpPNG.ScanLine[Y - TileH - I];
      Pcardinal(Pdata + (X - 19 + 2 * I)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X - 19 + 2 * I + 1)* 4)^ := $FF0000;
      Pcardinal(Pdata + (X+ 17- 2 * I)* 4)^ := $FF0000;
@@ -1774,3 +1811,6 @@ end;
 
 
 end.
+
+
+

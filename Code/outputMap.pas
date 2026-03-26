@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, head, StdCtrls, ExtCtrls, imzObject;
+  Dialogs, head, StdCtrls, ExtCtrls, imzObject, PNGimage;
 
 type
 
@@ -44,6 +44,7 @@ type
     procedure Button5Click(Sender: TObject);
     procedure Image1Click(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure SaveDialog1TypeChange(Sender: TObject);
   private
     OutMAPThread: TOutMAPThread;
   public
@@ -63,6 +64,7 @@ var
   Mmapoutputlayer1: Boolean = true;
   Mmapoutputlayer2: Boolean = true;
   Mmapoutputlayer3: Boolean = true;
+  TileScale: integer = 1;
 
 procedure outMapover;
 procedure outMapcheck;
@@ -93,6 +95,58 @@ uses
 
 {$R *.dfm}
 
+function ClampTileScale(Value: integer): integer;
+begin
+  if Value < 1 then
+    Result := 1
+  else if Value > 8 then
+    Result := 8
+  else
+    Result := Value;
+end;
+
+function TileW: integer;
+begin
+  Result := 18 * TileScale;
+end;
+
+function TileH: integer;
+begin
+  Result := 9 * TileScale;
+end;
+
+function TileSpan: integer;
+begin
+  Result := TileW * 2;
+end;
+
+function NormalizeOutMapFileName(const FileName: string; FilterIndex: integer): string;
+var
+  DesiredExt: string;
+begin
+  if FilterIndex = 2 then
+    DesiredExt := '.png'
+  else
+    DesiredExt := '.bmp';
+
+  if FileName = '' then
+    Result := 'MAP' + DesiredExt
+  else
+    Result := ChangeFileExt(FileName, DesiredExt);
+end;
+
+procedure ReadOutMapIni;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(StartPath + iniFilename);
+  try
+    TileScale := ClampTileScale(Ini.ReadInteger('Run', 'TileScale', TileScale));
+  finally
+    Ini.Free;
+  end;
+end;
+
 
 procedure ToutMAPThread.Execute;
 var
@@ -116,8 +170,8 @@ begin
   MApbmp1 := TBitmap.Create;
   MAPBMP1.Canvas.Lock;
   MAPBMP1.PixelFormat := pf8bit;
-  MAPBMP1.Width := 17360;//17280;
-  MAPBMP1.Height := 8700;//8640;
+  MAPBMP1.Width := 480 * TileSpan + 80 * TileScale;
+  MAPBMP1.Height := 480 * TileH * 2 + 60 * TileScale;
 
   Synchronize(outMapcreatepal);
   PalSize:=sizeof(TLogPalette) + 256 * sizeof(TPaletteEntry);
@@ -144,8 +198,8 @@ begin
   //tempMapData.width := MAPBMP1.Width;
   //setlength(tempMAPdata.data, tempMAPdata.height, tempMAPdata.width * 3);
 
-  firstx := MApBMP1.Width div 2 + 18;
-  firsty := 30;
+  firstx := MApBMP1.Width div 2 + TileW;
+  firsty := 30 * TileScale;
 
  // for I := 0 to MAPBMP1.Height - 1 do
   //  copymemory(@tempMapData.data[i][0], MAPBMP1.ScanLine[I], MAPBMP1.Width * 3);
@@ -169,22 +223,22 @@ begin
         begin
           if outMMapEditMode = RLEMode then
           begin
-            MColdrawRLE8(@Mmapgrp[Mmapfile.map[0].maplayer[I].pic[I1][I2] div 2].data[0],Mmapgrp[Mmapfile.map[0].maplayer[0].pic[I1][I2] div 2].size, @MAPBMP1, I2 * 18 - I1 * 18 + firstx, I1 * 9 + I2 * 9 + firsty, true);
+            MColdrawRLE8(@Mmapgrp[Mmapfile.map[0].maplayer[I].pic[I1][I2] div 2].data[0],Mmapgrp[Mmapfile.map[0].maplayer[0].pic[I1][I2] div 2].size, @MAPBMP1, I2 * TileW - I1 * TileW + firstx, I1 * TileH + I2 * TileH + firsty, true);
           end
           else
           begin
-            outImzFile.SceneQuickDraw(@MAPBMP1, Mmapfile.map[0].maplayer[I].pic[I1][I2] div 2, I2 * 18 - I1 * 18 + firstx, I1 * 9 + I2 * 9 + firsty);
+            outImzFile.SceneQuickDraw(@MAPBMP1, Mmapfile.map[0].maplayer[I].pic[I1][I2] div 2, I2 * TileW - I1 * TileW + firstx, I1 * TileH + I2 * TileH + firsty);
           end;
         end;
         if (I = 0) or (Mmapfile.map[0].maplayer[I].pic[I2][I1] div 2 > 0) then
         begin
           if outMMapEditMode = RLEMode then
           begin
-            MColdrawRLE8(@Mmapgrp[Mmapfile.map[0].maplayer[I].pic[I2][I1] div 2].data[0],Mmapgrp[Mmapfile.map[0].maplayer[0].pic[I2][I1] div 2].size, @MAPBMP1, I1 * 18 - I2 * 18 + firstx, I1 * 9 + I2 * 9 + firsty, true);
+            MColdrawRLE8(@Mmapgrp[Mmapfile.map[0].maplayer[I].pic[I2][I1] div 2].data[0],Mmapgrp[Mmapfile.map[0].maplayer[0].pic[I2][I1] div 2].size, @MAPBMP1, I1 * TileW - I2 * TileW + firstx, I1 * TileH + I2 * TileH + firsty, true);
           end
           else
           begin
-            outImzFile.SceneQuickDraw(@MAPBMP1, Mmapfile.map[0].maplayer[I].pic[I2][I1] div 2, I1 * 18 - I2 * 18 + firstx, I1 * 9 + I2 * 9 + firsty);
+            outImzFile.SceneQuickDraw(@MAPBMP1, Mmapfile.map[0].maplayer[I].pic[I2][I1] div 2, I1 * TileW - I2 * TileW + firstx, I1 * TileH + I2 * TileH + firsty);
           end;
         end;
       end;
@@ -242,8 +296,8 @@ begin
               Picwidth := 0;
             end;
           end;
-          CenterList[I3].x := i2 * 2 - (Picwidth+ 35) div 36 + 1;
-          CenterList[I3].y := i1 * 2 - (Picheight+ 35) div 36 + 1;
+          CenterList[I3].x := i2 * 2 - (Picwidth + TileSpan - 1) div TileSpan + 1;
+          CenterList[I3].y := i1 * 2 - (Picheight + TileSpan - 1) div TileSpan + 1;
           inc(I3);
         end;
 
@@ -266,8 +320,8 @@ begin
     begin
       ix := BuildingList[i3].x;
       iy := BuildingList[i3].y;
-      I1 := ix * 18 - Iy * 18  + firstx;
-      I2 := ix * 9 + Iy * 9 + firsty;
+      I1 := ix * TileW - Iy * TileW + firstx;
+      I2 := ix * TileH + Iy * TileH + firsty;
       if outMMapEditMode = RLEMode then
       begin
         McoldrawRLE8(@Mmapgrp[Mmapfile.map[0].maplayer[2].pic[Iy][ix] div 2].data[0],Mmapgrp[Mmapfile.map[0].maplayer[2].pic[Iy][ix] div 2].size,@MAPBMP1, i1, i2, true);
@@ -323,14 +377,25 @@ begin
       ix := ReadRDataInt(@useR.Rtype[3].Rdata[I].Rdataline[6].Rarray[0].dataarray[0]);
       iy := ReadRDataInt(@useR.Rtype[3].Rdata[I].Rdataline[7].Rarray[0].dataarray[0]);
       if (ix > 0) and (iy > 0) then
-        MAPBMP1.Canvas.TextOut((ix * 18 - Iy * 18  + firstx)* outMAPzoom div 100 - ROund(outmapfont.Size * 1.2), (ix * 9 + Iy * 9 + firsty) * outMAPzoom div 100 - Round(outmapfont.Size * 1.2), tempstr);
+        MAPBMP1.Canvas.TextOut((ix * TileW - Iy * TileW + firstx) * outMAPzoom div 100 - Round(outmapfont.Size * 1.2), (ix * TileH + Iy * TileH + firsty) * outMAPzoom div 100 - Round(outmapfont.Size * 1.2), tempstr);
     end;
   end;
 
   Synchronize(outMapsave);
 
   Deletefile(outMAPfilename);
-  MAPBMP1.SaveToFile(outMAPfilename);
+  if SameText(ExtractFileExt(outMAPfilename), '.png') then
+  begin
+    with TPNGObject.Create do
+    try
+      Assign(MAPBMP1);
+      SaveToFile(outMAPfilename);
+    finally
+      Free;
+    end;
+  end
+  else
+    MAPBMP1.SaveToFile(outMAPfilename);
   MAPBMP1.Canvas.Unlock;
   Synchronize(outMapover);
 
@@ -405,12 +470,13 @@ end;
 
 procedure outMapsave;
 begin
-  Form93.memo1.Lines.Add('正在保存bmp文件...');
+  Form93.memo1.Lines.Add('正在保存图片文件...');
 end;
 
 
 procedure TForm93.Button1Click(Sender: TObject);
 begin
+  ReadOutMapIni;
    Mmapoutputlayer1 := Checkbox2.Checked;
    Mmapoutputlayer2 := Checkbox3.Checked;
    Mmapoutputlayer3 := Checkbox4.Checked;
@@ -478,14 +544,13 @@ end;
 
 procedure TForm93.Button4Click(Sender: TObject);
 begin
-  savedialog1.FileName := edit1.Text;
+  if SameText(ExtractFileExt(Edit1.Text), '.png') then
+    SaveDialog1.FilterIndex := 2
+  else
+    SaveDialog1.FilterIndex := 1;
+  SaveDialog1.FileName := NormalizeOutMapFileName(Edit1.Text, SaveDialog1.FilterIndex);
   if savedialog1.Execute then
-  begin
-    edit1.Text := savedialog1.FileName;
-    if not SameText(ExtractFileExt(SaveDialog1.filename), '.bmp') then
-      edit1.Text := SaveDialog1.filename + '.bmp';
-
-  end;
+    edit1.Text := NormalizeOutMapFileName(SaveDialog1.FileName, SaveDialog1.FilterIndex);
 end;
 
 procedure TForm93.Button5Click(Sender: TObject);
@@ -501,6 +566,7 @@ end;
 
 procedure TForm93.FormCreate(Sender: TObject);
 begin
+  ReadOutMapIni;
   outmapfont := TFOnt.Create;
   savedialog1.InitialDir := StartPath;
   Edit1.Text := StartPath + Edit1.Text;
@@ -512,6 +578,11 @@ end;
 procedure TForm93.Image1Click(Sender: TObject);
 begin
   Button3Click(sender);
+end;
+
+procedure TForm93.SaveDialog1TypeChange(Sender: TObject);
+begin
+  SaveDialog1.FileName := NormalizeOutMapFileName(SaveDialog1.FileName, SaveDialog1.FilterIndex);
 end;
 
 end.

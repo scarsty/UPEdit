@@ -85,6 +85,7 @@ type
   end;
 
 var
+  TileScale: integer = 1;
   MMApopbmp: Tbitmap;
   MMApbufbmp: Tbitmap;
   MMApgrp: array of Tgrppic;
@@ -118,6 +119,41 @@ uses
   main, grplist, outputMap;
 
 {$R *.dfm}
+
+function ClampTileScale(Value: integer): integer;
+begin
+  if Value < 1 then
+    Result := 1
+  else if Value > 8 then
+    Result := 8
+  else
+    Result := Value;
+end;
+
+function TileW: integer;
+begin
+  Result := 18 * TileScale;
+end;
+
+function TileH: integer;
+begin
+  Result := 9 * TileScale;
+end;
+
+function TilePadding: integer;
+begin
+  Result := 150 * TileScale;
+end;
+
+function TileOffsetX: integer;
+begin
+  Result := 75 * TileScale;
+end;
+
+function TileOffsetY: integer;
+begin
+  Result := 110 * TileScale;
+end;
 
 procedure SetupMainExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
 var
@@ -319,6 +355,7 @@ begin
   try
     ini := Tinifile.Create(filename);
     MMapEditMode := TMapEditMode(ini.ReadInteger('File', 'MMapMode', Integer(MMapEditMode)));
+    TileScale := ClampTileScale(ini.ReadInteger('Run', 'TileScale', TileScale));
   finally
     ini.Free;
   end;
@@ -528,7 +565,6 @@ begin
       filename := SaveDialog1.filename;
       if not SameText(ExtractFileExt(SaveDialog1.filename), '.mmd') then
         filename := filename + '.mmd';
-      // scenelock := true;
       try
         FH := filecreate(filename);
         fileseek(FH, 0, 0);
@@ -545,20 +581,19 @@ begin
       finally
         fileclose(FH);
       end;
+
       try
         wartempbmp := Tbitmap.Create;
-        SetupMainExportBitmap(wartempbmp, (MMApcopymap.X + MMApcopymap.Y) * 18 + 150, (MMApcopymap.X + MMApcopymap.Y) * 9 + 150, true);
+        SetupMainExportBitmap(wartempbmp, (MMApcopymap.X + MMApcopymap.Y) * TileW + TilePadding, (MMApcopymap.X + MMApcopymap.Y) * TileH + TilePadding, true);
 
         for i := 0 to 2 do
           for ix := MMApcopymap.X - 1 downto 0 do
             for iy := MMApcopymap.Y - 1 downto 0 do
-              if (MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] > 0) or ((MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] = 0) and (i = 0))
-              then
+              if (MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] > 0) or ((MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] = 0) and (i = 0)) then
               begin
-                posx := (MMApcopymap.X - ix) * 18 - (MMApcopymap.Y - iy) * 18 + MMApcopymap.Y * 18 + 75;
-                posy := (MMApcopymap.X - ix) * 9 + (MMApcopymap.Y - iy) * 9 + 110;
+                posx := (MMApcopymap.X - ix) * TileW - (MMApcopymap.Y - iy) * TileW + MMApcopymap.Y * TileW + TileOffsetX;
+                posy := (MMApcopymap.X - ix) * TileH + (MMApcopymap.Y - iy) * TileH + TileOffsetY;
 
-                // McoldrawRLE8(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenetempbmp, posx,posy, true);
                 case MMapEditMode of
                   RLEMode:
                     begin
@@ -570,7 +605,6 @@ begin
                     end;
                   IMZMode, PNGMode:
                     begin
-                      // imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
                       ImzFile.SceneQuickDraw(@wartempbmp, MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2, posx, posy);
                     end;
                 end;
@@ -903,7 +937,7 @@ begin
             MMApfile.Map[0].maplayer[MMAplayer].pic[MMAptempy - iy][MMAptempx - ix] := MMApcopymap.maplayer[MMAplayer].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1];
       needupdate := true;
       UpdateMainSmallBmp;
-      // Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * 18, scenetempx, scenetempy);
+      // Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
       // copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
       // copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
     end
@@ -1128,10 +1162,10 @@ begin
       MMApbufbmp.Canvas.CopyRect(MMApbufbmp.Canvas.ClipRect, MMApopbmp.Canvas, MMApopbmp.Canvas.ClipRect);
       pointx := Image1.width div 2;
       pointy := Image1.height div 2;
-      axp := Round(((mousex - pointx) / 18 + (mousey - pointy + 9) / 9) / 2);
-      ayp := Round(-((mousex - pointx) / 18 - (mousey - pointy + 9) / 9) / 2);
-      posx := axp * 18 - ayp * 18 + pointx - 18 + 200;
-      posy := axp * 9 + ayp * 9 + pointy - 9;
+      axp := Round(((mousex - pointx) / TileW + (mousey - pointy + TileH) / TileH) / 2);
+      ayp := Round(-((mousex - pointx) / TileW - (mousey - pointy + TileH) / TileH) / 2);
+      posx := axp * TileW - ayp * TileW + pointx - TileW + 200;
+      posy := axp * TileH + ayp * TileH + pointy - TileH;
       MMApbufbmp.Canvas.Font.Color := clyellow;
       MMApbufbmp.Canvas.Font.size := 9;
       MMApbufbmp.Canvas.Brush.Style := bsclear;
@@ -1294,8 +1328,8 @@ begin
 
   pointx := Image1.width div 2;
   pointy := Image1.height div 2;
-  axp := Round(((mousex - pointx) / 18 + (mousey - pointy + 9) / 9) / 2);
-  ayp := Round(-((mousex - pointx) / 18 - (mousey - pointy + 9) / 9) / 2);
+  axp := Round(((mousex - pointx) / TileW + (mousey - pointy + TileH) / TileH) / 2);
+  ayp := Round(-((mousex - pointx) / TileW - (mousey - pointy + TileH) / TileH) / 2);
   // Axp := (mousex - pointx + 2 * mousey - pointy * 2 + 18) div 36;
   // Ayp := (-mousex + pointx + 2 * mousey - pointy * 2 + 18) div 36;
   ix := axp;
@@ -1381,8 +1415,8 @@ begin
             for ix := sx to lx do
               for iy := sy to ly do
               begin
-                posx := ix * 18 - iy * 18 + pointx + 200;
-                posy := ix * 9 + iy * 9 + pointy;
+                posx := ix * TileW - iy * TileW + pointx + 200;
+                posy := ix * TileH + iy * TileH + pointy;
                 drawsquare(posx, posy);
               end;
           end;
@@ -1390,8 +1424,8 @@ begin
       end
       else if (nowMMApgrpnum >= 0) and (MMAplayer < 3) and (MMAplayer >= 0) then
       begin
-        posx := axp * 18 - ayp * 18 + pointx + 200;
-        posy := axp * 9 + ayp * 9 + pointy;
+        posx := axp * TileW - ayp * TileW + pointx + 200;
+        posy := axp * TileH + ayp * TileH + pointy;
         if MMapEditMode = RLEMode then
         begin
           if (nowMMApgrpnum >= 0) and (nowMMApgrpnum < MMApgrpnum) and (MMApgrp[nowMMApgrpnum].size >= 8) then
@@ -1410,8 +1444,8 @@ begin
           qbuildx := 0;
           qbuildy := 0;
         end;
-        posx := axp * 18 - ayp * 18 + pointx - 18 + 200;
-        posy := axp * 9 + ayp * 9 + pointy - 9;
+        posx := axp * TileW - ayp * TileW + pointx - TileW + 200;
+        posy := axp * TileH + ayp * TileH + pointy - TileH;
         if MMapEditMode = RLEMode then
         begin
           MMApbufbmp.Canvas.Font.Color := clyellow;
@@ -1438,8 +1472,8 @@ begin
                 then
                 begin
                   tempint := MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2;
-                  posx := (axp - ix) * 18 - (ayp - iy) * 18 + pointx + 200;
-                  posy := (axp - ix) * 9 + (ayp - iy) * 9 + pointy;
+                  posx := (axp - ix) * TileW - (ayp - iy) * TileW + pointx + 200;
+                  posy := (axp - ix) * TileH + (ayp - iy) * TileH + pointy;
                   if MMapEditMode = RLEMode then
                   begin
                     if (tempint >= 0) and (tempint < MMApgrpnum) and (MMApgrp[tempint].size >= 8) then
@@ -1459,8 +1493,8 @@ begin
                 ((MMApcopymap.maplayer[MMAplayer].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] = 0) and (MMAplayer = 0)) then
               begin
                 tempint := MMApcopymap.maplayer[MMAplayer].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2;
-                posx := (axp - ix) * 18 - (ayp - iy) * 18 + pointx + 200;
-                posy := (axp - ix) * 9 + (ayp - iy) * 9 + pointy;
+                posx := (axp - ix) * TileW - (ayp - iy) * TileW + pointx + 200;
+                posy := (axp - ix) * TileH + (ayp - iy) * TileH + pointy;
                 if MMapEditMode = RLEMode then
                 begin
                   if (tempint >= 0) and (tempint < MMApgrpnum) and (MMApgrp[tempint].size >= 8) then
@@ -1669,8 +1703,8 @@ begin
         exit;
       ix := i + i2;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
         if (MmapopMap.maplayer[0].pic[iy + MY][ix + MX] div 2 >= 0) then
         begin
@@ -1692,8 +1726,8 @@ begin
         exit;
       ix := i + i2;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
         if (MmapopMap.maplayer[0].pic[iy + MY][ix + MX] div 2 >= 0) then
         begin
@@ -1715,8 +1749,8 @@ begin
         exit;
       ix := i + i2 + 1;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
         if (MmapopMap.maplayer[0].pic[iy + MY][ix + MX] div 2 >= 0) then
         begin
@@ -1738,8 +1772,8 @@ begin
         exit;
       ix := i + i2 + 1;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
         if (MmapopMap.maplayer[0].pic[iy + MY][ix + MX] div 2 >= 0) then
         begin
@@ -1766,8 +1800,8 @@ begin
         exit;
       ix := i + i2;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
       begin
         if (MmapopMap.maplayer[1].pic[iy + MY][ix + MX] div 2 > 0) then
@@ -1825,8 +1859,8 @@ begin
         exit;
       ix := i + i2;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
       begin
         if (MmapopMap.maplayer[1].pic[iy + MY][ix + MX] div 2 > 0) then
@@ -1883,8 +1917,8 @@ begin
         exit;
       ix := i + i2 + 1;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
       begin
         if (MmapopMap.maplayer[1].pic[iy + MY][ix + MX] div 2 > 0) then
@@ -1939,8 +1973,8 @@ begin
         exit;
       ix := i + i2 + 1;
       iy := i - i2;
-      posx := ix * 18 - iy * 18 + pointx;
-      posy := ix * 9 + iy * 9 + pointy;
+      posx := ix * TileW - iy * TileW + pointx;
+      posy := ix * TileH + iy * TileH + pointy;
       if (iy + MY >= 0) and (iy + MY < MmapopMap.Y) and (ix + MX >= 0) and (ix + MX < MmapopMap.X) then
       begin
         if (MmapopMap.maplayer[1].pic[iy + MY][ix + MX] div 2 > 0) then
@@ -2014,8 +2048,8 @@ begin
   begin
     ix := BuildingList[i].X;
     iy := BuildingList[i].Y;
-    posx := ix * 18 - iy * 18 + pointx;
-    posy := ix * 9 + iy * 9 + pointy;
+    posx := ix * TileW - iy * TileW + pointx;
+    posy := ix * TileH + iy * TileH + pointy;
     if MMapEditMode = RLEMode then
     begin
       if (MmapopMap.maplayer[2].pic[iy + MY][ix + MX] div 2 >= 0) and (MmapopMap.maplayer[2].pic[iy + MY][ix + MX] div 2 < MMApgrpnum) and
@@ -2046,8 +2080,8 @@ begin
     begin
     if needupdate then
     exit;
-    posx := ix * 18 - I * 18  + pointx;
-    posy := ix * 9 + I * 9 + pointy;
+    posx := ix * TileW - I * TileW  + pointx;
+    posy := ix * TileH + I * TileH + pointy;
     for I2 := 0 to waropmap.layernum - 1 do
     if (waropmap.maplayer[I2].pic[I][ix] div 2 > 0) or (I2 = 0)  then
     McoldrawRLE8(@wargrp[waropmap.maplayer[I2].pic[I][ix] div 2].data[0],wargrp[waropmap.maplayer[I2].pic[I][ix] div 2].size,waropbmp2, posx, posy, true);
@@ -2056,8 +2090,8 @@ begin
     begin
     if needupdate then
     exit;
-    posx := i * 18 - Iy * 18  + pointx;
-    posy := i * 9 + Iy * 9 + pointy;
+    posx := i * TileW - Iy * TileW  + pointx;
+    posy := i * TileH + Iy * TileH + pointy;
     for I2 := 0 to waropmap.layernum - 1 do
     if (waropmap.maplayer[I2].pic[Iy][i] div 2 > 0) or (I2 = 0) then
     McoldrawRLE8(@wargrp[waropmap.maplayer[I2].pic[Iy][i] div 2].data[0],wargrp[waropmap.maplayer[I2].pic[Iy][i] div 2].size,waropbmp2, posx, posy, true);
@@ -2089,13 +2123,13 @@ begin
         (Pdata + (X + 2 * i))^ := 23;
         (Pdata + (X + 2 * i + 1))^ := 23;
       end;
-      Pdata := MMApbufbmp.ScanLine[Y - 9];
-      (Pdata + (X - 18))^ := 23;
+      Pdata := MMApbufbmp.ScanLine[Y - TileH];
+      (Pdata + (X - TileW))^ := 23;
       (Pdata + (X + 17))^ := 23;
 
       for i := 1 to 8 do
       begin
-        Pdata := MMApbufbmp.ScanLine[Y - 9 - i];
+        Pdata := MMApbufbmp.ScanLine[Y - TileH - i];
         (Pdata + (X - 19 + 2 * i))^ := 23;
         (Pdata + (X - 19 + 2 * i + 1))^ := 23;
         (Pdata + (X + 17 - 2 * i))^ := 23;
@@ -2126,13 +2160,13 @@ begin
         Pcardinal(Pdata + (X + 2 * i) * 4)^ := $FF0000;
         Pcardinal(Pdata + (X + 2 * i + 1) * 4)^ := $FF0000;
       end;
-      Pdata := MMapbufbmppng.ScanLine[Y - 9];
-      Pcardinal(Pdata + (X - 18) * 4)^ := $FF0000;
+      Pdata := MMapbufbmppng.ScanLine[Y - TileH];
+      Pcardinal(Pdata + (X - TileW) * 4)^ := $FF0000;
       Pcardinal(Pdata + (X + 17) * 4)^ := $FF0000;
 
       for i := 1 to 8 do
       begin
-        Pdata := MMapbufbmppng.ScanLine[Y - 9 - i];
+        Pdata := MMapbufbmppng.ScanLine[Y - TileH - i];
         Pcardinal(Pdata + (X - 19 + 2 * i) * 4)^ := $FF0000;
         Pcardinal(Pdata + (X - 19 + 2 * i + 1) * 4)^ := $FF0000;
         Pcardinal(Pdata + (X + 17 - 2 * i) * 4)^ := $FF0000;
@@ -2149,3 +2183,6 @@ begin
 end;
 
 end.
+
+
+

@@ -2,7 +2,7 @@ object Form8: TForm8
   Left = 0
   Top = 0
   Caption = #35774#32622#32534#36753#22120#37197#32622
-  ClientHeight = 396
+  ClientHeight = 430
   ClientWidth = 380
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -11,6 +11,7 @@ object Form8: TForm8
   Font.Name = 'Tahoma'
   Font.Style = []
   Position = poMainFormCenter
+  OnCreate = FormCreate
   TextHeight = 13
   object Label1: TLabel
     Left = 32
@@ -26,7 +27,7 @@ object Form8: TForm8
   end
   object Button1: TButton
     Left = 42
-    Top = 344
+    Top = 376
     Width = 97
     Height = 33
     Caption = #30830#23450
@@ -35,7 +36,7 @@ object Form8: TForm8
   end
   object Button2: TButton
     Left = 242
-    Top = 344
+    Top = 376
     Width = 97
     Height = 33
     Caption = #21462#28040
@@ -93,5 +94,21 @@ object Form8: TForm8
       #26159
       #21542)
     TabOrder = 5
+  end
+  object Label2: TLabel
+    Left = 42
+    Top = 336
+    Width = 145
+    Height = 13
+    Caption = #22320#22270#32534#36753#25340#22270#20493#29575'(1~8)'
+  end
+  object Edit1: TEdit
+    Left = 248
+    Top = 332
+    Width = 91
+    Height = 21
+    Alignment = taRightJustify
+    TabOrder = 6
+    Text = '1'
   end
 end
