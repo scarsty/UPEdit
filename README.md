@@ -50,3 +50,23 @@ An Editor for All Heroes of Kam Yung's Stories
     TypeRef3=|跳转场景|
     TypeRef4=|装备武功|二组装备武功|所会武功|练出武功|
 ```
+
+  ## 在 VS Code 中构建与调试
+
+  仓库已提供 VS Code 配置文件：
+
+  - `.vscode/tasks.json`：Delphi 构建任务（Debug/Release, Win64）
+  - `.vscode/launch.json`：F5 启动 `Code/debug/UPEdit.exe`
+  - `Code/tools/build_delphi.cmd`：自动查找并加载 Delphi 的 `rsvars.bat`，再调用 `msbuild`
+
+  使用步骤：
+
+  1. 安装 Delphi（建议 10.4+，且包含 Win64 工具链）。
+  2. 在 VS Code 打开仓库根目录。
+  3. 按 `Ctrl+Shift+B` 运行默认任务 `Delphi: Build Debug Win64`。
+  4. 按 `F5` 运行 `UPEdit (Win64 Debug)`。
+
+  说明：
+
+  - 如果你的 Delphi 不是安装在默认路径，可设置系统环境变量 `BDS` 指向 Delphi 安装目录（例如 `C:\Program Files (x86)\Embarcadero\Studio\22.0`）。
+  - 工程的 Debug 输出目录为 `Code/debug`，Release 输出目录为 `Code/release`。
