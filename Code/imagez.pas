@@ -252,6 +252,11 @@ var
   I, I2, tempint, FH: integer;
   pakimz: Timz;
   ini: Tinifile;
+  txtPath: string;
+  sl: TStringList;
+  line: string;
+  parts: TArray<string>;
+  idx, dx, dy: integer;
 begin
   indexfile := imzindexfilename;
   try
@@ -278,22 +283,70 @@ begin
     Fname := SaveDialog1.filename;
     if not SameText(ExtractFileExt(SaveDialog1.filename), '.imz') then
       Fname := SaveDialog1.filename + '.imz';
-    if not fileexists(Path + indexfile) then
+    
+    txtPath := ChangeFileExt(indexfile, '.txt');
+    
+    // Try reading index.txt first (higher priority)
+    if fileexists(Path + txtPath) then
+    begin
+      sl := TStringList.Create;
+      try
+        sl.LoadFromFile(Path + txtPath);
+        pakimz.PNGnum := 0;
+        for I := 0 to sl.Count - 1 do
+        begin
+          line := Trim(sl[I]);
+          if line = '' then Continue;
+          
+          parts := line.Split([':']);
+          if Length(parts) >= 2 then
+          begin
+            try
+              idx := StrToInt(parts[0]);
+              parts := parts[1].Split([',']);
+              if Length(parts) >= 2 then
+              begin
+                dx := StrToInt(Trim(parts[0]));
+                dy := StrToInt(Trim(parts[1]));
+                
+                if idx >= pakimz.PNGnum then
+                  pakimz.PNGnum := idx + 1;
+                
+                if pakimz.PNGnum > Length(pakimz.imzPNG) then
+                  setlength(pakimz.imzPNG, pakimz.PNGnum);
+                
+                pakimz.imzPNG[idx].x := dx;
+                pakimz.imzPNG[idx].y := dy;
+              end;
+            except
+              // Skip invalid lines
+            end;
+          end;
+        end;
+        setlength(pakimz.imzPNG, pakimz.PNGnum);
+      finally
+        sl.Free;
+      end;
+    end
+    else if fileexists(Path + indexfile) then
+    begin
+      // Fall back to index.ka
+      FH := fileopen(Path + indexfile, fmopenread);
+      pakimz.PNGnum := fileseek(FH, 0, 2) shr 2;
+      fileseek(FH, 0, 0);
+      setlength(pakimz.imzPNG, pakimz.PNGnum);
+      for I := 0 to pakimz.PNGnum - 1 do
+      begin
+        fileread(FH, pakimz.imzPNG[I].x, 2);
+        fileread(FH, pakimz.imzPNG[I].y, 2);
+      end;
+      fileclose(FH);
+    end
+    else
     begin
       showmessage('偏移文件不存在！');
       exit;
     end;
-
-    FH := fileopen(Path + indexfile, fmopenread);
-    pakimz.PNGnum := fileseek(FH, 0, 2) shr 2;
-    fileseek(FH, 0, 0);
-    setlength(pakimz.imzPNG, pakimz.PNGnum);
-    for I := 0 to pakimz.PNGnum - 1 do
-    begin
-      fileread(FH, pakimz.imzPNG[I].x, 2);
-      fileread(FH, pakimz.imzPNG[I].y, 2);
-    end;
-    fileclose(FH);
 
     for I := 0 to pakimz.PNGnum - 1 do
     begin
@@ -362,15 +415,48 @@ var
   zip: pzip_t;
   buf: ansistring;
   p: psmallint;
+  sl: TStringList;
+  txtPath: string;
+  hasNonZero: Boolean;
 begin
   if IMZeditMode = zPNGmode then
   begin
     try
+      // Save index.ka (binary)
       FH := Filecreate(PNGEditPath + indexfile);
       for I := 0 to imz.PNGnum - 1 do
       begin
         filewrite(FH, imz.imzPNG[I].x, 2);
         filewrite(FH, imz.imzPNG[I].y, 2);
+      end;
+      fileclose(FH);
+      
+      // Check if all entries are zero
+      hasNonZero := false;
+      for I := 0 to imz.PNGnum - 1 do
+      begin
+        if (imz.imzPNG[I].x <> 0) or (imz.imzPNG[I].y <> 0) then
+        begin
+          hasNonZero := true;
+          Break;
+        end;
+      end;
+      
+      // Save index.txt if there are non-zero entries
+      if hasNonZero then
+      begin
+        txtPath := ChangeFileExt(indexfile, '.txt');
+        sl := TStringList.Create;
+        try
+          for I := 0 to imz.PNGnum - 1 do
+          begin
+            if (imz.imzPNG[I].x <> 0) or (imz.imzPNG[I].y <> 0) then
+              sl.Add(Format('%d:%d,%d', [I, imz.imzPNG[I].x, imz.imzPNG[I].y]));
+          end;
+          sl.SaveToFile(PNGEditPath + txtPath);
+        finally
+          sl.Free;
+        end;
       end;
     finally
       fileclose(FH);
@@ -379,6 +465,8 @@ begin
   else if IMZeditMode = zZIPmode then
   begin
     zip := zip_open(UnicodeToMulti(Pwidechar(Edit2.Text), 65001), ZIP_CREATE);
+    
+    // Save index.ka (binary)
     setlength(buf, imz.PNGnum * 4);
     p := @buf[1];
     for I := 0 to imz.PNGnum - 1 do
@@ -389,6 +477,34 @@ begin
       inc(p);
     end;
     zip_compress(zip, 'index.ka', @buf[1], length(buf));
+    
+    // Check if all entries are zero and save index.txt if needed
+    hasNonZero := false;
+    for I := 0 to imz.PNGnum - 1 do
+    begin
+      if (imz.imzPNG[I].x <> 0) or (imz.imzPNG[I].y <> 0) then
+      begin
+        hasNonZero := true;
+        Break;
+      end;
+    end;
+    
+    if hasNonZero then
+    begin
+      sl := TStringList.Create;
+      try
+        for I := 0 to imz.PNGnum - 1 do
+        begin
+          if (imz.imzPNG[I].x <> 0) or (imz.imzPNG[I].y <> 0) then
+            sl.Add(Format('%d:%d,%d', [I, imz.imzPNG[I].x, imz.imzPNG[I].y]));
+        end;
+        buf := AnsiString(sl.Text);
+        zip_compress(zip, 'index.txt', @buf[1], Length(buf));
+      finally
+        sl.Free;
+      end;
+    end;
+    
     zip_close(zip);
   end
   else
@@ -455,6 +571,11 @@ var
   ini: Tinifile;
   I, FH: integer;
   tpath: string;
+  txtPath: string;
+  line: string;
+  parts: TArray<string>;
+  idx, dx, dy: integer;
+  sl: TStringList;
 begin
   indexfile := imzindexfilename;
   try
@@ -469,26 +590,73 @@ begin
   if tpath[length(tpath)] <> '\' then
     tpath := tpath + '\';
   try
-    if not fileexists(tpath + indexfile) then
+    txtPath := ChangeFileExt(indexfile, '.txt');
+    
+    if fileexists(tpath + txtPath) then
+    begin
+      // Read from index.txt (higher priority)
+      sl := TStringList.Create;
+      try
+        sl.LoadFromFile(tpath + txtPath);
+        tempimz.PNGnum := 0;
+        for I := 0 to sl.Count - 1 do
+        begin
+          line := Trim(sl[I]);
+          if line = '' then Continue;
+          
+          parts := line.Split([':']);
+          if Length(parts) >= 2 then
+          begin
+            try
+              idx := StrToInt(parts[0]);
+              parts := parts[1].Split([',']);
+              if Length(parts) >= 2 then
+              begin
+                dx := StrToInt(Trim(parts[0]));
+                dy := StrToInt(Trim(parts[1]));
+                
+                if idx >= tempimz.PNGnum then
+                  tempimz.PNGnum := idx + 1;
+                
+                if tempimz.PNGnum > Length(tempimz.imzPNG) then
+                  setlength(tempimz.imzPNG, tempimz.PNGnum);
+                
+                tempimz.imzPNG[idx].x := dx;
+                tempimz.imzPNG[idx].y := dy;
+              end;
+            except
+              // Skip invalid lines
+            end;
+          end;
+        end;
+        // Ensure array is properly sized
+        setlength(tempimz.imzPNG, tempimz.PNGnum);
+      finally
+        sl.Free;
+      end;
+    end
+    else if fileexists(tpath + indexfile) then
+    begin
+      // Fall back to index.ka
+      FH := fileopen(tpath + indexfile, fmopenread);
+      tempimz.PNGnum := fileseek(FH, 0, 2) shr 2;
+      fileseek(FH, 0, 0);
+      setlength(tempimz.imzPNG, tempimz.PNGnum);
+      for I := 0 to tempimz.PNGnum - 1 do
+      begin
+        fileread(FH, tempimz.imzPNG[I].x, 2);
+        fileread(FH, tempimz.imzPNG[I].y, 2);
+      end;
+      fileclose(FH);
+    end
+    else
     begin
       SetEditMode(zIMZmode);
-      // ImzEditMode := ImzMode;
       tempimz.PNGnum := 0;
       showmessage('索引文件:' + tpath + indexfile + '不存在！');
       exit;
     end;
-
-    FH := fileopen(tpath + indexfile, fmopenread);
-    tempimz.PNGnum := fileseek(FH, 0, 2) shr 2;
-
-    fileseek(FH, 0, 0);
-    setlength(tempimz.imzPNG, tempimz.PNGnum);
-    for I := 0 to tempimz.PNGnum - 1 do
-    begin
-      fileread(FH, tempimz.imzPNG[I].x, 2);
-      fileread(FH, tempimz.imzPNG[I].y, 2);
-    end;
-  finally
+  except
     fileclose(FH);
   end;
 
@@ -525,6 +693,10 @@ var
   I1, I2: integer;
   FH: integer;
   ini: Tinifile;
+  sl: TStringList;
+  txtPath: string;
+  hasNonZero: boolean;
+  I1_idx: integer;
 begin
 
   if IMZeditMode = zPNGmode then
@@ -563,6 +735,33 @@ begin
     end;
   finally
     fileclose(FH);
+  end;
+  
+  // Also save index.txt if there are non-zero entries
+  txtPath := ChangeFileExt(indexfile, '.txt');
+  hasNonZero := false;
+  for I1_idx := 0 to imz.PNGnum - 1 do
+  begin
+    if (imz.imzPNG[I1_idx].x <> 0) or (imz.imzPNG[I1_idx].y <> 0) then
+    begin
+      hasNonZero := true;
+      break;
+    end;
+  end;
+  
+  if hasNonZero then
+  begin
+    sl := TStringList.Create;
+    try
+      for I1_idx := 0 to imz.PNGnum - 1 do
+      begin
+        if (imz.imzPNG[I1_idx].x <> 0) or (imz.imzPNG[I1_idx].y <> 0) then
+          sl.Add(Format('%d:%d,%d', [I1_idx, imz.imzPNG[I1_idx].x, imz.imzPNG[I1_idx].y]));
+      end;
+      sl.SaveToFile(dir + txtPath);
+    finally
+      sl.Free;
+    end;
   end;
 
   for I1 := 0 to imz.PNGnum - 1 do
@@ -957,6 +1156,12 @@ var
   name, buf: ansistring;
   zip: pzip_t;
   p: psmallint;
+  txtPath: string;
+  txtBuf: ansistring;
+  sl: TStringList;
+  line: string;
+  parts: TArray<string>;
+  idx, dx, dy: integer;
 begin
   indexfile := imzindexfilename;
   try
@@ -970,16 +1175,65 @@ begin
     zip := zip_open(name);
     if zip <> nil then
     begin
-      buf := zip_express(zip, indexfile);
-      tempimz.PNGnum := length(buf) div 4;
-      setlength(tempimz.imzPNG, tempimz.PNGnum);
-      p := @buf[1];
-      for I := 0 to tempimz.PNGnum - 1 do
+      txtPath := ChangeFileExt(indexfile, '.txt');
+      
+      // Try reading index.txt first (higher priority)
+      txtBuf := zip_express(zip, txtPath);
+      if Length(txtBuf) > 0 then
       begin
-        tempimz.imzPNG[I].x := p^;
-        inc(p);
-        tempimz.imzPNG[I].y := p^;
-        inc(p);
+        tempimz.PNGnum := 0;
+        sl := TStringList.Create;
+        try
+          sl.Text := string(txtBuf);
+          for I := 0 to sl.Count - 1 do
+          begin
+            line := Trim(sl[I]);
+            if line = '' then Continue;
+            
+            parts := line.Split([':']);
+            if Length(parts) >= 2 then
+            begin
+              try
+                idx := StrToInt(parts[0]);
+                parts := parts[1].Split([',']);
+                if Length(parts) >= 2 then
+                begin
+                  dx := StrToInt(Trim(parts[0]));
+                  dy := StrToInt(Trim(parts[1]));
+                  
+                  if idx >= tempimz.PNGnum then
+                    tempimz.PNGnum := idx + 1;
+                  
+                  if tempimz.PNGnum > Length(tempimz.imzPNG) then
+                    setlength(tempimz.imzPNG, tempimz.PNGnum);
+                  
+                  tempimz.imzPNG[idx].x := dx;
+                  tempimz.imzPNG[idx].y := dy;
+                end;
+              except
+                // Skip invalid lines
+              end;
+            end;
+          end;
+          setlength(tempimz.imzPNG, tempimz.PNGnum);
+        finally
+          sl.Free;
+        end;
+      end
+      else
+      begin
+        // Fall back to index.ka
+        buf := zip_express(zip, indexfile);
+        tempimz.PNGnum := length(buf) div 4;
+        setlength(tempimz.imzPNG, tempimz.PNGnum);
+        p := @buf[1];
+        for I := 0 to tempimz.PNGnum - 1 do
+        begin
+          tempimz.imzPNG[I].x := p^;
+          inc(p);
+          tempimz.imzPNG[I].y := p^;
+          inc(p);
+        end;
       end;
     end;
   finally
