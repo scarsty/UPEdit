@@ -326,7 +326,7 @@
       Left = 0
       Top = 0
       Width = 594
-      Height = 69
+      Height = 92
       Align = alTop
       TabOrder = 0
       Visible = False
@@ -356,16 +356,6 @@
         TabOrder = 1
         OnClick = CheckBox4Click
       end
-      object CheckBox5: TCheckBox
-        Left = 481
-        Top = 7
-        Width = 80
-        Height = 17
-        Hint = #36873#20013#27492#39033#65292#21487#20197#22312#22320#22270#20013
-        Caption = #36873#21462#27169#24335
-        TabOrder = 2
-        Visible = False
-      end
       object SpinEdit1: TSpinEdit
         Left = 137
         Top = 27
@@ -373,7 +363,7 @@
         Height = 22
         MaxValue = 100
         MinValue = 10
-        TabOrder = 3
+        TabOrder = 2
         Value = 10
         OnChange = SpinEdit1Change
       end
@@ -383,7 +373,7 @@
         Width = 98
         Height = 21
         Caption = 'undo(ctrl+z)'
-        TabOrder = 4
+        TabOrder = 3
         OnClick = Button11Click
       end
       object Button12: TButton
@@ -392,7 +382,7 @@
         Width = 98
         Height = 21
         Caption = 'redo(ctrl+shift+z)'
-        TabOrder = 5
+        TabOrder = 4
         OnClick = Button12Click
       end
       object RadioGroup1: TRadioGroup
@@ -406,8 +396,57 @@
           #21407#22987'rle'#36148#22270
           'PNG'#25171#21253
           'PNG'#25991#20214#22841)
-        TabOrder = 6
+        TabOrder = 5
         OnClick = RadioGroup1Click
+      end
+      object ExportGroundCheckBox: TCheckBox
+        Left = 472
+        Top = 8
+        Width = 61
+        Height = 17
+        Caption = #22320#38754
+        Checked = True
+        State = cbChecked
+        TabOrder = 6
+      end
+      object ExportBuildingCheckBox: TCheckBox
+        Left = 472
+        Top = 28
+        Width = 61
+        Height = 17
+        Caption = #24314#31569
+        Checked = True
+        State = cbChecked
+        TabOrder = 7
+      end
+      object ExportSkyCheckBox: TCheckBox
+        Left = 472
+        Top = 48
+        Width = 61
+        Height = 17
+        Caption = #31354#20013
+        Checked = True
+        State = cbChecked
+        TabOrder = 8
+      end
+      object ExportEventCheckBox: TCheckBox
+        Left = 472
+        Top = 68
+        Width = 61
+        Height = 17
+        Caption = #20107#20214
+        Checked = True
+        State = cbChecked
+        TabOrder = 9
+      end
+      object ExportImageButton: TButton
+        Left = 535
+        Top = 28
+        Width = 52
+        Height = 35
+        Caption = #23548#20986#22270#29255
+        TabOrder = 10
+        OnClick = ExportImageButtonClick
       end
     end
     object Panel10: TPanel

@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, head, ExtCtrls, StdCtrls, math, ComCtrls, IMZObject, iniFiles, imagez;
+  Dialogs, head, ExtCtrls, StdCtrls, math, ComCtrls, IMZObject, iniFiles, imagez, PNGimage;
 
 type
   TForm13 = class(TForm)
@@ -118,6 +118,131 @@ uses
   main, grplist, outputMap;
 
 {$R *.dfm}
+
+procedure SetupMainExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
+var
+  FillColor: TColor;
+begin
+  Target.PixelFormat := pf24bit;
+  Target.Width := Width;
+  Target.Height := Height;
+  if TransparentBackground then
+    FillColor := usualtrans
+  else
+    FillColor := clBlack;
+  Target.Canvas.Brush.Color := FillColor;
+  Target.Canvas.FillRect(Target.Canvas.ClipRect);
+end;
+
+procedure SaveBitmapAsTransparentPng(Source: TBitmap; const FileName: string);
+var
+  PNG: TPNGObject;
+  XIndex, YIndex: integer;
+  AlphaData: PByteArray;
+  PixelData: array of byte;
+begin
+  PNG := TPNGObject.Create;
+  try
+    PNG.Assign(Source);
+    PNG.CreateAlpha;
+    SetLength(PixelData, Source.Width * 3);
+    for YIndex := 0 to Source.Height - 1 do
+    begin
+      CopyMemory(@PixelData[0], Source.ScanLine[YIndex], Source.Width * 3);
+      AlphaData := PNG.AlphaScanline[YIndex];
+      for XIndex := 0 to Source.Width - 1 do
+        if PixelData[XIndex * 3] shl 16 + PixelData[XIndex * 3 + 1] shl 8 + PixelData[XIndex * 3 + 2] = usualtrans then
+          AlphaData[XIndex] := 0;
+    end;
+    PNG.SaveToFile(FileName);
+  finally
+    PNG.Free;
+  end;
+end;
+
+procedure ReplaceBitmapColor(Target: TBitmap; OldColor, NewColor: Cardinal);
+var
+  XIndex, YIndex: integer;
+  PixelData: PByteArray;
+  OldBlue, OldGreen, OldRed: byte;
+  NewBlue, NewGreen, NewRed: byte;
+begin
+  OldBlue := (OldColor shr 16) and $FF;
+  OldGreen := (OldColor shr 8) and $FF;
+  OldRed := OldColor and $FF;
+  NewBlue := (NewColor shr 16) and $FF;
+  NewGreen := (NewColor shr 8) and $FF;
+  NewRed := NewColor and $FF;
+  for YIndex := 0 to Target.Height - 1 do
+  begin
+    PixelData := Target.ScanLine[YIndex];
+    for XIndex := 0 to Target.Width - 1 do
+      if (PixelData[XIndex * 3] = OldBlue) and (PixelData[XIndex * 3 + 1] = OldGreen) and (PixelData[XIndex * 3 + 2] = OldRed) then
+      begin
+        PixelData[XIndex * 3] := NewBlue;
+        PixelData[XIndex * 3 + 1] := NewGreen;
+        PixelData[XIndex * 3 + 2] := NewRed;
+      end;
+  end;
+end;
+
+procedure DrawMainRLE8ColorBitmap(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
+var
+  State, Index, YIndex, XIndex, LineSize, Temp: integer;
+  PicWidth, PicHeight, OffsetX, OffsetY: integer;
+begin
+  if len <= 8 then
+    exit;
+
+  PicWidth := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  PicHeight := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  OffsetX := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  OffsetY := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+
+  if canmove then
+  begin
+    dy := dy - OffsetY;
+    dx := dx - OffsetX;
+  end;
+
+  if (dx > PBMP.Width) or (dx + PicWidth < 0) or (dy > PBMP.Height) or (dy + PicHeight < 0) then
+    exit;
+
+  for YIndex := 0 to PicHeight - 1 do
+  begin
+    LineSize := Ppic^;
+    Inc(Ppic);
+    State := 2;
+    XIndex := dx;
+    for Index := 0 to LineSize - 1 do
+    begin
+      if State = 2 then
+      begin
+        Temp := (Ppic + Index)^;
+        Inc(XIndex, Temp);
+        State := 1;
+      end
+      else if State = 1 then
+      begin
+        Temp := (Ppic + Index)^;
+        State := 2 + Temp;
+      end
+      else
+      begin
+        Temp := (Ppic + Index)^;
+        if (XIndex >= 0) and (XIndex < PBMP.Width) and (YIndex + dy >= 0) and (YIndex + dy < PBMP.Height) then
+          PBMP.Canvas.Pixels[XIndex, YIndex + dy] := (McolB[Temp] shl 16) or (McolG[Temp] shl 8) or McolR[Temp];
+        Dec(State);
+        Inc(XIndex);
+      end;
+    end;
+    Inc(Ppic, LineSize);
+  end;
+end;
 
 procedure TForm13.SetEditMode(EMode: TMapEditMode);
 begin
@@ -388,12 +513,8 @@ end;
 procedure TForm13.Button6Click(Sender: TObject);
 var
   filename: string;
-  i, i1, i2, ix, iy, FH, posx, posy: Integer;
+  i, i1, ix, iy, FH, posx, posy: Integer;
   wartempbmp: Tbitmap;
-  PalSize: longint;
-  pLogPalle: TMaxLogPalette;
-  PalleEntry: TPaletteEntry;
-  Palle: HPalette;
 begin
   if MMAplayer <> 4 then
   begin
@@ -426,34 +547,7 @@ begin
       end;
       try
         wartempbmp := Tbitmap.Create;
-
-        PalSize := sizeof(TLogPalette) + 256 * sizeof(TPaletteEntry);
-
-        pLogPalle.palVersion := $0300;
-        pLogPalle.palNumEntries := 256;
-        //
-        for i := 0 to 255 do
-        begin
-          pLogPalle.palPalEntry[i].peRed := McolR[i];
-          pLogPalle.palPalEntry[i].peGreen := McolG[i];
-          pLogPalle.palPalEntry[i].peBlue := McolB[i];
-          pLogPalle.palPalEntry[i].peFlags := PC_EXPLICIT;
-        end;
-        //
-        Palle := CreatePalette(pLogPalette(@pLogPalle)^);
-
-        if MMapEditMode = RLEMode then
-        begin
-          wartempbmp.PixelFormat := pf8bit;
-          wartempbmp.Palette := Palle;
-        end
-        else
-          wartempbmp.PixelFormat := pf32bit;
-
-        wartempbmp.width := (MMApcopymap.X + MMApcopymap.Y) * 18 + 150;
-        wartempbmp.height := (MMApcopymap.X + MMApcopymap.Y) * 9 + 150;
-        wartempbmp.Canvas.Brush.Color := clblack;
-        wartempbmp.Canvas.FillRect(wartempbmp.Canvas.ClipRect);
+        SetupMainExportBitmap(wartempbmp, (MMApcopymap.X + MMApcopymap.Y) * 18 + 150, (MMApcopymap.X + MMApcopymap.Y) * 9 + 150, true);
 
         for i := 0 to 2 do
           for ix := MMApcopymap.X - 1 downto 0 do
@@ -471,7 +565,7 @@ begin
                       if (MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2 >= 0) and
                         (MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2 < MMApgrpnum) and
                         (MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].size >= 8) then
-                        McoldrawRLE8(@MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].data[0],
+                        DrawMainRLE8ColorBitmap(@MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].data[0],
                           MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].size, @wartempbmp, posx, posy, true);
                     end;
                   IMZMode, PNGMode:
@@ -482,6 +576,8 @@ begin
                 end;
               end;
 
+        SaveBitmapAsTransparentPng(wartempbmp, filename + '.png');
+        ReplaceBitmapColor(wartempbmp, usualtrans, clBlack);
         wartempbmp.SaveToFile(filename + '.bmp');
       finally
         wartempbmp.Free;

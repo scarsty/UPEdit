@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs,head, iniFiles, ExtCtrls, ComCtrls, StdCtrls,math, Spin, ImzObject, ImageZ;
+  Dialogs,head, iniFiles, ExtCtrls, ComCtrls, StdCtrls,math, Spin, ImzObject, ImageZ, PNGimage;
 
 type
 
@@ -83,12 +83,16 @@ type
     CheckBox2: TCheckBox;
     CheckBox3: TCheckBox;
     CheckBox4: TCheckBox;
-    CheckBox5: TCheckBox;
     SpinEdit1: TSpinEdit;
     Label23: TLabel;
     Button11: TButton;
     Button12: TButton;
     RadioGroup1: TRadioGroup;
+    ExportGroundCheckBox: TCheckBox;
+    ExportBuildingCheckBox: TCheckBox;
+    ExportSkyCheckBox: TCheckBox;
+    ExportEventCheckBox: TCheckBox;
+    ExportImageButton: TButton;
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure Image1DragDrop(Sender, Source: TObject; X, Y: Integer);
@@ -133,6 +137,7 @@ type
     function Addundosave: boolean;
     procedure Button11Click(Sender: TObject);
     procedure Button12Click(Sender: TObject);
+    procedure ExportImageButtonClick(Sender: TObject);
     procedure SetEditMode(EMode: TMapEditMode);
     procedure RadioGroup1Click(Sender: TObject);
     procedure writeSModeini(EMode: TMapEditMode);
@@ -201,6 +206,131 @@ uses
    main,grplist,kdefedit;
 
 {$R *.dfm}
+
+procedure SetupSceneExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
+var
+  FillColor: TColor;
+begin
+  Target.PixelFormat := pf24bit;
+  Target.Width := Width;
+  Target.Height := Height;
+  if TransparentBackground then
+    FillColor := usualtrans
+  else
+    FillColor := clBlack;
+  Target.Canvas.Brush.Color := FillColor;
+  Target.Canvas.FillRect(Target.Canvas.ClipRect);
+end;
+
+procedure SaveBitmapAsTransparentPng(Source: TBitmap; const FileName: string);
+var
+  PNG: TPNGObject;
+  XIndex, YIndex: integer;
+  AlphaData: PByteArray;
+  PixelData: array of byte;
+begin
+  PNG := TPNGObject.Create;
+  try
+    PNG.Assign(Source);
+    PNG.CreateAlpha;
+    SetLength(PixelData, Source.Width * 3);
+    for YIndex := 0 to Source.Height - 1 do
+  begin
+      CopyMemory(@PixelData[0], Source.ScanLine[YIndex], Source.Width * 3);
+      AlphaData := PNG.AlphaScanline[YIndex];
+      for XIndex := 0 to Source.Width - 1 do
+        if PixelData[XIndex * 3] shl 16 + PixelData[XIndex * 3 + 1] shl 8 + PixelData[XIndex * 3 + 2] = usualtrans then
+          AlphaData[XIndex] := 0;
+    end;
+    PNG.SaveToFile(FileName);
+  finally
+    PNG.Free;
+  end;
+end;
+
+procedure ReplaceBitmapColor(Target: TBitmap; OldColor, NewColor: Cardinal);
+var
+  XIndex, YIndex: integer;
+  PixelData: PByteArray;
+  OldBlue, OldGreen, OldRed: byte;
+  NewBlue, NewGreen, NewRed: byte;
+begin
+  OldBlue := (OldColor shr 16) and $FF;
+  OldGreen := (OldColor shr 8) and $FF;
+  OldRed := OldColor and $FF;
+  NewBlue := (NewColor shr 16) and $FF;
+  NewGreen := (NewColor shr 8) and $FF;
+  NewRed := NewColor and $FF;
+  for YIndex := 0 to Target.Height - 1 do
+  begin
+    PixelData := Target.ScanLine[YIndex];
+    for XIndex := 0 to Target.Width - 1 do
+      if (PixelData[XIndex * 3] = OldBlue) and (PixelData[XIndex * 3 + 1] = OldGreen) and (PixelData[XIndex * 3 + 2] = OldRed) then
+      begin
+        PixelData[XIndex * 3] := NewBlue;
+        PixelData[XIndex * 3 + 1] := NewGreen;
+        PixelData[XIndex * 3 + 2] := NewRed;
+      end;
+  end;
+end;
+
+procedure DrawSceneRLE8ColorBitmap(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
+var
+  State, Index, YIndex, XIndex, LineSize, Temp: integer;
+  PicWidth, PicHeight, OffsetX, OffsetY: integer;
+begin
+  if len <= 8 then
+    exit;
+
+  PicWidth := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  PicHeight := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  OffsetX := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+  OffsetY := PSmallInt(Ppic)^;
+  Inc(Ppic, 2);
+
+  if canmove then
+  begin
+    dy := dy - OffsetY;
+    dx := dx - OffsetX;
+  end;
+
+  if (dx > PBMP.Width) or (dx + PicWidth < 0) or (dy > PBMP.Height) or (dy + PicHeight < 0) then
+    exit;
+
+  for YIndex := 0 to PicHeight - 1 do
+  begin
+    LineSize := Ppic^;
+    Inc(Ppic);
+    State := 2;
+    XIndex := dx;
+    for Index := 0 to LineSize - 1 do
+    begin
+      if State = 2 then
+      begin
+        Temp := (Ppic + Index)^;
+        Inc(XIndex, Temp);
+        State := 1;
+      end
+      else if State = 1 then
+      begin
+        Temp := (Ppic + Index)^;
+        State := 2 + Temp;
+      end
+      else
+      begin
+        Temp := (Ppic + Index)^;
+        if (XIndex >= 0) and (XIndex < PBMP.Width) and (YIndex + dy >= 0) and (YIndex + dy < PBMP.Height) then
+          PBMP.Canvas.Pixels[XIndex, YIndex + dy] := (McolB[Temp] shl 16) or (McolG[Temp] shl 8) or McolR[Temp];
+        Dec(State);
+        Inc(XIndex);
+      end;
+    end;
+    Inc(Ppic, LineSize);
+  end;
+end;
 
 procedure TForm12.Button10Click(Sender: TObject);
 var
@@ -1868,6 +1998,130 @@ except
 end;
 end;
 
+procedure TForm12.ExportImageButtonClick(Sender: TObject);
+var
+  FileName: string;
+  ExportBitmap: TBitmap;
+  CurrentMap: PMap;
+  CurrentEvent: PMapEvent;
+  ExportAsPng: boolean;
+  IncludeGround, IncludeBuilding, IncludeSky, IncludeEvent: boolean;
+  XIndex, YIndex: integer;
+  PosX, PosY, DrawY: integer;
+  PictureIndex, EventIndex: integer;
+begin
+  if (ComboBox2.ItemIndex < 0) or (ComboBox2.ItemIndex >= scenemapfile.num) then
+    exit;
+
+  IncludeGround := ExportGroundCheckBox.Checked;
+  IncludeBuilding := ExportBuildingCheckBox.Checked;
+  IncludeSky := ExportSkyCheckBox.Checked;
+  IncludeEvent := ExportEventCheckBox.Checked;
+  if not (IncludeGround or IncludeBuilding or IncludeSky or IncludeEvent) then
+  begin
+    showmessage('请至少选择一个导出层。');
+    exit;
+  end;
+
+  SaveDialog1.Filter := 'Image files (*.bmp;*.png)|*.bmp;*.png|Bitmap files (*.bmp)|*.bmp|PNG files (*.png)|*.png';
+  if not SaveDialog1.Execute then
+    exit;
+
+  FileName := SaveDialog1.FileName;
+  if ExtractFileExt(FileName) = '' then
+  begin
+    if SaveDialog1.FilterIndex = 3 then
+      FileName := FileName + '.png'
+    else
+      FileName := FileName + '.bmp';
+  end;
+  ExportAsPng := SameText(ExtractFileExt(FileName), '.png');
+
+  CurrentMap := @scenemapfile.map[ComboBox2.ItemIndex];
+  CurrentEvent := @Dfile.mapevent[ComboBox2.ItemIndex];
+  ExportBitmap := TBitmap.Create;
+  try
+    SetupSceneExportBitmap(ExportBitmap, (CurrentMap.x + CurrentMap.y) * 18 + 150, (CurrentMap.x + CurrentMap.y) * 9 + 150, ExportAsPng);
+
+    for XIndex := CurrentMap.x - 1 downto 0 do
+      for YIndex := CurrentMap.y - 1 downto 0 do
+      begin
+        PosX := (CurrentMap.x - XIndex) * 18 - (CurrentMap.y - YIndex) * 18 + CurrentMap.y * 18 + 75;
+        PosY := (CurrentMap.x - XIndex) * 9 + (CurrentMap.y - YIndex) * 9 + 110;
+
+        if IncludeGround then
+        begin
+          PictureIndex := CurrentMap.maplayer[0].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1] div 2;
+          if PictureIndex >= 0 then
+            case SceneEditMode of
+              RLEMode:
+                if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
+                  DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, PosY, true);
+              IMZMode, PNGMode:
+                ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, PosY);
+            end;
+        end;
+
+        if IncludeBuilding then
+        begin
+          PictureIndex := CurrentMap.maplayer[1].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1] div 2;
+          DrawY := PosY - CurrentMap.maplayer[4].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1];
+          if PictureIndex > 0 then
+            case SceneEditMode of
+              RLEMode:
+                if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
+                  DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
+              IMZMode, PNGMode:
+                ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
+            end;
+        end;
+
+        if IncludeSky then
+        begin
+          PictureIndex := CurrentMap.maplayer[2].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1] div 2;
+          DrawY := PosY - CurrentMap.maplayer[5].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1];
+          if PictureIndex > 0 then
+            case SceneEditMode of
+              RLEMode:
+                if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
+                  DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
+              IMZMode, PNGMode:
+                ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
+            end;
+        end;
+
+        if IncludeEvent then
+        begin
+          EventIndex := CurrentMap.maplayer[3].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1];
+          if (EventIndex >= 0) and (EventIndex < length(CurrentEvent.sceneevent)) then
+          begin
+            PictureIndex := CurrentEvent.sceneevent[EventIndex].beginpic1 div 2;
+            DrawY := PosY - CurrentMap.maplayer[4].pic[CurrentMap.y - YIndex - 1][CurrentMap.x - XIndex - 1];
+            if PictureIndex > 0 then
+              case SceneEditMode of
+                RLEMode:
+                  if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
+                    DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
+                IMZMode, PNGMode:
+                  ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
+              end;
+          end;
+        end;
+      end;
+
+    if ExportAsPng then
+      SaveBitmapAsTransparentPng(ExportBitmap, FileName)
+    else
+    begin
+      ReplaceBitmapColor(ExportBitmap, usualtrans, clBlack);
+      ExportBitmap.SaveToFile(FileName);
+    end;
+    showmessage('导出图片成功！');
+  finally
+    ExportBitmap.Free;
+  end;
+end;
+
 procedure TForm12.Button4Click(Sender: TObject);
 var
   I, temp, ix, iy: integer;
@@ -2072,12 +2326,8 @@ end;
 procedure TForm12.Button9Click(Sender: TObject);
 var
   filename: string;
-  I, I1, I2, ix, iy,FH,posx,posy: integer;
+  I, I1, ix, iy, FH, posx, posy: integer;
   scenetempbmp: Tbitmap;
-   PalSize:longint;
-    pLogPalle:TMaxLogPalette;
-    PalleEntry:TPaletteEntry;
-    Palle:HPalette;
 begin
   if scenelayer <> 6 then
   begin
@@ -2111,33 +2361,7 @@ begin
       end;
       try
         scenetempbmp := Tbitmap.Create;
-
-        PalSize:=sizeof(TLogPalette) + 256 * sizeof(TPaletteEntry);
-
-        pLogPalle.palVersion:=$0300;
-        pLogPalle.palNumEntries:=256;
-     //
-     for i:=0 to 255 do
-     begin
-       pLogPalle.palPalEntry[i].peRed:=McolR[I];
-       pLogPalle.palPalEntry[i].peGreen:=McolG[I];
-       pLogPalle.palPalEntry[i].peBlue:=McolB[I];
-       pLogPalle.palPalEntry[i].peFlags:=PC_EXPLICIT;
-     end;
-   //
-       Palle:=CreatePalette(pLogPalette(@plogpalle)^);
-        if SceneEditMode = RLEMode then
-        begin
-          scenetempbmp.PixelFormat := pf8bit;
-          scenetempbmp.Palette := Palle;
-        end
-        else
-          scenetempbmp.PixelFormat := pf32bit;
-
-        scenetempbmp.Width := (scenecopymap.x + scenecopymap.y) * 18 + 150;
-        scenetempbmp.height := (scenecopymap.x + scenecopymap.y) * 9 + 150;
-        scenetempbmp.Canvas.Brush.Color := clblack;
-        scenetempbmp.Canvas.FillRect(scenetempbmp.Canvas.ClipRect);
+        SetupSceneExportBitmap(scenetempbmp, (scenecopymap.x + scenecopymap.y) * 18 + 150, (scenecopymap.x + scenecopymap.y) * 9 + 150, true);
 
         for I := 0 to 2 do
           for Ix := scenecopymap.x - 1 downto 0 do
@@ -2159,7 +2383,7 @@ begin
                        and (scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2 < scenegrpnum)
                        and (scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size >= 8)
                        then
-                         McoldrawRLE8(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenetempbmp, posx,posy, true);
+                         DrawSceneRLE8ColorBitmap(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0], scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size, @scenetempbmp, posx, posy, true);
                      end;
                    IMZMode, PNGMode:
                      begin
@@ -2169,6 +2393,8 @@ begin
                  end;
                end;
 
+        SaveBitmapAsTransparentPng(scenetempbmp, filename + '.png');
+        ReplaceBitmapColor(scenetempbmp, usualtrans, clBlack);
         scenetempbmp.SaveToFile(filename + '.bmp');
       finally
         scenetempbmp.Free;
