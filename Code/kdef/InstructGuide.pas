@@ -37,7 +37,7 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TinctGuide.RadioGroup1Click(Sender: TObject);
 var

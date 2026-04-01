@@ -28,17 +28,14 @@ implementation
 
 uses
   Redit;
-
-// {$R *.lfm}
-
-
-
+{$R *.lfm}
 procedure TForm6.FormCreate(Sender: TObject);
 begin
   self.Cursor := fmcursor;
 end;
 
 end.
+
 
 
 

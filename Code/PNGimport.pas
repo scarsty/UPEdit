@@ -98,8 +98,7 @@ implementation
 
 uses
   PNGimportModify;
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TPNGimportThread.Execute;
 var
   PNGpic: TPngObject;
@@ -867,6 +866,7 @@ begin
 end;
 
 end.
+
 
 
 

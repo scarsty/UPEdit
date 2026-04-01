@@ -44,7 +44,7 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm71.Drawpallet;
 var

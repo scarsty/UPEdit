@@ -36,7 +36,7 @@ implementation
 uses
   kdefedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm65.ComboBox1Select(Sender: TObject);
 var

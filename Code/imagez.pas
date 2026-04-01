@@ -114,14 +114,14 @@ type
     procedure SetEditMode(EMode: TIMZEditMode);
   private
     { Private declarations }
-    linepicnum: integer; // ÿ��ͼƬ��
-    backcol: cardinal; // ������ɫ
-    squarecol: cardinal; // ѡ����ɫ
-    squareW: integer; // ѡ����
-    squareH: integer; // ѡ��߶�
-    firstpicnum: integer; // ��ǰ��һ��ͼ�����
-    nowpic: integer; // �������ָ���ͼƬ���
-    linenum: integer; // ������ʾͼƬ������
+    linepicnum: integer; // 每行图片数
+    backcol: cardinal; // 背景颜色
+    squarecol: cardinal; // 选中框颜色
+    squareW: integer; // 选中框宽
+    squareH: integer; // 选中框高
+    firstpicnum: integer; // 当前第一张图片序号
+    nowpic: integer; // 当前选中图片序号
+    linenum: integer; // 当前显示图片行数
     titleh: integer;
     popmenupic: integer;
     Timercount: integer;
@@ -139,9 +139,7 @@ implementation
 
 uses
   imzPNGedit, main;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 function TImzForm.GetEditMode: TIMZEditMode;
 begin
   RadioGroup1.ItemIndex := integer(IMZeditMode);
@@ -240,7 +238,7 @@ begin
     Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
-  if SelectDirectory('���ô��Ŀ¼', '', Path) then
+  if SelectDirectory('选择导出目录', '', Path) then
   begin
     if Path[length(Path)] <> '\' then
       Path := Path + '\';
@@ -277,10 +275,10 @@ begin
   if not DirectoryExists(Path) then
   begin
     // ForceDirectories(path);
-    showmessage('Ŀ¼�����ڣ�');
+    showmessage('目录不存在！');
     exit;
   end;
-  SaveDialog1.Title := '����imz�ļ���';
+  SaveDialog1.Title := '保存 imz 文件为';
   SaveDialog1.Filter := '*.imz|*.imz';
   if SaveDialog1.Execute then
   begin
@@ -348,7 +346,7 @@ begin
     end
     else
     begin
-      showmessage('ƫ���ļ������ڣ�');
+      showmessage('偏移文件不存在！');
       exit;
     end;
 
@@ -389,7 +387,7 @@ begin
     end;
 
     SaveImzToFile(@pakimz, Fname);
-    showmessage('IMZ�ļ�����ɹ���');
+    showmessage('IMZ 文件保存成功！');
   end;
 
 end;
@@ -678,7 +676,7 @@ begin
     Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
-  if SelectDirectory('���ô��Ŀ¼', Path, outdir) then
+  if SelectDirectory('选择导出目录', Path, outdir) then
   begin
     Path := outdir;
     // ImzEditMode := PNGMode;
@@ -705,7 +703,7 @@ begin
 
   if IMZeditMode = zPNGmode then
   begin
-    showmessage('�����֧���ļ��б༭ģʽ��ֻ������IMZ�ļ��༭ģʽ��ʹ�ã�');
+    showmessage('当前不支持文件列表编辑模式，仅可在 IMZ 文件编辑模式下使用。');
     exit;
   end;
 
@@ -796,7 +794,7 @@ begin
         end;
     end;
   end;
-  showmessage('����ɹ���');
+  showmessage('导出成功！');
 end;
 
 procedure TImzForm.Button8Click(Sender: TObject);
@@ -1142,7 +1140,7 @@ begin
       fileclose(FH);
       tempimz.PNGnum := 0;
       setlength(tempimz.imzPNG, tempimz.PNGnum);
-      showmessage('��ȡʧ�ܣ�');
+      showmessage('读取失败！');
     end;
   end
   else
@@ -1885,6 +1883,7 @@ begin
 end;
 
 end.
+
 
 
 

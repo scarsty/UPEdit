@@ -70,9 +70,7 @@ type
   end;
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TImzPNGeditForm.Image1MouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
@@ -531,6 +529,7 @@ begin
 end;
 
 end.
+
 
 
 

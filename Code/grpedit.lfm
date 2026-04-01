@@ -1,7 +1,12 @@
-﻿object grpedit : TForm
+﻿object Form2: TForm2
   Left = 0
-  Height = 400
   Top = 0
-  Width = 600
-  Caption = 'grpedit'
+  Caption = 贴图编辑
+  ClientHeight = 557
+  ClientWidth = 757
+  Color = clBtnFace
+  OnClose = FormClose
+  OnCreate = FormCreate
+  OnMouseWheelDown = FormMouseWheelDown
+  OnMouseWheelUp = FormMouseWheelUp
 end

@@ -43,7 +43,7 @@ implementation
 uses
   Redit, kdefedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm55.ComboBox1Select(Sender: TObject);
 var

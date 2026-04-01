@@ -41,7 +41,7 @@ var
 
 implementation
 
-// {$R *.lfm}
+{$R *.lfm}
 
 procedure RegisterFileType(prefix: string; exepfad: string; index: integer);
 var

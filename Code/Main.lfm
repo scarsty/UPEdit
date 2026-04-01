@@ -1,10 +1,6 @@
 ﻿object UPeditMainForm: TUPeditMainForm
   Left = 194
   Top = 111
-  Margins.Left = 2
-  Margins.Top = 2
-  Margins.Right = 2
-  Margins.Bottom = 2
   AlphaBlendValue = 1
   Caption = 'UPedit'
   ClientHeight = 667
@@ -21,7 +17,6 @@
   Menu = MainMenu1
   Position = poDefault
   WindowState = wsMaximized
-  WindowMenu = Window1
   OnClose = FormClose
   OnCreate = FormCreate
   OnResize = FormResize
@@ -31,17 +26,11 @@
     Top = 33
     Width = 778
     Height = 65
-    Margins.Left = 0
-    Margins.Top = 0
-    Margins.Right = 0
-    Margins.Bottom = 0
     Align = alTop
-    BevelEdges = []
     BevelOuter = bvNone
     Color = clWhite
     TabOrder = 0
     Visible = False
-    ExplicitWidth = 776
     object Label2: TLabel
       Left = 111
       Top = 2
@@ -68,31 +57,11 @@
     Top = 98
     Width = 248
     Height = 569
-    Margins.Left = 0
-    Margins.Top = 0
-    Margins.Right = 0
-    Margins.Bottom = 0
     Align = alLeft
-    BevelEdges = []
     BevelOuter = bvNone
     TabOrder = 1
     Visible = False
-    ExplicitHeight = 561
     object WebBrowser1: TWebBrowser
-      Left = 0
-      Top = 23
-      Width = 248
-      Height = 546
-      Align = alClient
-      TabOrder = 0
-      OnNewWindow2 = WebBrowser1NewWindow2
-      ExplicitHeight = 538
-      ControlData = {
-        4C00000081140000252D00000000000000000000000000000000000000000000
-        000000004C000000000000000000000001000000E0D057007335CF11AE690800
-        2B2E12620A000000000000004C0000000114020000000000C000000000000046
-        8000000000000000000000000000000000000000000000000000000000000000
-        00000000000000000100000000000000000000000000000000000000}
     end
     object Button1: TButton
       Left = 0
@@ -120,17 +89,6 @@
     TabOrder = 2
     Visible = False
     object WebBrowser2: TWebBrowser
-      Left = 3
-      Top = 2
-      Width = 60
-      Height = 75
-      TabOrder = 0
-      ControlData = {
-        4C000000F6040000340600000000000000000000000000000000000000000000
-        000000004C000000000000000000000001000000E0D057007335CF11AE690800
-        2B2E12620A000000000000004C0000000114020000000000C000000000000046
-        8000000000000000000000000000000000000000000000000000000000000000
-        00000000000000000100000000000000000000000000000000000000}
     end
   end
   object Panel4: TPanel
@@ -140,7 +98,6 @@
     Height = 33
     Align = alTop
     TabOrder = 3
-    ExplicitWidth = 776
     object Label3: TLabel
       Left = 25
       Top = 3
@@ -352,24 +309,10 @@
     end
   end
   object IdHTTP1: TIdHTTP
-    RedirectMaximum = 30
-    ProxyParams.BasicAuthentication = False
-    ProxyParams.ProxyPort = 0
-    Request.ContentLength = -1
-    Request.ContentRangeEnd = -1
-    Request.ContentRangeStart = -1
-    Request.ContentRangeInstanceLength = -1
-    Request.Accept = 'text/html, */*'
-    Request.BasicAuthentication = False
-    Request.UserAgent = 'Mozilla/3.0 (compatible; Indy Library)'
-    Request.Ranges.Units = 'bytes'
-    Request.Ranges = <>
-    HTTPOptions = [hoForceEncodeParams]
     Left = 32
     Top = 96
   end
   object TrayIcon1: TTrayIcon
-    Animate = True
     PopupMenu = PopupMenu1
     Visible = True
     OnClick = TrayIcon1Click
@@ -418,7 +361,6 @@
     end
   end
   object IdAntiFreeze1: TIdAntiFreeze
-    IdleTimeOut = 50
     Left = 120
     Top = 176
   end

@@ -94,9 +94,7 @@ implementation
 
 uses
   MainMapEdit, main;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 function ClampTileScale(Value: integer): integer;
 begin
   if Value < 1 then
@@ -588,6 +586,7 @@ begin
 end;
 
 end.
+
 
 
 

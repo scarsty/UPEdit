@@ -38,9 +38,7 @@ var
   FightFrameForm1: TFightFrameForm;
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TFightFrameForm.Button1Click(Sender: TObject);
 var
   value: integer;
@@ -107,6 +105,7 @@ begin
 end;
 
 end.
+
 
 
 

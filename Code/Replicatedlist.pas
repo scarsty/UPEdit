@@ -71,9 +71,7 @@ implementation
 
 uses
   main, Redit;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TForm86.Button1Click(Sender: TObject);
 var
   F, Flen,I: integer;
@@ -273,6 +271,7 @@ begin
 end;
 
 end.
+
 
 
 

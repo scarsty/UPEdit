@@ -60,6 +60,7 @@
         <ComponentName Value="MainForm"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UnitName Value="MAIN"/>
       </Unit2>
       <Unit3>
         <Filename Value="opendisplay.pas"/>
@@ -809,6 +810,10 @@
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
+    <SearchPaths>
+      <IncludeFiles Value="$(ProjOutDir)"/>
+      <OtherUnitFiles Value="kdef"/>
+    </SearchPaths>
     <Parsing>
       <SyntaxOptions>
         <UseAnsiStrings Value="False"/>
@@ -817,6 +822,7 @@
     <Linking>
       <Debugging>
         <DebugInfoType Value="dsDwarf3"/>
+        <UseExternalDbgSyms Value="True"/>
       </Debugging>
     </Linking>
   </CompilerOptions>

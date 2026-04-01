@@ -96,9 +96,7 @@ var
 implementation
 
 uses Main;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TForm91.Button1Click(Sender: TObject);
 begin
   if opendialog1.Execute then
@@ -845,6 +843,7 @@ begin
 end;
 
 end.
+
 
 
 

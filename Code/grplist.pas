@@ -149,28 +149,111 @@ procedure MEMdrawRLE8(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: intege
 procedure DataDrawRLE8(Ppic: Pbyte; len: integer; PBMP: Pbmpdata; dx, dy: integer; canmove: boolean);
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 uses
   main, takein, grpedit, outputPNG;
+
+procedure LoadFallbackPalette;
+var
+  i: Integer;
+  hasMainPalette: Boolean;
+begin
+  hasMainPalette := False;
+  for i := 0 to 255 do
+  begin
+    if (McolR[i] <> 0) or (McolG[i] <> 0) or (McolB[i] <> 0) then
+    begin
+      hasMainPalette := True;
+      break;
+    end;
+  end;
+
+  for i := 0 to 255 do
+  begin
+    if hasMainPalette then
+    begin
+      GR[i] := McolR[i];
+      GG[i] := McolG[i];
+      GB[i] := McolB[i];
+    end
+    else
+    begin
+      GR[i] := i;
+      GG[i] := i;
+      GB[i] := i;
+    end;
+  end;
+end;
+
+function LoadPaletteFromColFile(const AFileName: string): Boolean;
+var
+  Fs: TFileStream;
+  i, bpp: Integer;
+  maxRaw, r, g, b: Byte;
+begin
+  Result := False;
+  if not FileExists(AFileName) then
+    Exit;
+
+  Fs := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyWrite);
+  try
+    if Fs.Size < 256 * 3 then
+      Exit;
+
+    if Fs.Size >= 256 * 4 then
+      bpp := 4
+    else
+      bpp := 3;
+
+    maxRaw := 0;
+    for i := 0 to 255 do
+    begin
+      Fs.ReadBuffer(r, 1);
+      Fs.ReadBuffer(g, 1);
+      Fs.ReadBuffer(b, 1);
+      if bpp = 4 then
+        Fs.Seek(1, soCurrent);
+
+      if r > maxRaw then maxRaw := r;
+      if g > maxRaw then maxRaw := g;
+      if b > maxRaw then maxRaw := b;
+
+      GR[i] := r;
+      GG[i] := g;
+      GB[i] := b;
+    end;
+
+    if maxRaw <= 63 then
+      for i := 0 to 255 do
+      begin
+        GR[i] := GR[i] shl 2;
+        GG[i] := GG[i] shl 2;
+        GB[i] := GB[i] shl 2;
+      end;
+
+    Result := True;
+  finally
+    Fs.Free;
+  end;
+end;
 
 procedure TForm3.Drawsquare(x, y: integer);
 var
   Ix, iy: integer;
+  bmpCanvas: TCanvas;
 begin
-  //
+  bmpCanvas := image1.Picture.Bitmap.Canvas;
   iy := y;
   for Ix := x to x + grplistsquarew - 1 do
   begin
-    image1.Canvas.Pixels[ix, iy] := grplisttextcol;
-    image1.Canvas.Pixels[ix, iy + grplistsquareH] := grplisttextcol;
+    bmpCanvas.Pixels[ix, iy] := grplisttextcol;
+    bmpCanvas.Pixels[ix, iy + grplistsquareH] := grplisttextcol;
   end;
   ix := x;
   for Iy := y to y + grplistsquareh - 1 do
   begin
-    image1.Canvas.Pixels[ix, iy] := grplisttextcol;
-    image1.Canvas.Pixels[ix + grplistsquareW, iy] := grplisttextcol;
+    bmpCanvas.Pixels[ix, iy] := grplisttextcol;
+    bmpCanvas.Pixels[ix + grplistsquareW, iy] := grplisttextcol;
   end;
 end;
 
@@ -231,12 +314,6 @@ begin
 end;
 
 procedure TForm3.Button3Click(Sender: TObject);
-var
-  H, len, i:integer;
-   //PalSize:longint;
-  //  pLogPalle:TMaxLogPalette;
-   // PalleEntry:TPaletteEntry;
-   // Palle:HPalette;
 begin
 
   grpcollen := 256;
@@ -244,20 +321,11 @@ begin
   if opendialog1.Execute then
   begin
     edit3.Text := opendialog1.FileName;
-    H := FIleopen(edit3.Text, fmopenread);
-    len := fileseek(H, 0, 2);
-    fileseek(H,0,0);
-
-    for I := 0 to grpcollen - 1 do
+    if not LoadPaletteFromColFile(edit3.Text) then
     begin
-      fileread(H, GR[I], 1);
-      fileread(H, GG[I], 1);
-      fileread(H, GB[I], 1);
-      GB[I] := GB[I] shl 2;
-      GG[I] := GG[I] shl 2;
-      GR[I] := GR[I] shl 2;
+      showmessage('读取调色板失败，继续使用当前调色板。');
+      LoadFallbackPalette;
     end;
-    fileclose(H);
    {
    PalSize:=sizeof(TLogPalette) + 256 * sizeof(TPaletteEntry);
      //pLogPalle:=MemAlloc(PalSize);
@@ -308,9 +376,9 @@ var
   //tempstr:string;
   ini: Tinifile;
 begin
-  {//canvas����ɫ˳����BGR,����Ϸ��˳����RGB
+  {// canvas 颜色顺序为 BGR，游戏中顺序为 RGB
   tempcol1 := (GRPlistBackGround and $FF0000) shr 16 + GRPlistBackGround and $FF00 + (GRPlistBackGround and $FF) shl 16;
-  tempstr := inputbox('�Զ�����ɫ','����ʮ�����Ʒ�ʽ���루RGB��',Format('%x',[tempcol1]));
+  tempstr := inputbox('自定义颜色', '请用十六进制方式输入（RGB）', Format('%x', [tempcol1]));
   if strtoint('$' + tempstr) <> tempcol1 then
   begin
     tempcol1 := strtoint('$' + tempstr);
@@ -347,9 +415,9 @@ var
   //tempstr:string;
   ini: Tinifile;
 begin
-{  //canvas����ɫ˳����BGR,����Ϸ��˳����RGB
+{  // canvas 颜色顺序为 BGR，游戏中顺序为 RGB
   tempcol1 := (GRPlistTextCol and $FF0000) shr 16 + GRPlistTextCol and $FF00 + (GRPlistTextCol and $FF) shl 16;
-  tempstr := inputbox('�Զ�����ɫ','����ʮ�����Ʒ�ʽ���루RGB��',Format('%x',[tempcol1]));
+  tempstr := inputbox('自定义颜色', '请用十六进制方式输入（RGB）', Format('%x', [tempcol1]));
   if strtoint('$' + tempstr) <> tempcol1 then
   begin
     tempcol1 := strtoint('$' + tempstr);
@@ -429,7 +497,8 @@ var
   ScoH: integer;
   I, I2: integer;
   offset: array of integer;
-  idx,grp, filelen, param: integer;
+  idx, grp, filelen, param, grpFileLen, nextPos: integer;
+  useStartOffsets: Boolean;
 begin
   if not(fileexists(edit1.Text) and fileexists(edit2.Text)) then
   begin
@@ -439,12 +508,18 @@ begin
     bufbmp.Canvas.Brush.Color := CLWHITE;//$74A89C;//$FCFCFC;//usualtrans;
     bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
+    image1.Picture.Bitmap.SetSize(image1.Width, image1.Height);
+    image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height),bufbmp.Canvas,bufbmp.Canvas.ClipRect);
     scrollbar2.max := 0;
-    showmessage('idx��grp�ļ������ڣ�');
+    showmessage('idx 或 grp 文件不存在！');
     exit;
   end;
   idx := fileopen(edit1.Text, fmopenread);
+  if idx < 0 then
+  begin
+    showmessage('idx 文件打开失败！');
+    exit;
+  end;
   filelen := fileseek(idx, 0, 2);
   fileseek(idx, 0, 0);
   if filelen mod 4 <> 0 then
@@ -456,8 +531,9 @@ begin
     bufbmp.Canvas.Brush.Color := CLWHITE;//$74A89C;//$FCFCFC;//usualtrans;
     bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    showmessage('idx�ļ�����');
+    image1.Picture.Bitmap.SetSize(image1.Width, image1.Height);
+    image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height),bufbmp.Canvas,bufbmp.Canvas.ClipRect);
+    showmessage('idx 文件错误！');
     exit;
   end;
 
@@ -469,23 +545,68 @@ begin
   param := 0;
   setlength(grppic, filenum);
   grp := fileopen(edit2.Text, fmopenread);
+  if grp < 0 then
+    raise Exception.Create('grp open failed');
+  grpFileLen := fileseek(grp, 0, 2);
   fileseek(grp,0,0);
 
-  for I := 0 to filenum - 1 do
+  // 同时兼容两种 idx 语义：
+  // 1) 每项是图片起始偏移（常见）；2) 每项是累计结尾偏移（旧逻辑）。
+  useStartOffsets := (filenum > 0) and (offset[0] = 0);
+  if useStartOffsets then
   begin
-    grppic[i].size := offset[i] - param;
-    param := offset[i];
-    if GRPpic[I].size > 0 then
-    begin
-      setlength(GRPpic[i].data, grppic[i].size);
-      fileread(grp, GRPpic[i].data[0], GRPpic[i].size);
-    end
-    else
-    begin
-      grppic[i].size := 0;
-      setlength(GRPpic[i].data, grppic[i].size);
-    end;
+    for I := 1 to filenum - 1 do
+      if (offset[I] < offset[I - 1]) or (offset[I] > grpFileLen) then
+      begin
+        useStartOffsets := False;
+        break;
+      end;
+  end;
 
+  if useStartOffsets then
+  begin
+    for I := 0 to filenum - 1 do
+    begin
+      if I < filenum - 1 then
+        nextPos := offset[I + 1]
+      else
+        nextPos := grpFileLen;
+
+      if (offset[I] >= 0) and (nextPos >= offset[I]) and (nextPos <= grpFileLen) then
+        grppic[I].size := nextPos - offset[I]
+      else
+        grppic[I].size := 0;
+
+      if GRPpic[I].size > 0 then
+      begin
+        setlength(GRPpic[I].data, grppic[I].size);
+        fileseek(grp, offset[I], 0);
+        fileread(grp, GRPpic[I].data[0], GRPpic[I].size);
+      end
+      else
+      begin
+        grppic[I].size := 0;
+        setlength(GRPpic[I].data, 0);
+      end;
+    end;
+  end
+  else
+  begin
+    for I := 0 to filenum - 1 do
+    begin
+      grppic[i].size := offset[i] - param;
+      param := offset[i];
+      if GRPpic[I].size > 0 then
+      begin
+        setlength(GRPpic[i].data, grppic[i].size);
+        fileread(grp, GRPpic[i].data[0], GRPpic[i].size);
+      end
+      else
+      begin
+        grppic[i].size := 0;
+        setlength(GRPpic[i].data, grppic[i].size);
+      end;
+    end;
   end;
   fileclose(grp);
   except
@@ -496,15 +617,16 @@ begin
     bufbmp.Canvas.Brush.Color := CLWHITE;//$74A89C;//$FCFCFC;//usualtrans;
     bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    showmessage('grp�ļ�����');
+    image1.Picture.Bitmap.SetSize(image1.Width, image1.Height);
+    image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height),bufbmp.Canvas,bufbmp.Canvas.ClipRect);
+    showmessage('grp 文件错误！');
 
     fileclose(grp);
     fileclose(idx);
     exit;
   end;
   combobox2.Clear;
-  combobox2.Items.Add('ȫ��');
+  combobox2.Items.Add('全部');
   combobox2.ItemIndex := 0;
   beginpic := 0;
   endpic := filenum - 1;
@@ -529,7 +651,7 @@ begin
   try
     display;
   except
-    showmessage('����');
+    showmessage('显示失败！');
     exit;
   end;
   Form3initial := true;
@@ -610,7 +732,7 @@ end;
 
 procedure TForm3.FormCreate(Sender: TObject);
 var
-  H,len,I: integer;
+  I: integer;
   filename: string;
   // PalSize:longint;
   //  pLogPalle:TMaxLogPalette;
@@ -631,22 +753,11 @@ begin
   if fileexists(filename) then
   begin
     edit3.Text := FileName;
-    H := FIleopen(edit3.Text, fmopenread);
-    len := fileseek(H, 0, 2);
-    fileseek(H,0,0);
-    //grpcollen := len div 3;
-    grpcollen := 256;
-    for I := 0 to 256 - 1 do
-    begin
-      fileread(H, GR[I], 1);
-      fileread(H, GG[I], 1);
-      fileread(H, GB[I], 1);
-      GB[I] := GB[I] shl 2;
-      GG[I] := GG[I] shl 2;
-      GR[I] := GR[I] shl 2;
-    end;
-    fileclose(H);
-  end;
+    if not LoadPaletteFromColFile(edit3.Text) then
+      LoadFallbackPalette;
+  end
+  else
+    LoadFallbackPalette;
  { PalSize:=sizeof(TLogPalette) + 256 * sizeof(TPaletteEntry);
      //pLogPalle:=MemAlloc(PalSize);
      //getmem(Plogpalle, palsize);
@@ -672,7 +783,7 @@ begin
   bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
   bufbmp.Canvas.Font.Color := GRPlisttextcol;//clyellow;
   bufbmp.Canvas.Font.Size := 10;
-  bufbmp.Canvas.Font.Name := '����';
+  bufbmp.Canvas.Font.Name := '宋体';
   bufbmp.Canvas.Brush.Style := bsclear;
 
   bufbmp2 := Tbitmap.Create;
@@ -752,7 +863,7 @@ begin
 
       temppic := caltemppic;
 
-      image1.Canvas.CopyRect(image1.Canvas.ClipRect, bufbmp2.Canvas, bufbmp2.Canvas.ClipRect);
+      image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height), bufbmp2.Canvas, bufbmp2.Canvas.ClipRect);
       Drawsquare(sx * grplistsquarew, sy * grplistsquareh);
 
       {for ix := sx * grplistsquarew to (sx + 1) * grplistsquarew - 1 do
@@ -772,7 +883,7 @@ begin
 
 
       temppic := -1;
-      image1.Canvas.CopyRect(image1.Canvas.ClipRect, bufbmp2.Canvas, bufbmp2.Canvas.ClipRect);
+      image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height), bufbmp2.Canvas, bufbmp2.Canvas.ClipRect);
     end;
 
   end;
@@ -970,12 +1081,12 @@ begin
   begin
     if Radiogroup1.ItemIndex = 0 then
     begin
-    tempslt := messagebox(self.Handle,'��ͼƬΪPNG��ʽ���Ƿ����ΪRLE8��ʽ��ѡ���ǡ�����ΪRLE8��ʽ��ѡ�񡰷���һ��PNG�滻��ѡ��ȡ����������ǰ������','��ʾ', MB_YESNOCANCEL);
+    tempslt := messagebox(self.Handle, '该图片为 PNG 格式，是否转换为 RLE8 格式？选择“是”将转为 RLE8；选择“否”将以另一张 PNG 替换；选择“取消”则保持当前图片。', '提示', MB_YESNOCANCEL);
     if tempslt = IDNo then
     begin
       opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
       tempstr := opendialog1.Title;
-      opendialog1.Title := 'ѡ��һ��PNGͼƬ�滻��ǰ';
+      opendialog1.Title := '选择一张 PNG 图片替换当前图片';
       if opendialog1.Execute then
       begin
         tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1017,7 +1128,7 @@ begin
     begin
       opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
       tempstr := opendialog1.Title;
-      opendialog1.Title := 'ѡ��һ��PNGͼƬ�滻��ǰ';
+      opendialog1.Title := '选择一张 PNG 图片替换当前图片';
       if opendialog1.Execute then
       begin
         tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1117,7 +1228,7 @@ var
 begin
   temppic := movelock;
   if filenum = 1 then
-    showmessage('ֻʣһ��ͼƬ��������ɾ��')
+    showmessage('只剩一张图片，不能再删除')
   else if temppic = filenum - 1 then
   begin
     dec(filenum);
@@ -1316,7 +1427,7 @@ procedure TForm3.PNG1Click(Sender: TObject);
   Pdat:Pbytearray;
 begin
   //
-  if SelectDirectory('ѡ�񱣴��ļ���',dir,Dir) then
+  if SelectDirectory('选择保存文件夹', dir, Dir) then
   begin
     if dir[length(dir)] <> '\' then
       dir :=dir + '\';
@@ -1345,7 +1456,7 @@ begin
         PNGrs.Free;
       end;
     end;
-    showmessage('����ɹ�');
+    showmessage('导出成功');
   end;}
 
 begin
@@ -1363,7 +1474,7 @@ begin
   temppic := movelock;
   opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
   tempstr := opendialog1.Title;
-  opendialog1.Title := 'ѡ��һ��PNGͼƬ�滻��ǰ';
+  opendialog1.Title := '选择一张 PNG 图片替换当前图片';
   if opendialog1.Execute then
   begin
     tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1389,7 +1500,7 @@ begin
   temppic := movelock;
   opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
   tempstr := opendialog1.Title;
-  opendialog1.Title := 'ѡ��һ��PNGͼƬ�滻��ǰ';
+  opendialog1.Title := '选择一张 PNG 图片替换当前图片';
   if opendialog1.Execute then
   begin
     try
@@ -1494,7 +1605,7 @@ begin
   bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
   bufbmp.Canvas.Font.Color := GRPListTextCol;//clyellow;
   bufbmp.Canvas.Font.Size := 10;
-  bufbmp.Canvas.Font.Name := '����';
+  bufbmp.Canvas.Font.Name := '宋体';
 
 
   iy := 0;
@@ -1504,6 +1615,7 @@ begin
   h := 0;
   grplistlinenum := 0;
   grplistsquareW := image1.Width div grplistlinepicnum;
+  SetStretchBltMode(bufbmp.Canvas.Handle, COLORONCOLOR);
   PNGrs := TPNGObject.Create;
   temprs := TmemoryStream.Create;
   for I := nowpic to endpic do
@@ -1529,18 +1641,21 @@ begin
         begin
           bufbmp3.Width := tempw;
           bufbmp3.Height := temph;
+          bufbmp3.PixelFormat := pf24bit;
           bufbmp3.Canvas.Brush.Style := bssolid;
           bufbmp3.Canvas.Brush.Color := GRPlistBackGround;
           bufbmp3.Canvas.FillRect(bufbmp3.Canvas.ClipRect);
-          tempbmpdata.pixelperbit := bufbmp3.PixelFormat;
+          tempbmpdata.pixelperbit := pf24bit;
           tempbmpdata.height := bufbmp3.Height;
           tempbmpdata.width := bufbmp3.Width;
           setlength(tempbmpdata.data, tempbmpdata.height, tempbmpdata.width * 3);
           for i2 := 0 to bufbmp3.Height - 1 do
             Move(bufbmp3.ScanLine[i2]^, tempbmpdata.data[i2][0], tempbmpdata.width * 3);
           DatadrawRLE8(@(grppic[I].data[0]), grppic[I].size, @tempbmpdata, 0, 0, false);
+          bufbmp3.BeginUpdate(False);
           for i2 := 0 to bufbmp3.Height - 1 do
             Move(tempbmpdata.data[i2][0], bufbmp3.ScanLine[i2]^, tempbmpdata.width * 3);
+          bufbmp3.EndUpdate(False);
           if (temph <= grplistsquareh - grplisttitleh) and (tempw <= grplistsquarew) then
           begin
             hd := temph;
@@ -1602,7 +1717,8 @@ begin
           temprs.Write(grppic[i].data[0],grppic[i].size);
           temprs.Position := 0;
           PNGrs.LoadFromStream(temprs);
-          PNGrs.Draw(bufbmp.Canvas, Rect(x, y, x + wd, y + hd));
+          bufbmp3.Assign(PNGrs);
+          bufbmp.Canvas.StretchDraw(Rect(x, y, x + wd, y + hd), bufbmp3);
           temprs.SetSize(0);
         end;
       end;
@@ -1622,7 +1738,8 @@ begin
   setlength(tempbmpdata.data,0,0);
   bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
   Scrollbar2.LargeChange := max(1, grplistlinenum - 1);
-  image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp2.Canvas,bufbmp2.Canvas.ClipRect);
+  image1.Picture.Bitmap.SetSize(image1.Width, image1.Height);
+  image1.Picture.Bitmap.Canvas.CopyRect(Rect(0, 0, image1.Width, image1.Height), bufbmp2.Canvas, Rect(0, 0, bufbmp2.Width, bufbmp2.Height));
 end;
 
 procedure copyGRP(AFrom, Ato:integer);
@@ -1746,7 +1863,7 @@ begin
     dx := dx - xs;
   end;
 
-  //����Ļ��
+  // 超出屏幕范围时直接跳过
   if (dx > PBMP.width) or (dx + pw < 0) or (dy > PBMP.height) or (dy + ph < 0) then
     exit;
 
@@ -1817,6 +1934,7 @@ begin
 end;
 
 end.
+
 
 
 

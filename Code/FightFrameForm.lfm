@@ -1,4 +1,4 @@
-﻿object FightFrameForm : TForm
+﻿object FightFrameForm: TFightFrameForm
   Left = 0
   Height = 400
   Top = 0

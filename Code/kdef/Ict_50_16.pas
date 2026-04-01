@@ -44,7 +44,7 @@ implementation
 uses
   Redit, kdefedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm54.ComboBox1Select(Sender: TObject);
 var

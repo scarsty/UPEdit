@@ -41,7 +41,7 @@ implementation
 uses
   kdefedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm41.Drawpallet;
 var

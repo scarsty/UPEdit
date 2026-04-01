@@ -1,4 +1,4 @@
-﻿object CYhead : TForm
+﻿object Form89: TForm89
   Left = 0
   Height = 400
   Top = 0

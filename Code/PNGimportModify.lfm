@@ -1,4 +1,4 @@
-﻿object PNGimportModify : TForm
+﻿object Form95: TForm95
   Left = 0
   Height = 400
   Top = 0

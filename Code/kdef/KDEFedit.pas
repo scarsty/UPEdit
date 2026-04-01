@@ -1,6 +1,7 @@
 ﻿unit KDEFedit;
 
 {$modeswitch autoderef}
+{$H+}
 
 interface
 
@@ -140,7 +141,7 @@ function E_getstr(bit,t,x: smallint): widestring;
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 uses
   Redit, newinstruct,waredit, Main, Ict_1,Ict_2, Ict_3,Ict_4,ict_5, ict_6,ict_8, ict_10,
@@ -249,7 +250,7 @@ var
 begin
   if nowevent.attribamount = 1 then
     showmessage('ֻʣһ��ָ��޷�ɾ����')
-  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, Pwidechar(widestring('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' ��')),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
+  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, PChar('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' ��'),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
   begin
     deleteatrb(@nowevent,listbox1.ItemIndex);
     saveeventtoData(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -264,7 +265,7 @@ begin
     for I := 0 to nowevent.attribamount - 1 do
       if nowevent.attrib[listbox1.ItemIndex].labelfrom = nowevent.attrib[I].labelstatus then
         break;
-    if (MessageBox(Self.Handle, Pwidechar(widestring('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[I] + ' ��')),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
+    if (MessageBox(Self.Handle, PChar('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[I] + ' ��'),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
     begin
       deleteatrb(@nowevent,I);
       //saveevent(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -655,7 +656,7 @@ begin
       begin
         setlength(handlestr, len);
         strlist.Clear;
-        strnum := ExtractStrings([' '], [], Pwidechar(handlestr), Strlist);
+        strnum := ExtractStrings([' '], [], PChar(handlestr), Strlist);
         if strnum > 0 then
         begin
           inc(atrbnum);
@@ -737,7 +738,7 @@ end;
 
 procedure TForm7.Button4Click(Sender: TObject);
 var
-  next, len, I, I2, len2, Ncount, a: integer;
+  nextVal, len, I, I2, len2, Ncount, a: integer;
   Astr, Bstr, Cstr: widestring;
   ini: Tinifile;
 begin
@@ -978,12 +979,14 @@ begin
   eventamount := 0;
   setlength(Kevent, eventamount);
   CForm7 := true;
-  action := cafree;
+  CloseAction := caFree;
 end;
 
 procedure TForm7.FormCreate(Sender: TObject);
 var
   ini: Tinifile;
+  initialEventIndex: Integer;
+  initialInstrIndex: Integer;
 begin
   //
   lastevent := -1;
@@ -1005,15 +1008,34 @@ begin
   if readkdefini and readkdef and readtalk then
   begin
     arrangekdef;
-    combobox2.ItemIndex := 0;
-    //copyevent(@noworievent, @kevent[0]);
-    savedatatoevent(@noworievent, @kevent[0]);
-    //calkdef(@noworievent, @nowevent);
-    calevent(@noworievent, @nowevent);
-    displayevent;
+    if eventamount > 0 then
+    begin
+      combobox2.ItemIndex := 0;
+      for initialEventIndex := 0 to eventamount - 1 do
+      begin
+        combobox2.ItemIndex := initialEventIndex;
+        ComboBox2Select(Sender);
+        if listbox1.Items.Count > 0 then
+          break;
+      end;
 
-    lastevent := 0;
-  end;
+      if listbox1.Items.Count > 0 then
+      begin
+        initialInstrIndex := 0;
+        while (initialInstrIndex < listbox1.Items.Count) and (Trim(listbox1.Items[initialInstrIndex]) = '') do
+          inc(initialInstrIndex);
+        if initialInstrIndex < listbox1.Items.Count then
+        begin
+          listbox1.ItemIndex := initialInstrIndex;
+          ListBox1Click(Sender);
+        end;
+      end
+      else
+        ShowMessage('诊断: 已加载' + IntToStr(eventamount) + '个事件，但所有事件attribamount均为0。');
+    end;
+  end
+  else
+    ShowMessage('诊断: 文件加载失败。gamepath=' + gamepath);
 
 end;
 
@@ -1235,7 +1257,7 @@ begin
               tdata[i2] := 0;
           end;
         if talkstr[I].len > 0 then
-          Move(@talkstr[I].str[0], @tdata[0],talkstr[I].len);
+          Move(tdata[0], talkstr[I].str[0], talkstr[I].len);
       end;
       fileclose(F);
 
@@ -1287,7 +1309,7 @@ begin
               tdata[i2] := 0;
           end;
         if namestr[I].len > 0 then
-          Move(@namestr[I].str[0], @tdata[0], namestr[I].len);
+          Move(tdata[0], namestr[I].str[0], namestr[I].len);
       end;
       fileclose(F);
     except
@@ -1326,7 +1348,7 @@ begin
     inc(len, talkoffset[I]);
     setlength(tdata, talkoffset[I]);
     if talkoffset[I] > 0 then
-      Move(@tdata[0], @talkstr[I].str[0], talkoffset[I]);
+      Move(talkstr[I].str[0], tdata[0], talkoffset[I]);
     if talkinvert = 0 then
     begin
       for i2 := 0 to talkoffset[I] - 1 do
@@ -1366,7 +1388,7 @@ begin
       strlist.Clear;
       strnum := 0;
       if tempstr <> '' then
-        strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
+        strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
       if strnum = 6 then
       begin
         kdefini.KDEFitem[I].index := strtoint('$'+strlist.Strings[0]);
@@ -1415,7 +1437,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1426,7 +1448,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1442,7 +1464,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1463,7 +1485,7 @@ begin
       strnum := 0;
       tempstr := ini.ReadString('Kdefattrib', 'GuideComboBox' + inttostr(I), '');
       if tempstr <> '' then
-        strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
+        strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
       InstructGuideComboboxini.Combobox[I].ListAmount := max(strnum div 2, 0);
       setlength(InstructGuideComboboxini.Combobox[I].List, InstructGuideComboboxini.Combobox[I].ListAmount);
       for I2 := 0 to InstructGuideComboboxini.Combobox[I].ListAmount - 1 do
@@ -3127,7 +3149,7 @@ begin
   if source.parcount > 0 then
   begin
     setlength(dest.par, dest.parcount);
-    Move(@dest.par[0], @source.par[0], dest.parcount * 2);
+    Move(source.par[0], dest.par[0], dest.parcount * 2);
   end;
 end;
 
@@ -3579,7 +3601,7 @@ begin
       else
         sourceent.attrib[i1].par[kdefini.KDEFitem[sourceent.attrib[i1].attribnum].yesjump] := 0;
     end;
-    Move(@destent.data[I2], @sourceent.attrib[I1].par[0], sourceent.attrib[I1].parcount * 2);
+    Move(sourceent.attrib[I1].par[0], destent.data[I2], sourceent.attrib[I1].parcount * 2);
     inc(I2, sourceent.attrib[I1].parcount * 2);
   end;
     
@@ -3623,10 +3645,10 @@ begin
 
       if temp < destent.attribamount then
       begin
-        Move(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), destent.attrib[temp].parcount * 2);
+        Move(sourceent.data[I1], destent.attrib[temp].par[0], destent.attrib[temp].parcount * 2);
       end
       else
-        Move(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), sourceent.datalen - I1);
+        Move(sourceent.data[I1], destent.attrib[temp].par[0], sourceent.datalen - I1);
       inc(temp);
       inc(I1, Kdefini.KDEFitem[temp2].paramount * 2);
     end
@@ -3635,7 +3657,7 @@ begin
       destent.attrib[temp].attribnum := temp2;
       destent.attrib[temp].parcount := 1;
       setlength(destent.attrib[temp].par, destent.attrib[temp].parcount);
-      Move(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), 2);
+      Move(sourceent.data[I1], destent.attrib[temp].par[0], 2);
       inc(I1, 2);
       inc(temp);
     end;

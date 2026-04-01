@@ -63,9 +63,7 @@ implementation
 
 uses
   grplist;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TPNGThread.Execute;
 var
   I, PF, FH : integer;
@@ -268,6 +266,7 @@ begin
 end;
 
 end.
+
 
 
 

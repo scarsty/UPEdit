@@ -18,6 +18,7 @@ type
   public
     procedure CreateAlpha;
     procedure Draw(ACanvas: TCanvas; const ARect: TRect);
+    procedure LoadFromStream(Stream: TStream); override;
     property AlphaScanline[Index: Integer]: PByteArray read GetAlphaScanline;
   end;
 
@@ -41,7 +42,7 @@ type
     data: array of byte;
   end;
 
-  // R�ļ��ṹrecord
+  // R 文件结构 record
   TRdatasingle = record
     datatype: smallint;
     datalen: integer;
@@ -52,17 +53,17 @@ type
 
   TRarray = record
     incnum: smallint;
-    dataarray: array of TRdatasingle; // ��Ա
+    dataarray: array of TRdatasingle; // 成员
   end;
 
   TRdataline = record
     len: smallint;
-    Rarray: array of TRarray; // ����
+    Rarray: array of TRarray; // 数组
   end;
 
   TRdata = record
     num: smallint;
-    Rdataline: array of TRdataline; // ÿ���������Ʒ�������Ȱ����ĳ�Ա
+    Rdataline: array of TRdataline; // 每行数据包含多个数组成员
   end;
 
   PRdata = ^TRdata;
@@ -71,7 +72,7 @@ type
     datanum: integer;
     namepos: integer;
     mappos: integer;
-    Rdata: array of TRdata; // ÿ���������ݵĶ��ٸ�
+    Rdata: array of TRdata; // 每种类型的数据集合
   end;
 
   PRtype = ^TRtype;
@@ -83,7 +84,7 @@ type
 
   PRFile = ^TRFile;
 
-  // R�ļ������ļ�record
+  // R 文件配置结构 record
   TRtermini = record
     datanum: smallint;
     incnum: smallint;
@@ -123,7 +124,7 @@ type
     Wterm: array of TWtermini;
   end;
 
-  // �¼������ļ�record
+  // 事件配置结构 record
   TKDEFitem = record
     index: smallint;
     paramount: smallint;
@@ -139,18 +140,18 @@ type
     talkarrange: integer;
   end;
 
-  // ָ��record
+  // 指令 record
   Tattrib = record
-    attribnum: smallint; // ָ�����
-    parcount: smallint; // ָ���������
-    labelstatus: smallint; // -2:����ת��-1:label��>=0:��תԴ
-    labelway: smallint; // 1���£�-1��ǰ
+    attribnum: smallint; // 指令编号
+    parcount: smallint; // 指令参数个数
+    labelstatus: smallint; // -2:相对跳转 -1:label 源 >=0:跳转目标
+    labelway: smallint; // 1:向后，-1:向前
     labelfrom: smallint;
     labelto: smallint;
     par: array of smallint;
   end;
 
-  // �¼�record
+  // 事件 record
   Tevent = record
     attribamount: smallint;
     attrib: array of Tattrib;
@@ -180,7 +181,7 @@ type
 
   Teventcopy = record
     copyevent: integer;
-    copyattrib: integer; // -1û���ƣ�1�ɸ���
+    copyattrib: integer; // -1 不可复制，1 可复制
   end;
 
   TInstructGuideComboboxList = record
@@ -392,7 +393,7 @@ var
   Ridxfilename: array of string;
   datacode: integer = 1; // 0gbk,1big5,2utf16le,3utf8
   talkcode: integer = 1;
-  talkinvert: integer = 0; // ����0����Ҫȡ��
+  talkinvert: integer = 0; // 非 0 表示需要取反
   language: integer;
 
   inicode: integer;
@@ -401,7 +402,7 @@ var
   useR: TRFile;
   kdefidx, kdefgrp: string;
   nameidx, namegrp: string;
-  // ս�����������ļ�
+  // 战斗相关数据文件
   useW: TWfile;
   Wini: TWini;
   Wtypedataitem: integer;
@@ -430,10 +431,10 @@ var
   CForm12: boolean = true;
   CForm13: boolean = true;
   CForm86: boolean = true;
-  CForm89: boolean = true; // ����ͷ��
-  CForm91: boolean = true; // �籾����
-  CForm94: boolean = true; // PNG��������
-  CFormImz: boolean = true; // IMZ�༭
+  CForm89: boolean = true; // 测试头像
+  CForm91: boolean = true; // 脚本浏览
+  CForm94: boolean = true; // PNG 批量导入
+  CFormImz: boolean = true; // IMZ 编辑
 
   DownloadUpdate: boolean = false;
 
@@ -519,6 +520,19 @@ begin
   ACanvas.StretchDraw(ARect, Self);
 end;
 
+procedure TPNGObject.LoadFromStream(Stream: TStream);
+var
+  PNG: TPortableNetworkGraphic;
+begin
+  PNG := TPortableNetworkGraphic.Create;
+  try
+    PNG.LoadFromStream(Stream);
+    Self.Assign(PNG);
+  finally
+    PNG.Free;
+  end;
+end;
+
 function calPNG(Pdata: Pbyte): integer;
 begin
   result := 0;
@@ -531,14 +545,14 @@ function MultiToUnicode(str: PAnsiChar; codepage: integer): widestring;
 var
   len: integer;
 begin
-  // codepage��936���壬950����
+  // codepage: 936 简体，950 繁体
   len := MultiByteToWideChar(codepage, 0, PAnsiChar(str), -1, nil, 0);
   setlength(result, len - 1);
   MultiByteToWideChar(codepage, 0, PAnsiChar(str), length(str), PWideChar(result), len + 1);
   // result := ' ' + result;
 end;
 
-// unicodeתΪ���ֽ�, ��չ
+// Unicode 转为多字节，预留扩展
 function UnicodeToMulti(str: PWideChar; codepage: integer): Ansistring;
 var
   len: integer;
@@ -706,7 +720,7 @@ begin
   {$ENDIF}
 end;
 
-// �����������ʾ���ж���������
+// 统一字符串显示处理
 function displaystr(str: string): string;
 begin
   // if (inicode <> 0) and (language = 1)  then

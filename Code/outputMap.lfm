@@ -1,4 +1,4 @@
-﻿object outputMap : TForm
+﻿object Form93: TForm93
   Left = 0
   Height = 400
   Top = 0

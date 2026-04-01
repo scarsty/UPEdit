@@ -1,10 +1,6 @@
 ﻿object Form5: TForm5
   Left = 0
   Top = 0
-  Margins.Left = 2
-  Margins.Top = 2
-  Margins.Right = 2
-  Margins.Bottom = 2
   Caption = 'R'#25991#20214#32534#36753
   ClientHeight = 476
   ClientWidth = 860
@@ -30,7 +26,6 @@
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitWidth = 858
     object Label1: TLabel
       Left = 25
       Top = 25
@@ -76,7 +71,6 @@
       Width = 152
       Height = 21
       Style = csDropDownList
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 0
       OnChange = ComboBox1Change
     end
@@ -86,7 +80,6 @@
       Width = 160
       Height = 21
       Style = csDropDownList
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 1
       OnSelect = ComboBox2Select
     end
@@ -132,7 +125,6 @@
       Width = 119
       Height = 21
       Style = csDropDownList
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 6
     end
     object Button5: TButton
@@ -182,16 +174,12 @@
     Align = alClient
     BevelOuter = bvLowered
     TabOrder = 1
-    ExplicitWidth = 748
-    ExplicitHeight = 299
     object StatusBar1: TStatusBar
       Left = 1
       Top = 286
       Width = 748
       Height = 20
       Panels = <>
-      ExplicitTop = 278
-      ExplicitWidth = 746
     end
     object CheckListBox1: TCheckListBox
       Left = 1
@@ -199,18 +187,10 @@
       Width = 748
       Height = 285
       Align = alClient
-      BevelInner = bvLowered
-      BevelOuter = bvRaised
-      Ctl3D = True
-      Flat = False
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       ItemHeight = 17
-      ParentCtl3D = False
       TabOrder = 1
       OnClick = CheckListBox1Click
       OnDblClick = CheckListBox1DblClick
-      ExplicitWidth = 746
-      ExplicitHeight = 277
     end
   end
   object Panel3: TPanel
@@ -221,7 +201,6 @@
     Align = alLeft
     BevelOuter = bvNone
     TabOrder = 2
-    ExplicitHeight = 299
     object Label3: TLabel
       Left = 11
       Top = 265
@@ -287,7 +266,6 @@
       Top = 234
       Width = 82
       Height = 21
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 5
       Text = '0'
       OnKeyPress = Edit1KeyPress
@@ -297,7 +275,6 @@
       Top = 285
       Width = 82
       Height = 21
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 6
       Text = '0'
       OnKeyPress = Edit2KeyPress
@@ -308,7 +285,6 @@
       Width = 85
       Height = 21
       Style = csDropDownList
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       ItemIndex = 0
       TabOrder = 7
       Text = '='
@@ -324,7 +300,6 @@
       Top = 377
       Width = 82
       Height = 21
-      ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
       TabOrder = 8
       Text = '0'
     end

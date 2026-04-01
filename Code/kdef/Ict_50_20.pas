@@ -30,7 +30,7 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm58.ComboBox1Select(Sender: TObject);
 begin

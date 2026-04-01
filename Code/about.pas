@@ -38,7 +38,7 @@ implementation
 
 uses main;
 
-// {$R *.lfm}
+{$R *.lfm}
 
 procedure TAboutBox.FormCreate(Sender: TObject);
 begin

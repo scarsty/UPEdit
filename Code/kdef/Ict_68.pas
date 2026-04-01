@@ -73,7 +73,7 @@ implementation
 uses
   kdefedit, picedit;
 
-{$R *.dfm}
+{$R *.lfm}
 procedure TForm38.FormCreate(Sender: TObject);
 var
   I,F: integer;
@@ -264,7 +264,7 @@ begin
     inc(len, talkoffset[I]);
     setlength(tdata, talkoffset[I]);
     if talkoffset[I] > 0 then
-      Move(@tdata[0], @namestr[I].str[0], talkoffset[I]);
+      Move(namestr[I].str[0], tdata[0], talkoffset[I]);
     if talkinvert = 0 then
     begin
       for i2 := 0 to talkoffset[I] - 1 do

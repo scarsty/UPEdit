@@ -109,9 +109,7 @@ implementation
 
 uses
   main, Redit, ReditForm, warmapedit;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure addnewWdata(PWF: PWFile; PWD: PRData);
 var
   i3, i4, i5, temp: integer;
@@ -1649,6 +1647,7 @@ begin
 end;
 
 end.
+
 
 
 

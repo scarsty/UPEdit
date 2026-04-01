@@ -57,9 +57,7 @@ implementation
 
 uses
   CYhead;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
@@ -226,6 +224,7 @@ begin
 end;
 
 end.
+
 
 
 

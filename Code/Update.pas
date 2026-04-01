@@ -84,9 +84,7 @@ var
   newVersion: string = '';
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TZIPThread.Execute;
 begin
 end;
@@ -192,5 +190,6 @@ begin
 end;
 
 end.
+
 
 

@@ -1,4 +1,4 @@
-﻿unit SenceMapEdit;
+unit SenceMapEdit;
 
 {$modeswitch autoderef}
 
@@ -207,9 +207,7 @@ implementation
 
 uses
    main,grplist,kdefedit;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
@@ -854,7 +852,17 @@ begin
   sceneopbmp.Canvas.Font.Color := clyellow;
   sceneopbmp.PixelFormat := pf8bit;
   sceneopbmp.Palette := Palle;
-  image1.Canvas.Brush.Style := bsclear;
+  image1.Picture.Bitmap.Width := image1.Width;
+  image1.Picture.Bitmap.Height := image1.Height;
+  image2.Picture.Bitmap.Width := image2.Width;
+  image2.Picture.Bitmap.Height := image2.Height;
+  image3.Picture.Bitmap.Width := image3.Width;
+  image3.Picture.Bitmap.Height := image3.Height;
+  image4.Picture.Bitmap.Width := image4.Width;
+  image4.Picture.Bitmap.Height := image4.Height;
+  image5.Picture.Bitmap.Width := image5.Width;
+  image5.Picture.Bitmap.Height := image5.Height;
+  image1.Picture.Bitmap.Canvas.Brush.Style := bsclear;
   scenebufbmp := Tbitmap.Create;
   scenebufbmp.Width := image1.Width;
   scenebufbmp.Height := image1.Height;
@@ -915,16 +923,16 @@ begin
   begin
     displayscenemap(@scenemapfile.map[0], @sceneopbmp);
     scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
   end
   else
   begin
     displayscenemap(@scenemapfile.map[0], @sceneopbmppng);
     scenebufbmppng.Canvas.CopyRect(scenebufbmppng.Canvas.ClipRect, sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
+    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
   end;
   //scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-  //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+  //image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
   scenelock := false;
   except
     showmessage('������ͼ�༭����ʧ�ܣ�������ͼ���ݴ���');
@@ -1023,7 +1031,7 @@ begin
         copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
      // displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
      // scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-      //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+      //image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end;
     end
     else if (scenelayer >= 0) and (scenelayer < 3) then
@@ -1039,7 +1047,7 @@ begin
         copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
        // displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
       //  scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-       // image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+       // image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end;
     end;
   end
@@ -1103,7 +1111,7 @@ begin
           Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[scenelayer].pic[scenetempy][scenetempx]].num := evtnum;
         //  displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
          // scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-        //  image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+        //  image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
           needupdate := true;
           copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
           copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
@@ -1167,7 +1175,7 @@ begin
           //waropbmp.PixelFormat := pf32bit;
           //warbufbmp.PixelFormat := pf32bit;
           //scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-          //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+          //image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
           Updatesmallimg(image1.Width DIV 2,image1.Height div 2 - 31 * TileW, scenetempx, scenetempy);
           copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
           copyscenemapevent(@Dfile.mapevent[combobox2.ItemIndex], @scenemapeventbackup[0]);
@@ -1188,7 +1196,7 @@ begin
           //waropbmp.PixelFormat := pf32bit;
           //warbufbmp.PixelFormat := pf32bit;
           //scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-          //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+          //image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
         end;
       end;
     end
@@ -1377,14 +1385,14 @@ begin
         label21.Caption := '-1';
     end;
 
-    image2.Canvas.Brush.Color :=clwhite;//$606060;
-    image2.Canvas.FillRect(image2.Canvas.ClipRect);
-    image3.Canvas.Brush.Color := clwhite;//$606060;
-    image3.Canvas.FillRect(image3.Canvas.ClipRect);
-    image4.Canvas.Brush.Color := clwhite;//$606060;
-    image4.Canvas.FillRect(image4.Canvas.ClipRect);
-    image5.Canvas.Brush.Color := clwhite;//$606060;
-    image5.Canvas.FillRect(image5.Canvas.ClipRect);
+    image2.Picture.Bitmap.Canvas.Brush.Color :=clwhite;//$606060;
+    image2.Picture.Bitmap.Canvas.FillRect(image2.Picture.Bitmap.Canvas.ClipRect);
+    image3.Picture.Bitmap.Canvas.Brush.Color := clwhite;//$606060;
+    image3.Picture.Bitmap.Canvas.FillRect(image3.Picture.Bitmap.Canvas.ClipRect);
+    image4.Picture.Bitmap.Canvas.Brush.Color := clwhite;//$606060;
+    image4.Picture.Bitmap.Canvas.FillRect(image4.Picture.Bitmap.Canvas.ClipRect);
+    image5.Picture.Bitmap.Canvas.Brush.Color := clwhite;//$606060;
+    image5.Picture.Bitmap.Canvas.FillRect(image5.Picture.Bitmap.Canvas.ClipRect);
 
     eventpictime := 0;
 
@@ -1404,12 +1412,12 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2].size >= 8) then
               begin
                 McoldrawRLE8(@scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2].data[0],scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2].size,@scenesmallbmp, 0,0, false);
-                image2.Canvas.CopyRect(image2.Canvas.ClipRect,scenesmallbmp.Canvas,image2.Canvas.ClipRect);
+                image2.Picture.Bitmap.Canvas.CopyRect(image2.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image2.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image2.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1427,16 +1435,16 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].size >= 8) then
               begin
                 McoldrawRLE8(@scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].data[0],scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].size,@scenesmallbmp, 0,0, false);
-                image3.Canvas.CopyRect(image3.Canvas.ClipRect,scenesmallbmp.Canvas,image3.Canvas.ClipRect);
+                image3.Picture.Bitmap.Canvas.CopyRect(image3.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image3.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image3.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image3.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
         end;
         //McoldrawRLE8(@scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].data[0],scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].size,@scenesmallbmp, 0,0, false);
-        //image3.Canvas.CopyRect(image3.Canvas.ClipRect,scenesmallbmp.Canvas,image3.Canvas.ClipRect);
+        //image3.Picture.Bitmap.Canvas.CopyRect(image3.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image3.Picture.Bitmap.Canvas.ClipRect);
       end;
       scenesmallbmp.Canvas.Brush.Color :=clwhite;//$606060;
       scenesmallbmp.Canvas.FillRect(scenesmallbmp.Canvas.ClipRect);
@@ -1452,17 +1460,17 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].size >= 8) then
               begin
                 McoldrawRLE8(@scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].data[0],scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].size,@scenesmallbmp, 0,0, false);
-                image4.Canvas.CopyRect(image4.Canvas.ClipRect,scenesmallbmp.Canvas,image4.Canvas.ClipRect);
+                image4.Picture.Bitmap.Canvas.CopyRect(image4.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image4.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image4.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image4.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
         end;
 
         //McoldrawRLE8(@scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].data[0],scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].size,@scenesmallbmp, 0,0, false);
-        //image4.Canvas.CopyRect(image4.Canvas.ClipRect,scenesmallbmp.Canvas,image4.Canvas.ClipRect);
+        //image4.Picture.Bitmap.Canvas.CopyRect(image4.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image4.Picture.Bitmap.Canvas.ClipRect);
 
       end;
       scenesmallbmp.Canvas.Brush.Color :=clwhite;//$606060;
@@ -1481,16 +1489,16 @@ begin
               and (scenegrp[Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2].size >= 8) then
               begin
                 McoldrawRLE8(@scenegrp[Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2].data[0],scenegrp[Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2].size,@scenesmallbmp, 0,0, false);
-                image5.Canvas.CopyRect(image5.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Canvas.ClipRect);
+                image5.Picture.Bitmap.Canvas.CopyRect(image5.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image5.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
         end;
         //McoldrawRLE8(@scenegrp[Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2].data[0],scenegrp[Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2].size,@scenesmallbmp, 0,0, false);
-        //image5.Canvas.CopyRect(image5.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Canvas.ClipRect);
+        //image5.Picture.Bitmap.Canvas.CopyRect(image5.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Picture.Bitmap.Canvas.ClipRect);
       end;
     end;
 end;
@@ -1588,9 +1596,9 @@ begin
       end;
     end;
     if SceneEditMOde = RLEMode then
-      image1.Canvas.CopyRect(image1.ClientRect,scenebufbmp.Canvas,scenebufbmp.Canvas.ClipRect)
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,scenebufbmp.Canvas,scenebufbmp.Canvas.ClipRect)
     else
-      image1.Canvas.CopyRect(image1.ClientRect,scenebufbmppng.Canvas,scenebufbmppng.Canvas.ClipRect);
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,scenebufbmppng.Canvas,scenebufbmppng.Canvas.ClipRect);
   end;
   if candraw then
   begin
@@ -1699,7 +1707,7 @@ begin
                    end;
                  IMZMode, PNGMode:
                    begin
-                    //imzFile.DrawImztocanvasEx(image2.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
+                    //imzFile.DrawImztocanvasEx(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
                     //ImzFile.SceneQuickDraw(@scenebufbmpPNG, scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
                      ImzFile.SceneQuickDrawBuf(@scenePNGbuf, scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
                    end;
@@ -1786,7 +1794,7 @@ begin
                      end;
                    IMZMode, PNGMode:
                      begin
-                      //imzFile.DrawImztocanvasEx(image2.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
+                      //imzFile.DrawImztocanvasEx(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
                       ImzFile.SceneQuickDraw(@scenebufbmpPNG, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
                      end;
                  end;
@@ -1848,9 +1856,9 @@ begin
     end;
 
     if SceneEditMOde = RLEMode then
-      image1.Canvas.CopyRect(image1.ClientRect,scenebufbmp.Canvas,scenebufbmp.Canvas.ClipRect)
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,scenebufbmp.Canvas,scenebufbmp.Canvas.ClipRect)
     else
-      image1.Canvas.CopyRect(image1.ClientRect,scenebufbmppng.Canvas,scenebufbmppng.Canvas.ClipRect);
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,scenebufbmppng.Canvas,scenebufbmppng.Canvas.ClipRect);
   end;
   end;
 end;
@@ -1888,12 +1896,12 @@ begin
               if (tempint >= 0) and (tempint < scenegrpnum) and (scenegrp[tempint].size >= 8) then
               begin
                 McoldrawRLE8(@scenegrp[tempint].data[0],scenegrp[tempint].size,@scenesmallbmp, 0,0, false);
-                image5.Canvas.CopyRect(image5.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Canvas.ClipRect);
+                image5.Picture.Bitmap.Canvas.CopyRect(image5.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               //ImzFile.SceneQuickDraw(@scenebufbmp, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
             end;
         end;
@@ -1987,13 +1995,13 @@ begin
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
         scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end
       else
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmppng);
         scenebufbmppng.Canvas.CopyRect(scenebufbmppng.Canvas.ClipRect, sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
       end;
     end;
   end;
@@ -2321,13 +2329,13 @@ begin
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
         scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end
       else
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmppng);
         scenebufbmppng.Canvas.CopyRect(scenebufbmppng.Canvas.ClipRect, sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
       end;
       scenelock := false;
       except
@@ -2430,7 +2438,7 @@ begin
                      end;
                    IMZMode, PNGMode:
                      begin
-                       //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+                       //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
                        ImzFile.SceneQuickDraw(@scenetempbmp, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
                      end;
                  end;
@@ -2493,13 +2501,13 @@ begin
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
         scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end
       else
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmppng);
         scenebufbmppng.Canvas.CopyRect(scenebufbmppng.Canvas.ClipRect, sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
       end;  scenelock := false;
   initialundomap(@scenemapfile.map[0], @Dfile.mapevent[0],0);
   undotimes := 0;
@@ -2519,13 +2527,13 @@ begin
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmp);
         scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
       end
       else
       begin
         displayscenemap(@scenemapfile.map[combobox2.ItemIndex], @sceneopbmppng);
         scenebufbmppng.Canvas.CopyRect(scenebufbmppng.Canvas.ClipRect, sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
-        image1.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
+        image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmppng.Canvas,sceneopbmppng.Canvas.ClipRect);
       end;
   scenelock := false;
   //copyscenemap(@scenemapfile.map[combobox2.ItemIndex], @scenemapbackup[0]);
@@ -2880,7 +2888,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[1].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[1].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
 
@@ -2899,7 +2907,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[2].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[5].pic[I][ix]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[2].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[5].pic[I][ix]);
 
@@ -2920,7 +2928,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[I][ix]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[I][ix]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
 
@@ -2950,7 +2958,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[0].pic[Iy][i] div 2, posx, posy);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[0].pic[Iy][i] div 2, posx, posy);
 
@@ -2969,7 +2977,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[1].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[1].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
 
@@ -2988,7 +2996,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[2].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[5].pic[Iy][i]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[2].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[5].pic[Iy][i]);
 
@@ -3009,7 +3017,7 @@ begin
             end;
           IMZMode, PNGMode:
             begin
-              //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+              //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[Iy][i]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
               //ImzFile.SceneQuickDraw(sceneopbmp2, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[Iy][i]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
             end;
@@ -3183,6 +3191,7 @@ begin
 end;
 
 end.
+
 
 
 

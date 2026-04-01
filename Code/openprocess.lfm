@@ -28,11 +28,6 @@
     Top = 3
     Width = 402
     Height = 52
-    Margins.Left = 4
-    Margins.Top = 4
-    Margins.Right = 4
-    Margins.Bottom = 4
-    ParentCustomHint = False
     Caption = 'UPedit'#21152#36733#20013'...'
     Color = clMaroon
     Font.Charset = DEFAULT_CHARSET
@@ -48,11 +43,6 @@
     Top = 1
     Width = 523
     Height = 66
-    Margins.Left = 4
-    Margins.Top = 4
-    Margins.Right = 4
-    Margins.Bottom = 4
-    ParentCustomHint = False
     AutoSize = False
     Caption = 'UPedit'#21152#36733#20013'...'
     Color = clMaroon
@@ -70,11 +60,6 @@
     Top = 0
     Width = 535
     Height = 65
-    Margins.Left = 4
-    Margins.Top = 4
-    Margins.Right = 4
-    Margins.Bottom = 4
-    ParentCustomHint = False
     AutoSize = False
     Caption = 'UPedit'#21152#36733#20013'...'
     Color = clMaroon

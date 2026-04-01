@@ -38,9 +38,7 @@ var
   alreadyopen: Boolean = false;
   FlashFormHeight, FlashFormWidth: integer;
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 function UpdateLayeredWindow(hwnd: HWND; hdcDst: HDC; pptDst: PPoint; psize: PSize;
   hdcSrc: HDC; pptSrc: PPoint; crKey: COLORREF; pblend: PBlendFunction;
   dwFlags: DWORD): BOOL; stdcall; external 'user32' name 'UpdateLayeredWindow';
@@ -178,6 +176,7 @@ begin
 end;
 
 end.
+
 
 
 

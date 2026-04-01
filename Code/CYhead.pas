@@ -64,9 +64,7 @@ implementation
 
 uses
   main, CYheadoutput;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TForm89.Button10Click(Sender: TObject);
 begin
   if CYheadnum > 0 then
@@ -343,6 +341,7 @@ begin
 end;
 
 end.
+
 
 
 

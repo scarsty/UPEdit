@@ -25,7 +25,7 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm44.ListBox1DblClick(Sender: TObject);
 begin

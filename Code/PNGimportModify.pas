@@ -45,9 +45,7 @@ var
   Form95active: Boolean = false;
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 procedure TForm95.Edit1Change(Sender: TObject);
 var
   temp: integer;
@@ -119,6 +117,7 @@ begin
 end;
 
 end.
+
 
 
 

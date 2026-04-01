@@ -31,7 +31,7 @@ implementation
 uses
   KDEFedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm9.ListBox1Click(Sender: TObject);
 begin

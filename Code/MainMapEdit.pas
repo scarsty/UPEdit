@@ -1,4 +1,4 @@
-﻿unit MainMapEdit;
+unit MainMapEdit;
 
 {$modeswitch autoderef}
 
@@ -119,9 +119,7 @@ implementation
 
 uses
   main, grplist, outputMap;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
@@ -295,7 +293,7 @@ begin
   begin
     if not(readMmapGRP = 1) then
     begin
-      showmessage('��ȡIDX��GRP�ļ�����');
+      showmessage('读取 IDX 或 GRP 文件失败');
       MMapInitial := false;
       RadioGroup1.ItemIndex := Integer(MMapEditMode);
       exit;
@@ -312,7 +310,7 @@ begin
   begin
     if not ImzFile.ReadImzFromFile(gamepath + MMAPIMZ) then
     begin
-      showmessage('��ȡIMZ�ļ�ʧ�ܣ�');
+      showmessage('读取 IMZ 文件失败');
       MMapInitial := false;
       RadioGroup1.ItemIndex := Integer(MMapEditMode);
       exit;
@@ -329,7 +327,7 @@ begin
   begin
     if not ImzFile.ReadImzFromFolder(gamepath + MMAPPNGpath) then
     begin
-      showmessage('��ȡIMZ�ļ���ʧ�ܣ�');
+      showmessage('读取 IMZ 文件夹失败');
       MMapInitial := false;
       RadioGroup1.ItemIndex := Integer(MMapEditMode);
       exit;
@@ -501,9 +499,9 @@ begin
       filewrite(grp, MMApfile.Map[0].maplayer[4].pic[iy][0], MMApfile.Map[0].X * 2);
     fileclose(grp);
 
-    showmessage('������ͼ�ɹ���');
+    showmessage('保存主地图成功！');
   except
-    showmessage('����ʧ�ܣ�');
+    showmessage('保存失败！');
   end;
 end;
 
@@ -561,7 +559,7 @@ var
 begin
   if MMAplayer <> 4 then
   begin
-    showmessage('��ѡ�����ͼ��Ϊ"ȫ��"��Ȼ�����������һ������');
+    showmessage('请先将图层选择为“全部”，然后再执行该功能');
   end
   else
   begin
@@ -755,7 +753,7 @@ begin
     //
     Palle := CreatePalette(pLogPalette(@pLogPalle)^);
   except
-    showmessage('���ͼ�༭����ʧ�ܣ�ԭ���ǵ�ɫ������ʧ�ܣ������ǵ�ɫ���ļ�δ�ҵ���������Ϸ·���Լ�ini�ļ����ã�');
+    showmessage('主地图编辑器初始化失败：调色板读取失败。请检查游戏路径与 ini 配置。');
     self.Close;
     exit;
   end;
@@ -781,7 +779,7 @@ begin
   RadioGroup1.ItemIndex := Integer(MMapEditMode);
   if not( { (readMmapGRP = 1) and } (readMmapfile = 1)) then
   begin
-    showmessage('���ͼ�༭����ʧ�ܣ���ͼ�ļ����ݴ����δ�ҵ���������Ϸ·���Լ�ini�ļ����ã�');
+    showmessage('主地图编辑器初始化失败：地图数据文件缺失。请检查游戏路径与 ini 配置。');
     self.Close;
     exit;
   end;
@@ -805,6 +803,14 @@ begin
     MMApsmallbmp.Palette := Palle;
     MMApsmallbmp.width := 500;
     MMApsmallbmp.height := 500;
+    Image2.Picture.Bitmap.Width := Image2.Width;
+    Image2.Picture.Bitmap.Height := Image2.Height;
+    Image3.Picture.Bitmap.Width := Image3.Width;
+    Image3.Picture.Bitmap.Height := Image3.Height;
+    Image4.Picture.Bitmap.Width := Image4.Width;
+    Image4.Picture.Bitmap.Height := Image4.Height;
+    Image5.Picture.Bitmap.Width := Image5.Width;
+    Image5.Picture.Bitmap.Height := Image5.Height;
     ScrollBar1.Min := 0;
     ScrollBar1.Max := Max(MMApfile.Map[0].X, MMApfile.Map[0].Y) - 1;
     ScrollBar2.Min := 0;
@@ -819,7 +825,7 @@ begin
     // image1.Canvas.CopyRect(image1.ClientRect,Mmapopbmp.Canvas,Mmapopbmp.Canvas.ClipRect);
 
   except
-    showmessage('���ͼ�༭��ʧ�ܣ�');
+    showmessage('主地图编辑器初始化失败！');
     self.Close;
     exit;
   end;
@@ -865,7 +871,7 @@ procedure TForm13.Image1DragDrop(Sender, Source: TObject; X, Y: Integer);
 begin
   if MMAplayer = 4 then
   begin
-    showmessage('��ѡ������ͼ���ٽ�����ק������');
+    showmessage('请先选择子图层，再进行拖拽放置');
     exit;
   end;
   if IMZDrag then
@@ -978,7 +984,7 @@ begin
           for iy := 0 to MMApcopymap.Y - 1 do
             if (MMAptempx - ix >= 0) and (MMAptempx - ix < MMApfile.Map[0].X) and (MMAptempy - iy >= 0) and (-iy + MMAptempy < MMApfile.Map[0].Y) then
               MMApfile.Map[0].maplayer[i].pic[MMAptempy - iy][MMAptempx - ix] := tempmap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1];
-      // ����Ҫ�޸����ý�����
+      // 清理临时复制图层缓存
       setlength(tempmap.maplayer, 0);
       needupdate := true;
       UpdateMainSmallBmp;
@@ -1097,7 +1103,7 @@ begin
     begin
       if (((MMApstillx <> MMAptempx) or (MMApstilly <> MMAptempy)) or (MMAplayer = 4)) and (MMApstill = 1) then
       begin
-        // ������ͼ
+        // 框选地图
         MMApcopymapmode := 1;
         lx := MMAptempx;
         ly := MMAptempy;
@@ -1176,10 +1182,10 @@ begin
       MMApbufbmp.Canvas.Font.size := 9;
       MMApbufbmp.Canvas.Brush.Style := bsclear;
       MMApbufbmp.Canvas.TextOut(posx, posy, '(' + inttostr(qbuildx) + ',' + inttostr(qbuildy) + ')');
-      temprect := Image1.Canvas.ClipRect;
+      temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
       temprect.Left := temprect.Left + 200;
       temprect.Right := temprect.Right + 200;
-      Image1.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+      Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
     end;
     MMApstill := 0;
   end;
@@ -1209,14 +1215,14 @@ end;
 procedure TForm13.UpdateMainSmallBmp;
 begin
   try
-    Image2.Canvas.Brush.Color := CLWHITE; // $606060;
-    Image2.Canvas.FillRect(Image2.Canvas.ClipRect);
-    Image3.Canvas.Brush.Color := CLWHITE; // $606060;
-    Image3.Canvas.FillRect(Image3.Canvas.ClipRect);
-    Image4.Canvas.Brush.Color := CLWHITE; // $606060;
-    Image4.Canvas.FillRect(Image4.Canvas.ClipRect);
-    Image5.Canvas.Brush.Color := CLWHITE; // $606060;
-    Image5.Canvas.FillRect(Image5.Canvas.ClipRect);
+    Image2.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image2.Picture.Bitmap.Canvas.FillRect(Image2.Picture.Bitmap.Canvas.ClipRect);
+    Image3.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image3.Picture.Bitmap.Canvas.FillRect(Image3.Picture.Bitmap.Canvas.ClipRect);
+    Image4.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image4.Picture.Bitmap.Canvas.FillRect(Image4.Picture.Bitmap.Canvas.ClipRect);
+    Image5.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image5.Picture.Bitmap.Canvas.FillRect(Image5.Picture.Bitmap.Canvas.ClipRect);
     if (MMAptempx >= 0) and (MMAptempx < MMApfile.Map[0].X) and (MMAptempy >= 0) and (MMAptempy < MMApfile.Map[0].Y) then
     begin
       MMApsmallbmp.Canvas.Brush.Color := CLWHITE; // $606060;
@@ -1233,12 +1239,12 @@ begin
               begin
                 McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
                   0, false);
-                Image2.Canvas.CopyRect(Image2.Canvas.ClipRect, MMApsmallbmp.Canvas, Image2.Canvas.ClipRect);
+                Image2.Picture.Bitmap.Canvas.CopyRect(Image2.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image2.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              ImzFile.DrawImztocanvas(Image2.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
+              ImzFile.DrawImztocanvas(Image2.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1257,12 +1263,12 @@ begin
               begin
                 McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
                   0, false);
-                Image3.Canvas.CopyRect(Image3.Canvas.ClipRect, MMApsmallbmp.Canvas, Image3.Canvas.ClipRect);
+                Image3.Picture.Bitmap.Canvas.CopyRect(Image3.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image3.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              ImzFile.DrawImztocanvas(Image3.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
+              ImzFile.DrawImztocanvas(Image3.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1280,12 +1286,12 @@ begin
               begin
                 McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
                   0, false);
-                Image4.Canvas.CopyRect(Image4.Canvas.ClipRect, MMApsmallbmp.Canvas, Image4.Canvas.ClipRect);
+                Image4.Picture.Bitmap.Canvas.CopyRect(Image4.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image4.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              ImzFile.DrawImztocanvas(Image4.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
+              ImzFile.DrawImztocanvas(Image4.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1307,19 +1313,19 @@ begin
                 McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2].data[0],
                   MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2].size, @MMApsmallbmp, 0,
                   0, false);
-                Image5.Canvas.CopyRect(Image5.Canvas.ClipRect, MMApsmallbmp.Canvas, Image5.Canvas.ClipRect);
+                Image5.Picture.Bitmap.Canvas.CopyRect(Image5.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image5.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              ImzFile.DrawImztocanvas(Image5.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]]
+              ImzFile.DrawImztocanvas(Image5.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]]
                 [MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2, 0, 0, 0);
             end;
         end;
       end;
     end;
   except
-    showmessage('������ͼ����!');
+    showmessage('绘制地图失败！');
   end;
 end;
 
@@ -1347,23 +1353,23 @@ begin
   begin
     try
       needupdate := false;
-      temprect := Image1.Canvas.ClipRect;
+      temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
       temprect.Left := temprect.Left + 200;
       temprect.Right := temprect.Right + 200;
       if MMapEditMode = RLEMode then
       begin
         displayMmap(@MMApfile.Map[0], @MMApopbmp);
         MMApbufbmp.Canvas.CopyRect(MMApbufbmp.Canvas.ClipRect, MMApopbmp.Canvas, MMApopbmp.Canvas.ClipRect);
-        Image1.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
       end
       else
       begin
         displayMmap(@MMApfile.Map[0], @MMapopbmppng);
         MMapbufbmppng.Canvas.CopyRect(MMapbufbmppng.Canvas.ClipRect, MMapopbmppng.Canvas, MMapopbmppng.Canvas.ClipRect);
-        Image1.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
+        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
       end;
     except
-      showmessage('���µ�ͼ����');
+      showmessage('刷新地图失败');
     end;
   end;
   if (axp <> MMAptempx) or (ayp <> MMAptempy) then
@@ -1515,19 +1521,19 @@ begin
 
       end;
 
-      temprect := Image1.Canvas.ClipRect;
+      temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
       temprect.Left := temprect.Left + 200;
       temprect.Right := temprect.Right + 200;
       if MMapEditMode = RLEMode then
       begin
-        Image1.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
       end
       else
       begin
-        Image1.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
+        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
       end;
     except
-      showmessage('����ͼ�����������');
+      showmessage('绘制地图网格失败');
     end;
   end;
 end;
@@ -1700,7 +1706,7 @@ begin
 
   MX := ScrollBar1.Position + ScrollBar2.Position - MMApfile.Map[0].Y div 2;
   MY := ScrollBar2.Position - ScrollBar1.Position + MMApfile.Map[0].Y div 2;
-  // �����
+  // 绘制地面层
   for i := -(Mmapopbmp2.height div 36) to (Mmapopbmp2.height div 36) do
   begin
     for i2 := 1 to (Mmapopbmp2.width div 72) - 1 do
@@ -1796,7 +1802,7 @@ begin
         end;
     end;
   end;
-  // �����
+  // 绘制建筑层
   k := 0;
   for i := -(Mmapopbmp2.height div 36) to (Mmapopbmp2.height div 36 + 2) do
   begin
@@ -1851,7 +1857,7 @@ begin
               Picwidth := 0;
             end;
           end;
-          // ����ͼƬ�Ŀ�ȼ���ͼ���е㣬Ϊ�������С����ʵ�����е������2��
+          // 计算图片宽度和中心点，便于后续鼠标命中判定
           CenterList[k].X := ix * 2 - (Picwidth + 35) div 36 + 1;
           CenterList[k].Y := iy * 2 - (Picwidth + 35) div 36 + 1;
           k := k + 1;
@@ -1909,7 +1915,7 @@ begin
               Picwidth := 0;
             end;
           end;
-          // ����ͼƬ�Ŀ�ȼ���ͼ���е㣬Ϊ�������С����ʵ�����е������2��
+          // 计算图片宽度和中心点，便于后续鼠标命中判定
           CenterList[k].X := ix * 2 - (Picwidth + 35) div 36 + 1;
           CenterList[k].Y := iy * 2 - (Picwidth + 35) div 36 + 1;
           k := k + 1;
@@ -1965,7 +1971,7 @@ begin
               Picwidth := 0;
             end;
           end;
-          // ����ͼƬ�Ŀ�ȼ���ͼ���е㣬Ϊ�������С����ʵ�����е������2��
+          // 计算图片宽度和中心点，便于后续鼠标命中判定
           CenterList[k].X := ix * 2 - (Picwidth + 35) div 36 + 1;
           CenterList[k].Y := iy * 2 - (Picwidth + 35) div 36 + 1;
           k := k + 1;
@@ -2027,7 +2033,7 @@ begin
               picheight := 0;
             end;
           end;
-          // ����ͼƬ�Ŀ�ȼ���ͼ���е㣬Ϊ�������С����ʵ�����е������2��
+          // 计算图片宽高与中心点，便于后续鼠标命中判定
           CenterList[k].X := ix * 2 - (Picwidth + 35) div 36 + 1;
           CenterList[k].Y := iy * 2 - (picheight + 35) div 36 + 1;
           k := k + 1;
@@ -2035,7 +2041,7 @@ begin
       end;
     end;
   end;
-  // ������
+  // 根据中心点排序
   for i := 0 to k - 1 do
     for i2 := 0 to k - 2 do
     begin
@@ -2189,6 +2195,7 @@ begin
 end;
 
 end.
+
 
 
 

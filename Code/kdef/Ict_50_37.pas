@@ -26,7 +26,7 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 end.
 

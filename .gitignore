@@ -10,7 +10,6 @@ Code/lib/x86_64-win64/
 *.res
 *.vrc
 *.rsm
-UPedit.ini
 Code/kdef/__history
 *.local
 *.bat
@@ -20,3 +19,11 @@ Code/__recovery
 *.ppu
 *.bak
 Code/backup
+*.compiled
+*.obj
+*.a
+*.rsj
+*.dbg
+*.lps
+*.log
+Code/kdef/backup

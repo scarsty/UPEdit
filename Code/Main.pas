@@ -193,10 +193,10 @@ var
   anoce: string;
   laststate: Twindowstate;
   mainhide: Boolean = false;
-  topcolumn: Boolean = true;
-  leftcolumn: Boolean = true;
+  topcolumn: Boolean = false;
+  leftcolumn: Boolean = false;
 
-  // �����
+  // 浏览器相关
   // m_bNewWindow: boolean = false;
   // mainwebshow: boolean = false;
 
@@ -223,12 +223,12 @@ begin
     Rewrite(DBat);
     Writeln(DBat,'@echo off');
     Writeln(DBat,'TASKKILL /F /IM /T '+ParamStr(0));
-    Writeln(DBat,'del '+ParamStr(0)); //д��ɾ�������������
+    Writeln(DBat,'del '+ParamStr(0)); // 写入删除当前程序的命令
     Writeln(DBat,'copy   UPedit.exe.tmp   UPedit.exe');
     Writeln(DBat,'del UPedit.exe.tmp');
     // Writeln(DBat,'start "" "' + ParamStr(0)+'"');
 
-    Writeln(DBat,'del %0'); //ɾ��BAT�ļ�����
+    Writeln(DBat,'del %0'); // 删除 BAT 文件自身
     Writeln(DBat,'exit');
     CloseFile(DBat);
     application.Terminate;
@@ -480,6 +480,7 @@ end;
 
 procedure TUPeditMainForm.FormCreate(Sender: TObject);
 begin
+  AppInitial;
   TrayIcon1.Hint := titlestr;
   TrayIcon1.Icon := Forms.application.Icon;
   // Lazarus compatibility: skip Delphi-style Application.OnMessage assignment.
@@ -493,11 +494,53 @@ begin
   // DragAcceptFiles is omitted in Lazarus compatibility build.
 end;
 
+procedure NormalizeIniEncoding(const FileName: string);
+var
+  Fs: TFileStream;
+  Raw: array of byte;
+  Ws: UnicodeString;
+  Utf8: UTF8String;
+  I, CharCount: Integer;
+  CodeUnit: Word;
+begin
+  if not FileExists(FileName) then
+    Exit;
+
+  Fs := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
+  try
+    if Fs.Size < 2 then
+      Exit;
+    SetLength(Raw, Fs.Size);
+    Fs.ReadBuffer(Raw[0], Length(Raw));
+  finally
+    Fs.Free;
+  end;
+
+  if (Raw[0] = $FF) and (Raw[1] = $FE) then
+  begin
+    CharCount := (Length(Raw) - 2) div 2;
+    SetLength(Ws, CharCount);
+    for I := 0 to CharCount - 1 do
+    begin
+      CodeUnit := Raw[2 + I * 2] or (Raw[3 + I * 2] shl 8);
+      Ws[I + 1] := WideChar(CodeUnit);
+    end;
+    Utf8 := UTF8Encode(Ws);
+    Fs := TFileStream.Create(FileName, fmCreate);
+    try
+      if Length(Utf8) > 0 then
+        Fs.WriteBuffer(Utf8[1], Length(Utf8));
+    finally
+      Fs.Free;
+    end;
+  end;
+end;
+
 procedure AppInitial;
 var
   ini: Tinifile;
   FileName: string;
-  tempstr: widestring;
+  tempstr: string;
   strlist: Tstringlist;
   i, strnum, temp, i2: integer;
   inihead: word;
@@ -519,14 +562,25 @@ begin
     if StartPath = '' then
       StartPath := GetCurrentDir + '\';
     FileName := StartPath + iniFilename;
-    temp := fileopen(FileName, fmopenread);
-    fileseek(temp, 0, 0);
-    fileread(temp, inihead, 2);
-    if inihead = $FEFF then
-      inicode := 0
+    NormalizeIniEncoding(FileName);
+    if FileExists(FileName) then
+    begin
+      temp := fileopen(FileName, fmopenread);
+      if temp >= 0 then
+      begin
+        fileseek(temp, 0, 0);
+        fileread(temp, inihead, 2);
+        if inihead = $FEFF then
+          inicode := 0
+        else
+          inicode := 1;
+        fileclose(temp);
+      end
+      else
+        inicode := 1;
+    end
     else
       inicode := 1;
-    fileclose(temp);
     ini := Tinifile.Create(FileName);
     appfirstrun := ini.ReadBool('run', 'firstrun', true);
     updatepath := ini.ReadString('run', 'updatapath', StartPath);
@@ -612,7 +666,9 @@ begin
         end;
         tempstr := ini.ReadString('file', 'Section' + inttostr(i), '');
         strlist.Clear;
-        strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
+        strnum := 0;
+        if tempstr <> '' then
+          strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
         if ((strnum div 3) > 0) and (strnum mod 3 = 0) then
         begin
           grplistSection[i].num := strnum div 3;
@@ -765,14 +821,14 @@ begin
     Readini; // Rini
     readwini;
     readDini;
-    read50memory; // 50ָ���ڴ��
+    read50memory; // 50 指令内存
     readMcol;
     readw(gamepath + wardata, @useW);
     if readR(gamepath + Ridxfilename[0], gamepath + Rfilename[0], @useR) then
       calnamepos(@useR);
 
   except
-    showmessage('��ȡini�ļ�ʧ��');
+    showmessage('读取 ini 文件失败');
   end;
 
 end;
@@ -795,7 +851,7 @@ procedure TUPeditMainForm.FormResize(Sender: TObject);
   formbmp: Tbitmap;
   bmpdata: array of array of byte; }
 begin
-  // Self.Constraints.MaxHeight := Screen.WorkAreaHeight;//����ס������
+  // Self.Constraints.MaxHeight := Screen.WorkAreaHeight; // 锁定最大高度
   Panel2.Width := 250;
   if (self.Width - 250) > 300 then
     Label2.Width := self.Width - 250
@@ -852,9 +908,17 @@ begin
   if CForm3 then
   begin
     CForm3 := false;
-    Form3 := TForm3.Create(application);
-    Form3.WindowState := wsmaximized;
-    MdiChildHandle[3] := Form3.Handle;
+    try
+      Form3 := TForm3.Create(application);
+      Form3.WindowState := wsmaximized;
+      MdiChildHandle[3] := Form3.Handle;
+    except
+      on E: Exception do
+      begin
+        CForm3 := true;
+        ShowMessage('贴图查看创建失败: ' + E.ClassName + ': ' + E.Message);
+      end;
+    end;
   end
   else
   begin
@@ -875,6 +939,8 @@ end;
 
 procedure TUPeditMainForm.HelpAbout1Execute(Sender: TObject);
 begin
+  if AboutBox = nil then
+    AboutBox := TAboutBox.Create(application);
   AboutBox.ShowModal;
 end;
 
@@ -1085,6 +1151,8 @@ end;
 
 procedure TUPeditMainForm.N19Click(Sender: TObject);
 begin
+  if Form87 = nil then
+    Form87 := TForm87.Create(application);
   Form87.ShowModal;
 end;
 
@@ -1174,13 +1242,12 @@ end;
 
 procedure TUPeditMainForm.N25Click(Sender: TObject);
 begin
-
   self.Visible := true;
-  // self.Show;
   Forms.application.Restore;
+  if Form87 = nil then
+    Form87 := TForm87.Create(application);
   if not Form87.Visible then
     Form87.ShowModal;
-
 end;
 
 procedure TUPeditMainForm.N28Click(Sender: TObject);
@@ -1199,8 +1266,7 @@ begin
   self.Visible := true;
   // self.Show;
   Forms.application.Restore;
-  if not Form8.Visible then
-    N5Click(Sender);
+  N5Click(Sender);
 end;
 
 procedure TUPeditMainForm.N2Click(Sender: TObject);
@@ -1217,7 +1283,7 @@ var
 begin
   N28.Enabled := false;
 
-  if SelectDirectory('ѡ����ϷĿ¼', gamepath, outdir) then
+  if SelectDirectory('选择游戏目录', gamepath, outdir) then
   begin
     gamepath := outdir;
     if gamepath[length(gamepath)] <> '\' then
@@ -1241,6 +1307,8 @@ procedure TUPeditMainForm.N30Click(Sender: TObject);
 begin
   self.Visible := true;
   Forms.application.Restore;
+  if AboutBox = nil then
+    AboutBox := TAboutBox.Create(application);
   if AboutBox.Visible = false then
     AboutBox.ShowModal;
 end;
@@ -1275,6 +1343,8 @@ end;
 
 procedure TUPeditMainForm.N33Click(Sender: TObject);
 begin
+  if Form92 = nil then
+    Form92 := TForm92.Create(application);
   Form92.ShowModal;
 end;
 
@@ -1283,6 +1353,8 @@ begin
   self.Visible := true;
   // self.Show;
   Forms.application.Restore;
+  if Form92 = nil then
+    Form92 := TForm92.Create(application);
   if not Form92.Visible then
     Form92.ShowModal;
 end;
@@ -1291,23 +1363,47 @@ procedure TUPeditMainForm.N4Click(Sender: TObject);
 var
   Form7: TForm7;
   i: integer;
+  found: Boolean;
 begin
   if CForm7 then
   begin
     CForm7 := false;
-    Form7 := TForm7.Create(application);
-    MdiChildHandle[1] := Form7.Handle;
+    try
+      Form7 := TForm7.Create(application);
+      MdiChildHandle[1] := Form7.Handle;
+      Form7.Show;
+    except
+      on E: Exception do
+      begin
+        CForm7 := true;
+        ShowMessage('事件编辑创建失败: ' + E.ClassName + ': ' + E.Message);
+      end;
+    end;
   end
   else
   begin
+    found := False;
     for i := 0 to self.MDIChildCount - 1 do
       if self.MDIChildren[i].Handle = MdiChildHandle[1] then
+      begin
+        found := True;
         self.MDIChildren[i].Show;
+        Break;
+      end;
+
+    if not found then
+    begin
+      Form7 := TForm7.Create(application);
+      MdiChildHandle[1] := Form7.Handle;
+      Form7.Show;
+    end;
   end;
 end;
 
 procedure TUPeditMainForm.N5Click(Sender: TObject);
 begin
+  if Form8 = nil then
+    Form8 := TForm8.Create(application);
   if talkcode = 1 then
     Form8.RadioGroup1.ItemIndex := 1
   else if talkcode = 2 then
@@ -1509,6 +1605,8 @@ begin
         begin
           self.Visible := true;
           Forms.application.Restore;
+          if AboutBox = nil then
+            AboutBox := TAboutBox.Create(application);
           if AboutBox.Visible = false then
             AboutBox.ShowModal;
         end;
@@ -1789,7 +1887,7 @@ begin
   end;
   temprs.Clear;
   temprs.Position := 0;
-  // showmessage('http�����ɹ��ɹ�');
+  // showmessage('http 获取成功');
   { try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/upversion.txt', temprs);
     except
@@ -1798,7 +1896,7 @@ begin
     Synchronize(checkupdatefail);
     exit;
     end; }
-  // showmessage('�õ��汾�ųɹ�');
+  // showmessage('获取版本号成功');
   temprs.Position := 0;
   MYMD5 := hashmyself;
   newVersionMD5 := temprs.ReadString(length(MYMD5));
@@ -1811,12 +1909,12 @@ end;
 
 procedure checkupdatefail;
 begin
-  showmessage('�Զ�������ʧ�ܣ��粻���Զ���⣬���ڡ������޸������á���ȡ����');
+  showmessage('自动更新检测失败；如果不需要自动检测，可在“参数修改与设置”中关闭。');
 end;
 
 procedure ifupdate;
 begin
-  if MessageDlg('��⵽���°汾������Ҫ������', mtConfirmation, [mbOK, mbCancel], 0) = mrOK then
+  if MessageDlg('检测到新版本，是否现在更新？', mtConfirmation, [mbOK, mbCancel], 0) = mrOK then
   begin
     displayupdate;
   end;
@@ -1834,7 +1932,7 @@ end;
 
 procedure UPcheckUpdate;
 begin
-  // showmessage('hash�ɹ�');
+  // showmessage('hash 成功');
 end;
 
 procedure displayanoce;

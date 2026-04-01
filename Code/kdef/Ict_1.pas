@@ -40,7 +40,7 @@ implementation
 uses
   KDEFedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 procedure TForm14.Button3Click(Sender: TObject);
 var

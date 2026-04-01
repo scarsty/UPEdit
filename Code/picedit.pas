@@ -112,9 +112,7 @@ function calPNG(Pdata: Pbyte): integer;
 
 
 implementation
-
-// {$R *.lfm}
-
+{$R *.lfm}
 uses
   main;
 
@@ -1201,6 +1199,7 @@ begin
 end;
 
 end.
+
 
 
 

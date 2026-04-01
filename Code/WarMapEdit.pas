@@ -1,4 +1,4 @@
-﻿unit WarMapEdit;
+unit WarMapEdit;
 
 {$modeswitch autoderef}
 
@@ -114,9 +114,7 @@ implementation
 
 uses
    main,grplist;
-
-// {$R *.lfm}
-
+{$R *.lfm}
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
@@ -620,7 +618,7 @@ begin
                      end;
                    IMZMode, PNGMode:
                      begin
-                       //imzFile.DrawImztocanvasEx(image5.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
+                       //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
                        ImzFile.SceneQuickDraw(@Wartempbmp, Warcopymap.maplayer[I].pic[Warcopymap.y - iy - 1][Warcopymap.x - ix - 1] div 2, posx, posy);
                      end;
                  end;
@@ -750,12 +748,12 @@ begin
         RLEMode:
           begin
             warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
             warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
           end;
     end;
   end;
@@ -884,6 +882,12 @@ begin
   warbufbmp.Palette := palle;
   warcenterx := image1.Width div 2;
   warcentery := image1.Height div 2;
+  image1.Picture.Bitmap.Width := image1.Width;
+  image1.Picture.Bitmap.Height := image1.Height;
+  image2.Picture.Bitmap.Width := image2.Width;
+  image2.Picture.Bitmap.Height := image2.Height;
+  image3.Picture.Bitmap.Width := image3.Width;
+  image3.Picture.Bitmap.Height := image3.Height;
 
   try
   if not ({(readWarmapgrp = 1) and }(readwardef(gamepath + warmapdefidx,gamepath + warmapdefgrp,@warmapfile) = 1)) then
@@ -910,13 +914,13 @@ begin
   begin
     displaywarmap(@warmapfile.map[0], @waropbmp, Wareditmode, @ImzFile);
     warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
   end
   else
   begin
     displaywarmap(@warmapfile.map[0], @waropbmpPng, Wareditmode, @ImzFile);
     warbufbmpPng.Canvas.CopyRect(warbufbmpPng.Canvas.ClipRect, waropbmpPng.Canvas,waropbmp.Canvas.ClipRect);
-    image1.Canvas.CopyRect(image1.ClientRect, waropbmpPng.Canvas, waropbmpPng.Canvas.ClipRect);
+    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect, waropbmpPng.Canvas, waropbmpPng.Canvas.ClipRect);
   end;
 
 
@@ -982,12 +986,12 @@ begin
         RLEMode:
           begin
             warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
             warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas, waropbmppng.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
           end;
       end;
 
@@ -1006,12 +1010,12 @@ begin
         RLEMode:
           begin
             warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
             warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
           end;
       end;
       UpdatewarSmallImg;
@@ -1030,12 +1034,12 @@ begin
         RLEMode:
           begin
             warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
             warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
           end;
       end;
       UpdatewarSmallImg;
@@ -1147,10 +1151,10 @@ end;
 
 procedure TForm11.UpdatewarSmallImg;
 begin
-    image2.Canvas.Brush.Color :=CLWHITE;//$606060;
-    image2.Canvas.FillRect(image2.Canvas.ClipRect);
-    image3.Canvas.Brush.Color := CLWHITE;//$606060;
-    image3.Canvas.FillRect(image3.Canvas.ClipRect);
+    image2.Picture.Bitmap.Canvas.Brush.Color :=CLWHITE;//$606060;
+    image2.Picture.Bitmap.Canvas.FillRect(image2.Picture.Bitmap.Canvas.ClipRect);
+    image3.Picture.Bitmap.Canvas.Brush.Color := CLWHITE;//$606060;
+    image3.Picture.Bitmap.Canvas.FillRect(image3.Picture.Bitmap.Canvas.ClipRect);
     if (wartempx >= 0) and (wartempx < warmapfile.map[combobox1.ItemIndex].x) and (wartempy >=0) and (wartempy < warmapfile.map[combobox1.ItemIndex].y) then
     begin
       warsmallbmp.Canvas.Brush.Color := CLWHITE;//$606060;
@@ -1167,12 +1171,12 @@ begin
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].size >= 8) then
               begin
                 McoldrawRLE8(@wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].data[0],wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].size,@warsmallbmp, 0,0, false);
-                image2.Canvas.CopyRect(image2.Canvas.ClipRect,warsmallbmp.Canvas,image2.Canvas.ClipRect);
+                image2.Picture.Bitmap.Canvas.CopyRect(image2.Picture.Bitmap.Canvas.ClipRect,warsmallbmp.Canvas,image2.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image2.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1190,12 +1194,12 @@ begin
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].size >= 8) then
               begin
                 McoldrawRLE8(@wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].data[0],wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].size,@warsmallbmp, 0,0, false);
-                image3.Canvas.CopyRect(image3.Canvas.ClipRect,warsmallbmp.Canvas,image3.Canvas.ClipRect);
+                image3.Picture.Bitmap.Canvas.CopyRect(image3.Picture.Bitmap.Canvas.ClipRect,warsmallbmp.Canvas,image3.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
           IMZMode, PNGMode:
             begin
-              imzFile.DrawImztocanvas(image3.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2, 0, 0, 0);
+              imzFile.DrawImztocanvas(image3.Picture.Bitmap.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2, 0, 0, 0);
             end;
         end;
       end;
@@ -1224,12 +1228,12 @@ begin
         RLEMode:
           begin
             warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
             warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
           end;
       end;
   end;
@@ -1388,10 +1392,10 @@ begin
       end;
     end;
     if WarEditMode = RLEMode then
-      image1.Canvas.CopyRect(image1.ClientRect,warbufbmp.Canvas,warbufbmp.Canvas.ClipRect)
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,warbufbmp.Canvas,warbufbmp.Canvas.ClipRect)
     else
     begin
-      image1.Canvas.CopyRect(image1.ClientRect,warbufbmppng.Canvas,warbufbmppng.Canvas.ClipRect);
+      image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,warbufbmppng.Canvas,warbufbmppng.Canvas.ClipRect);
     end;
   end;
 end;
@@ -1817,6 +1821,7 @@ end;
 
 
 end.
+
 
 
 

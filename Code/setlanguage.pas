@@ -33,7 +33,7 @@ var
 
 implementation
 
-// {$R *.lfm}
+{$R *.lfm}
 
 procedure TForm8.Button1Click(Sender: TObject);
 var

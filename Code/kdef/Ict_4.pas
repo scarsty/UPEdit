@@ -30,7 +30,7 @@ implementation
 uses
   kdefedit;
 
-{$R *.dfm}
+{$R *.lfm}
 
 end.
 

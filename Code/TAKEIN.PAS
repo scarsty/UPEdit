@@ -108,7 +108,7 @@ function findwidth24pf(Pdata: Pbyte; width: integer; trancol: cardinal): integer
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 uses
   main, grpedit, grplist;
