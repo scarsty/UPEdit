@@ -1,4 +1,8 @@
-unit Redit;
+ï»¿unit Redit;
+
+{$modeswitch autoderef}
+
+{$codepage utf8}
 
 interface
 
@@ -6,7 +10,6 @@ uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, head, ExtCtrls, StdCtrls, inifiles, ComCtrls, comobj,
   {XLSFonts4, XLSReadWriteII4, SheetData4,} CheckLst, math,
-  System.IOUtils,
   // VCL.FlexCel.Core, FlexCel.XlsAdapter;
   xlsxio,
   SQLite3, SQLite3Wrap;
@@ -54,7 +57,7 @@ type
     procedure arrange;
 
     procedure ComboBox1Change(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
 
     procedure FormResize(Sender: TObject);
     procedure checklistbox1DblClick(Sender: TObject);
@@ -108,7 +111,7 @@ procedure addnewRdata(PRF: PRfile; CRType: integer; PRD: PRdata);
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 uses
   main, ReditForm;
@@ -213,18 +216,18 @@ var
   xls: plxw_workbook;
   sheet: plxw_worksheet;
 begin
-  SaveDialog1.Filter := 'excelÎÄ¼ş|*.xlsx';
+  SaveDialog1.Filter := 'Excelæ–‡ä»¶|*.xlsx';
   if SaveDialog1.Execute then
   begin
     // try
     filename := SaveDialog1.filename;
     if not SameText(ExtractFileExt(filename), '.xlsx') then
       filename := filename + '.xlsx';
-    xls := workbook_new(pansichar(UnicodeToMulti(pwidechar(filename), 65001)));
+    xls := workbook_new(pansichar(UnicodeToMulti(PWideChar(UnicodeString(filename)), 65001)));
 
     for i1 := 0 to RFile.typenumber - 1 do
     begin
-      sheet := workbook_add_worksheet(xls, pansichar(UnicodeToMulti(pwidechar(typename[i1]), 65001)));
+      sheet := workbook_add_worksheet(xls, pansichar(UnicodeToMulti(PWideChar(UnicodeString(typename[i1])), 65001)));
       temp := 0;
       if i1 = 0 then
       begin
@@ -241,11 +244,11 @@ begin
               begin
                 if i3 > 0 then
                 begin
-                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(pwidechar(displaystr(Rini[i1].Rterm[i2 + i4].name + inttostr(i3))), 65001)), nil);
+                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(Rini[i1].Rterm[i2 + i4].name + inttostr(i3)))), 65001)), nil);
                 end
                 else
                 begin
-                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(pwidechar(displaystr(Rini[i1].Rterm[i2 + i4].name)), 65001)), nil);
+                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(Rini[i1].Rterm[i2 + i4].name))), 65001)), nil);
                 end;
                 inc(temp);
               end;
@@ -260,7 +263,7 @@ begin
               begin
                 if RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datatype = 1 then
                 begin
-                  worksheet_write_string(sheet, temp, i2 + 1, pansichar(UnicodeToMulti(pwidechar(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])), 65001)), nil)
+                  worksheet_write_string(sheet, temp, i2 + 1, pansichar(UnicodeToMulti(PWideChar(UnicodeString(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]))), 65001)), nil)
                 end
                 else
                 begin
@@ -287,11 +290,11 @@ begin
               begin
                 if i3 > 0 then
                 begin
-                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(pwidechar(Rini[i1].Rterm[i2 + i4].name + inttostr(i3)), 65001)), nil)
+                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(Rini[i1].Rterm[i2 + i4].name + inttostr(i3))), 65001)), nil)
                 end
                 else
                 begin
-                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(pwidechar(Rini[i1].Rterm[i2 + i4].name), 65001)), nil);
+                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(Rini[i1].Rterm[i2 + i4].name)), 65001)), nil);
                 end;
                 inc(temp);
               end;
@@ -307,7 +310,7 @@ begin
               begin
                 if RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datatype = 1 then
                 begin
-                  worksheet_write_string(sheet, i2 + 1, temp, pansichar(UnicodeToMulti(pwidechar(displaystr(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]))),
+                  worksheet_write_string(sheet, i2 + 1, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])))),
                     65001)), nil)
                 end
                 else
@@ -323,9 +326,9 @@ begin
 
     workbook_close(xls);
 
-    showmessage('µ¼³öExcel³É¹¦£¡');
+    showmessage('å¯¼å‡º Excel æˆåŠŸã€‚');
     // except
-    // showmessage('µ¼³öExcel´íÎó£¡');
+    // showmessage('å¯¼å‡º Excel å¤±è´¥ã€‚');
     // exit;
     // end;
   end;
@@ -346,7 +349,7 @@ var
   ic, ir: integer;
 begin
 
-  OpenDialog1.Filter := 'excel±í¸ñÎÄ¼ş|*.xlsx';
+  OpenDialog1.Filter := 'Excelæ–‡ä»¶|*.xlsx';
   if OpenDialog1.Execute then
   begin
     // try
@@ -355,7 +358,7 @@ begin
     // XLSReadWriteII41.Filename := opendialog1.Filename;
     // XLSReadWriteII41.Read;
     // xls := TXlsFile.Create (opendialog1.Filename);
-    xls := xlsxioread_open(pansichar(UnicodeToMulti(pwidechar(OpenDialog1.filename), 936)));
+    xls := xlsxioread_open(pansichar(UnicodeToMulti(PWideChar(UnicodeString(OpenDialog1.filename)), 936)));
     RFile.typenumber := typenumber;
     for i1 := 0 to RFile.typenumber - 1 do
     begin
@@ -443,10 +446,10 @@ begin
     arrange;
     displayR;
     xlsxioread_close(xls);
-    showmessage('µ¼ÈëExcel³É¹¦£¡');
+    showmessage('å¯¼å…¥ Excel æˆåŠŸã€‚');
     // except on E: Exception
     // do
-    // showmessage('µ¼ÈëExcel´íÎó£¡' + E.ClassName+' error raised, with message : '+E.Message);
+    // showmessage('å¯¼å…¥ Excel å¤±è´¥ï¼š' + E.ClassName+' error raised, with message : '+E.Message);
     // exit;
     // end;
   end;
@@ -482,7 +485,7 @@ begin
       end;
       calnamepos(@RFile);
       ComboBox1.ItemIndex := 0;
-      showmessage('¶ÁÈ¡RÎÄ¼şÊ§°Ü£¡');
+      showmessage('è¯»å– R æ–‡ä»¶å¤±è´¥ã€‚');
       arrange;
       displayR;
     end;
@@ -500,7 +503,7 @@ procedure TForm5.Button3Click(Sender: TObject);
 var
   temp: integer;
 begin
-  if MessageBox(Self.Handle, 'ÊÇ·ñÌí¼ÓÏîµ½×îºó£¬ÒÔµ±Ç°ÖµÎªÈ±Ê¡Öµ£¿', 'Ìí¼ÓÏîµ½×îºó', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'æ˜¯å¦åœ¨æœ«å°¾æ–°å¢ä¸€é¡¹ï¼Œå¹¶ä»¥å½“å‰é¡¹çš„å€¼ä½œä¸ºç¼ºçœå€¼ï¼Ÿ', 'æ–°å¢é¡¹åˆ°æœ«å°¾', MB_OKCANCEL) = 1 then
   begin
     addnewRdata(@RFile, ComboBox1.ItemIndex, nil);
     if RFile.Rtype[ComboBox1.ItemIndex].datanum > 1 then
@@ -557,8 +560,8 @@ begin
               PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen);
           end;
           if PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen > 0 then
-            zeromemory(@PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].data[0],
-              PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen);
+            FillChar(PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].data[0],
+              PRF.Rtype[CRType].Rdata[PRF.Rtype[CRType].datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen, 0);
         end;
       end;
     end;
@@ -575,10 +578,10 @@ var
   arrg: boolean;
 begin
   if RFile.Rtype[ComboBox1.ItemIndex].datanum <= 1 then
-    showmessage('´æÔÚµÄÏîÄ¿ÊıÁ¿Ì«ÉÙ£¨Ğ¡ÓÚ1£©£¬Çë²»ÒªÉ¾³ı£¡')
+    showmessage('å½“å‰é¡¹ç›®æ•°é‡å¤ªå°‘ï¼Œå°‘äº 1 é¡¹ï¼Œè¯·ä¸è¦åˆ é™¤ã€‚')
   else
   begin
-    if MessageBox(Self.Handle, 'ÊÇ·ñÉ¾³ı×îºóÒ»Ïî£¿', 'É¾³ı×îºóÒ»Ïî', MB_OKCANCEL) = 1 then
+    if MessageBox(Self.Handle, 'æ˜¯å¦åˆ é™¤æœ€åä¸€é¡¹ï¼Ÿ', 'åˆ é™¤æœ€åä¸€é¡¹', MB_OKCANCEL) = 1 then
     begin
       temp := ComboBox2.ItemIndex;
       arrg := false;
@@ -600,14 +603,14 @@ var
   i1, i2, i3, i4, i5: integer;
   temp: integer;
 begin
-  if MessageBox(Self.Handle, 'µ¼³öExcelĞèÒª±¾»úÒÑ¾­°²×°Excel£¬²¢ÇÒµ¼³öÊ±¼ä½Ï³¤£¬¹ı³ÌÖĞÇë²»Òª½øĞĞ²Ù×÷¡£È·ÊµÒªµ¼³öÂğ£¿', 'µ¼³öExcel', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'å¯¼å‡º Excel éœ€è¦å·²å®‰è£… Excelï¼Œè¿‡ç¨‹å¯èƒ½è¾ƒæ…¢ï¼Œå¯¼å‡ºæœŸé—´è¯·ä¸è¦è¿›è¡Œå…¶ä»–æ“ä½œã€‚ç¡®å®è¦å¯¼å‡ºå—ï¼Ÿ', 'å¯¼å‡º Excel', MB_OKCANCEL) = 1 then
   begin
     ExcelApp := CreateOleObject('Excel.Application');
-    ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷';
+    ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å‡º Excel';
     ExcelApp.visible := true;
     ExcelApp.WorkBooks.Add;
-    // ExcelApp.WorkSheets[2].name := 'ÎïÆ·';
-    // ExcelApp.Cells[1,4].Value := 'µÚÒ»ĞĞµÚËÄÁĞ';
+    // ExcelApp.WorkSheets[2].name := 'ç‰©å“';
+    // ExcelApp.Cells[1,4].Value := 'ç¬¬ä¸€è¡Œçš„æ ‡é¢˜';
 
     for i1 := integer(ExcelApp.workSheets.count) to RFile.typenumber - 1 do
     begin
@@ -622,7 +625,7 @@ begin
       temp := 1;
       if i1 = 0 then
       begin
-        ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ')';
+        ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å‡º Excel(' + displaystr(typename[i1]) + ')';
         for i2 := 0 to typedataitem[i1] - 1 do
           if Rini[i1].Rterm[i2].datanum > 0 then
             for i3 := 0 to Rini[i1].Rterm[i2].datanum - 1 do
@@ -639,7 +642,7 @@ begin
 
         for i2 := 0 to RFile.Rtype[i1].datanum - 1 do
         begin
-          ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
+          ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å‡º Excel(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
           temp := 1;
           for i3 := 0 to RFile.Rtype[i1].Rdata[i2].num - 1 do
             for i4 := 0 to RFile.Rtype[i1].Rdata[i2].Rdataline[i3].len - 1 do
@@ -652,7 +655,7 @@ begin
       end
       else
       begin
-        ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ')';
+        ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å‡º Excel(' + displaystr(typename[i1]) + ')';
         for i2 := 0 to typedataitem[i1] - 1 do
           if Rini[i1].Rterm[i2].datanum > 0 then
             for i3 := 0 to Rini[i1].Rterm[i2].datanum - 1 do
@@ -668,7 +671,7 @@ begin
               end;
         for i2 := 0 to RFile.Rtype[i1].datanum - 1 do
         begin
-          ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
+          ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å‡º Excel(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
           temp := 1;
           for i3 := 0 to RFile.Rtype[i1].Rdata[i2].num - 1 do
             for i4 := 0 to RFile.Rtype[i1].Rdata[i2].Rdataline[i3].len - 1 do
@@ -680,10 +683,10 @@ begin
         end;
       end;
     end;
-    ExcelApp.Caption := 'UPeditµ¼³öExcelÍê³É£¡';
+    ExcelApp.Caption := 'UPedit å¯¼å‡º Excel å®Œæˆ';
     ExcelApp := Unassigned;
     SetForegroundWindow(application.Handle);
-    showmessage('µ¼³öExcelÍê³É£¡Çëµ½Excel³ÌĞòÖĞ±£´æÎÄ¼ş£¡');
+    showmessage('å¯¼å‡º Excel å®Œæˆï¼Œè¯·åˆ° Excel ä¸­å¦å­˜æ–‡ä»¶ã€‚');
   end;
 end;
 
@@ -693,25 +696,25 @@ var
   i1, i2, i3, i4, i5: integer;
   temp, temp2: integer;
 begin
-  if MessageBox(Self.Handle, 'µ¼ÈëExcelĞèÒª±¾»úÒÑ¾­°²×°Excel£¬²¢ÇÒµ¼ÈëÊ±¼ä½Ï³¤£¬¹ı³ÌÖĞÇë²»Òª½øĞĞ²Ù×÷¡£È·ÊµÒªµ¼ÈëÂğ£¿', 'µ¼ÈëExcel', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'å¯¼å…¥ Excel éœ€è¦å·²å®‰è£… Excelï¼Œè¿‡ç¨‹å¯èƒ½è¾ƒæ…¢ï¼Œå¯¼å…¥æœŸé—´è¯·ä¸è¦è¿›è¡Œå…¶ä»–æ“ä½œã€‚ç¡®å®è¦å¯¼å…¥å—ï¼Ÿ', 'å¯¼å…¥ Excel', MB_OKCANCEL) = 1 then
   begin
-    OpenDialog1.Filter := 'excel±í¸ñÎÄ¼ş|*.xls;*.xlsx';
+    OpenDialog1.Filter := 'Excelæ–‡ä»¶|*.xls;*.xlsx';
     if OpenDialog1.Execute then
     begin
       ExcelApp := CreateOleObject('Excel.Application');
-      ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷';
+      ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å…¥ Excel';
       ExcelApp.visible := true;
       // ExcelApp.WorkBooks.Add;
       ExcelApp.WorkBooks.Open(OpenDialog1.filename);
 
-      // ExcelApp.WorkSheets[2].name := 'ÎïÆ·';
-      // ExcelApp.Cells[1,4].Value := 'µÚÒ»ĞĞµÚËÄÁĞ';
+      // ExcelApp.WorkSheets[2].name := 'ç‰©å“';
+      // ExcelApp.Cells[1,4].Value := 'ç¬¬ä¸€è¡Œçš„æ ‡é¢˜';
       RFile.typenumber := typenumber;
       for i1 := 0 to RFile.typenumber - 1 do
       begin
         // ExcelApp.WorkSheets[i1 + 1].name := typename[i1];
         // ExcelApp.workSheets[i1 + 1].activate;
-        ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ')';
+        ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å…¥ Excel(' + displaystr(typename[i1]) + ')';
         if i1 = 0 then
         begin
 
@@ -734,7 +737,7 @@ begin
           // setlength(Rfile.Rtype[i1].Rdata, RFile.Rtype[i1].datanum);
           for i2 := 0 to RFile.Rtype[i1].datanum - 1 do
           begin
-            ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
+            ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å…¥ Excel(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
             // temp := 0;
             // for i3 := 0 to typedataitem[i1] - 1 do
             // if Rini[i1].Rterm[i3].datanum > 0 then
@@ -805,7 +808,7 @@ begin
 
           for i2 := 0 to RFile.Rtype[i1].datanum - 1 do
           begin
-            ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷ÖĞ(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
+            ExcelApp.Caption := 'UPedit æ­£åœ¨å¯¼å…¥ Excel(' + displaystr(typename[i1]) + ':' + inttostr(i2 + 1) + '/' + inttostr(RFile.Rtype[i1].datanum) + ')';
 
             // temp2 := 0;
             // for i3 := 0 to typedataitem[i1] - 1 do
@@ -861,7 +864,7 @@ begin
         end;
 
       end;
-      ExcelApp.Caption := 'UPeditµ¼ÈëExcelÍê³É£¡';
+      ExcelApp.Caption := 'UPedit å¯¼å…¥ Excel å®Œæˆ';
       ExcelApp := Unassigned;
       calnamepos(@RFile);
       ComboBox1.Clear;
@@ -872,7 +875,7 @@ begin
       displayR;
       // excelApp.Quit;
       SetForegroundWindow(application.Handle);
-      showmessage('µ¼ÈëExcelÍê³É£¡');
+      showmessage('å¯¼å…¥ Excel å®Œæˆã€‚');
     end;
   end;
 end;
@@ -919,11 +922,11 @@ begin
     displayR;
 end;
 
-procedure TForm5.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm5.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   setlength(RFile.Rtype, 0);
   CForm5 := true;
-  Action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure TForm5.FormCreate(Sender: TObject);
@@ -979,26 +982,26 @@ begin
         [Rselect[CheckListBox1.ItemIndex].pos3].datatype = 0 then
         WriteRDataInt(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray[Rselect[CheckListBox1.ItemIndex].pos2].dataarray
           [Rselect[CheckListBox1.ItemIndex].pos3],
-          strtoint64(InputBox('ĞŞ¸Ä', 'ĞŞ¸Ä´ËÏîÊıÖµ', inttostr(ReadRDataInt(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray
+          strtoint64(InputBox('ä¿®æ”¹', 'ä¿®æ”¹å½“å‰æ•°å€¼', inttostr(ReadRDataInt(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray
           [Rselect[CheckListBox1.ItemIndex].pos2].dataarray[Rselect[CheckListBox1.ItemIndex].pos3])))))
       else
       begin
         WriteRDataStr(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray[Rselect[CheckListBox1.ItemIndex].pos2].dataarray
           [Rselect[CheckListBox1.ItemIndex].pos3],
-          displaybackstr(InputBox('ĞŞ¸Ä', 'ĞŞ¸Ä´ËÏî×Ö·û´®', displaystr(readRDatastr(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray
+          displaybackstr(InputBox('ä¿®æ”¹', 'ä¿®æ”¹å½“å‰å­—ç¬¦ä¸²', displaystr(readRDatastr(@RFile.Rtype[ComboBox1.ItemIndex].Rdata[ComboBox2.ItemIndex].Rdataline[Rselect[CheckListBox1.ItemIndex].pos1].Rarray
           [Rselect[CheckListBox1.ItemIndex].pos2].dataarray[Rselect[CheckListBox1.ItemIndex].pos3])))));
         // showmessage(inttostr(length(tempstr)));
         // Setlength(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str, RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 2);
         // RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str := tempstr;
         // Setlength(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str, RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 2);
-        // copymemory(pointer(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str))
+        // Move(pointer(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str))
         // if sizeof(tempstr) < RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen then
-        // zeromemory((pbyte(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str) + sizeof(tempstr)), RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen - sizeof(tempstr));
-        // zeromemory((pbyte(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str) + RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen), 2);
+        // FillByte((pbyte(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str) + sizeof(tempstr)), RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen - sizeof(tempstr));
+        // FillByte((pbyte(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str) + RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen), 2);
 
         // showmessage(inttostr(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen));
         // fillchar(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str, RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 2, #0);
-        // RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str := writeinstr(displaybackstr(InputBox('ĞŞ¸Ä','ĞŞ¸Ä´ËÏî×Ö·û´®', displaystr(readoutstr(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str)))));
+        // RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str := writeinstr(displaybackstr(InputBox('ä¿®æ”¹', 'ä¿®æ”¹å½“å‰ä½ç½®å­—ç¬¦ä¸²', displaystr(readoutstr(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str)))));
         // Setlength(RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str, RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 2);
         // RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str[RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 1] := #0;
         // RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].str[RFile.Rtype[combobox1.ItemIndex].Rdata[combobox2.ItemIndex].Rdataline[Rselect[checklistbox1.ItemIndex].pos1].Rarray[Rselect[checklistbox1.ItemIndex].pos2].dataarray[Rselect[checklistbox1.ItemIndex].pos3].datalen + 2] := #0;
@@ -1039,7 +1042,7 @@ var
   Size, F, temp, templen: integer;
 begin
   result := false;
-  if grp.EndsWith('.db') then
+  if SameText(ExtractFileExt(grp), '.db') then
   begin
     result := readDB(grp, PRF);
     exit;
@@ -1157,7 +1160,7 @@ begin
   begin
     nameLower := lowercase(Rini[0].Rterm[i2].name);
     if (Rini[0].Rterm[i2].datanum > 0) and (Rini[0].Rterm[i2].incnum > 1) and (Rini[0].Rterm[i2].quote = 2) and
-      ((pos('ÎïÆ·', Rini[0].Rterm[i2].name) > 0) or (pos('item', nameLower) > 0)) then
+      ((pos('ç‰©å“', Rini[0].Rterm[i2].name) > 0) or (pos('item', nameLower) > 0)) then
     begin
       candidateIdx := i2;
       break;
@@ -1236,13 +1239,13 @@ begin
     i1 := 0;
     while Stmt.Step = SQLITE_ROW do
     begin
-      tname := Stmt.ColumnText(0); // ±íµÄÃû×Ö
+      tname := Stmt.ColumnText(0); // è¡¨åå­—æ®µ
       tname := typename[i1];
       if tname = 'bindata' then
         continue;
       typename[i1] := tname;
       typedataitem[i1] := term_num;
-      // ±í½á¹¹
+      // è¯»å–ç»“æ„
       stmt_struct := DB.Prepare('PRAGMA table_info(' + tname + ')');
       term_num := getRows(stmt_struct);
       setlength(Rini[i1].Rterm, term_num);
@@ -1302,12 +1305,12 @@ begin
       end;
       stmt_struct.Free;
 
-      // ¶ÁÈ¡Êı¾İ
+      // è¯»å–ç»“æ„
       stmt_data := DB.Prepare('select * from ' + tname);
 
       PRF.Rtype[i1].namepos := -1;
       templen := getRows(stmt_data);
-      // Êı¾İĞĞÊı
+      // åˆå§‹åŒ–æ•°æ®
       for i2 := 0 to templen - 1 do
       begin
         addnewRdata(PRF, i1, nil);
@@ -1571,8 +1574,8 @@ begin
 
       if tempstr <> '' then
       begin
-        strnum := ExtractStrings([' '], [], pwidechar(tempstr), strlist);
-        strnum1 := ExtractStrings([' '], [], pwidechar(iniF.ReadString('R_Modify', 'TypeNameName', '')), strlist1);
+        strnum := ExtractStrings([' '], [], PChar(AnsiString(tempstr)), strlist);
+        strnum1 := ExtractStrings([' '], [], PChar(AnsiString(iniF.ReadString('R_Modify', 'TypeNameName', ''))), strlist1);
         for i1 := 0 to strnum - 1 do
         begin
           typename[i1] := strlist.strings[i1];
@@ -1597,7 +1600,7 @@ begin
             tempstr := iniF.ReadString('R_Modify', 'data(' + inttostr(i1) + ',' + inttostr(i2) + ')', '');
             if tempstr <> '' then
             begin
-              strnum := ExtractStrings([' '], [], pwidechar(tempstr), strlist);
+              strnum := ExtractStrings([' '], [], PChar(AnsiString(tempstr)), strlist);
               if strnum = 8 then
               begin
                 with Rini[i1].Rterm[i2] do
@@ -1623,7 +1626,7 @@ begin
     end;
     iniF.Free;
   except
-    // showmessage('¶ÁÈ¡iniÎÄ¼ş´íÎó£¡');
+    // showmessage('è¯»å– ini æ–‡ä»¶é”™è¯¯');
     exit;
   end;
 end;
@@ -1650,7 +1653,7 @@ begin
         setlength(dest.Rdataline[i1].Rarray[i2].dataarray[i3].data, dest.Rdataline[i1].Rarray[i2].dataarray[i3].datalen);
         // dest.Rdataline[i1].Rarray[i2].dataarray[i3].str := source.Rdataline[i1].Rarray[i2].dataarray[i3].str;
         if dest.Rdataline[i1].Rarray[i2].dataarray[i3].datalen > 0 then
-          copymemory(@dest.Rdataline[i1].Rarray[i2].dataarray[i3].data[0], @source.Rdataline[i1].Rarray[i2].dataarray[i3].data[0], dest.Rdataline[i1].Rarray[i2].dataarray[i3].datalen);
+          Move(source.Rdataline[i1].Rarray[i2].dataarray[i3].data[0], dest.Rdataline[i1].Rarray[i2].dataarray[i3].data[0], dest.Rdataline[i1].Rarray[i2].dataarray[i3].datalen);
       end;
     end;
   end;
@@ -1683,7 +1686,7 @@ var
   offset: array of integer;
   F: integer;
 begin
-  if grp.EndsWith('.db') then
+  if SameText(ExtractFileExt(grp), '.db') then
   begin
     saveDB(grp, PRF);
     exit;
@@ -1780,7 +1783,7 @@ begin
                     1:
                       value_str := MultiToUnicode(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], 950);
                     2:
-                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]); // Õâ¸ö¹À¼Æ²»¶Ô£¬µ«ËÆºõÓÃ²»ÉÏ
+                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]); // å®½å­—ç¬¦ç¼–ç æµ‹è¯•ï¼Œç¹ä½“ä¼¼ä¹ä¹Ÿå¯ç”¨
                   else
                     value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
                   end;
@@ -1816,3 +1819,10 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+

@@ -1,10 +1,14 @@
-unit FightFrameForm;
+﻿unit FightFrameForm;
+
+{$modeswitch autoderef}
+
+{$H+}
 
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
-  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls;
+  Windows, Messages, SysUtils, Variants, Classes, Graphics,
+  Controls, Forms, Dialogs, StdCtrls;
 
 type
   TFightFrameForm = class(TForm)
@@ -35,7 +39,7 @@ var
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TFightFrameForm.Button1Click(Sender: TObject);
 var
@@ -103,3 +107,6 @@ begin
 end;
 
 end.
+
+
+

@@ -1,16 +1,18 @@
-unit opendisplay;
+ï»¿unit opendisplay;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, {jpeg,} pngimage, math;
+  Dialogs, ExtCtrls, StdCtrls, math;
 
 type
   TFlashForm = class(TForm)
     Timer1: TTimer;
     procedure FormCreate(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure PNGForm_FromGraphic(AGraphic : TGraphic);
     procedure SetFormAlpha(alpha: byte);
     procedure FormClick(Sender: TObject);
@@ -37,7 +39,11 @@ var
   FlashFormHeight, FlashFormWidth: integer;
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
+
+function UpdateLayeredWindow(hwnd: HWND; hdcDst: HDC; pptDst: PPoint; psize: PSize;
+  hdcSrc: HDC; pptSrc: PPoint; crKey: COLORREF; pblend: PBlendFunction;
+  dwFlags: DWORD): BOOL; stdcall; external 'user32' name 'UpdateLayeredWindow';
 
 procedure TFlashForm.FormClick(Sender: TObject);
 begin
@@ -45,12 +51,13 @@ begin
     close;
 end;
 
-procedure TFlashForm.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TFlashForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   //opendisbmp.Free;
   alreadyopen := true;
-  Flashbmp.Free();
-  action := cafree;
+  if Assigned(Flashbmp) then
+    Flashbmp.Free;
+  CloseAction := cafree;
 end;
 
 procedure TFlashForm.FormCreate(Sender: TObject);
@@ -58,19 +65,28 @@ var
   {JPG: TJPeGimage;
   rs: Tresourcestream;
   tempdisbmp: Tbitmap; }
-  wic : TWICImage;
+  Pic: TPicture;
   r : TResourceStream;
 begin
   if alreadyopen then
     FlashForm.Position := poMainFormCenter;
   isShowModal := false;
   r := TResourceStream.Create(HInstance, 'PNGimage_1', RT_RCDATA);
-  wic := TWICImage.Create;
-  wic.LoadFromStream(r);
-  FlashFormHeight := wic.Height;
-  FlashFormWidth := wic.Width;
-  PNGForm_FromGraphic(wic);
-  wic.Free;
+  Pic := TPicture.Create;
+  try
+    try
+      Pic.LoadFromStream(r);
+      FlashFormHeight := Pic.Height;
+      FlashFormWidth := Pic.Width;
+      if Assigned(Pic.Graphic) then
+        PNGForm_FromGraphic(Pic.Graphic);
+    except
+      FlashFormHeight := 200;
+      FlashFormWidth := 320;
+    end;
+  finally
+    Pic.Free;
+  end;
   r.Free;
 
   {JPG := TJPeGimage.create;
@@ -83,7 +99,7 @@ begin
   //opendisbmp.Canvas.s
   self.Canvas.Brush.Style := bsclear;
   self.Canvas.Font.Color := clblack;
-  self.Canvas.Font.Name := 'ËÎÌå';
+  self.Canvas.Font.Name := 'ï¿½ï¿½ï¿½ï¿½';
   self.Canvas.Font.Size := 16;
   processint:= 0;
   opendisbmp.Width := self.Width;
@@ -92,7 +108,7 @@ begin
   //image1.Canvas.StretchDraw(image1.Canvas.ClipRect, opendisbmp);
   //self.Canvas.CopyRect(self.Canvas.ClipRect,opendisbmp.Canvas,opendisbmp.Canvas.ClipRect);
   //image1.Canvas.Font.Color := Random($FFFFFF);
-  self.Canvas.TextOut(0, 0, '³ÌÐòÔØÈëÖÐ...');
+  self.Canvas.TextOut(0, 0, 'ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½...');
   self.Refresh;
   JPG.Free;
   tempdisbmp.Free;}
@@ -109,7 +125,7 @@ begin
 
   BlendFunction.BlendOp := AC_SRC_OVER;
   BlendFunction.BlendFlags := 0;
-  BlendFunction.SourceConstantAlpha := 1; // Í¸Ã÷¶È
+  BlendFunction.SourceConstantAlpha := 1; // Í¸ï¿½ï¿½ï¿½ï¿½
   BlendFunction.AlphaFormat := AC_SRC_ALPHA;
 
   SetWindowLong(Self.Handle, GWL_EXSTYLE, GetWindowLong(Self.Handle,
@@ -131,7 +147,7 @@ begin
   //
   ptDst := Point(Self.Left, Self.Top);
   ptSrc := Point(0, 0);
-  BlendFunction.SourceConstantAlpha := alpha; // Í¸Ã÷¶È
+  BlendFunction.SourceConstantAlpha := alpha; // Í¸ï¿½ï¿½ï¿½ï¿½
   UpdateLayeredWindow(Self.Handle,
      Self.Canvas.Handle,
      @ptDst,
@@ -162,3 +178,11 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+

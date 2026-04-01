@@ -1,10 +1,12 @@
-unit grplist;
+ï»¿unit grplist;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, head, Menus, FileCtrl, PNGimage, about,inifiles, math;
+  Dialogs, ExtCtrls, StdCtrls, head, Menus, FileCtrl, about,inifiles, math;
 
 type
 
@@ -69,7 +71,7 @@ type
     //function judgeWH: Trect;
     procedure display;
     procedure ScrollBar2Change(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; X,
       Y: Integer);
     procedure Image1MouseUp(Sender: TObject; Button: TMouseButton;
@@ -148,7 +150,7 @@ procedure DataDrawRLE8(Ppic: Pbyte; len: integer; PBMP: Pbmpdata; dx, dy: intege
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 uses
   main, takein, grpedit, outputPNG;
@@ -306,9 +308,9 @@ var
   //tempstr:string;
   ini: Tinifile;
 begin
-  {//canvasµÄÑÕÉ«Ë³ÐòÊÇBGR,¶øÓÎÏ·ÖÐË³ÐòÊÇRGB
+  {//canvasï¿½ï¿½ï¿½ï¿½É«Ë³ï¿½ï¿½ï¿½ï¿½BGR,ï¿½ï¿½ï¿½ï¿½Ï·ï¿½ï¿½Ë³ï¿½ï¿½ï¿½ï¿½RGB
   tempcol1 := (GRPlistBackGround and $FF0000) shr 16 + GRPlistBackGround and $FF00 + (GRPlistBackGround and $FF) shl 16;
-  tempstr := inputbox('×Ô¶¨ÒåÑÕÉ«','ÇëÒÔÊ®Áù½øÖÆ·½Ê½ÊäÈë£¨RGB£©',Format('%x',[tempcol1]));
+  tempstr := inputbox('ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½É«','ï¿½ï¿½ï¿½ï¿½Ê®ï¿½ï¿½ï¿½ï¿½ï¿½Æ·ï¿½Ê½ï¿½ï¿½ï¿½ë£¨RGBï¿½ï¿½',Format('%x',[tempcol1]));
   if strtoint('$' + tempstr) <> tempcol1 then
   begin
     tempcol1 := strtoint('$' + tempstr);
@@ -345,9 +347,9 @@ var
   //tempstr:string;
   ini: Tinifile;
 begin
-{  //canvasµÄÑÕÉ«Ë³ÐòÊÇBGR,¶øÓÎÏ·ÖÐË³ÐòÊÇRGB
+{  //canvasï¿½ï¿½ï¿½ï¿½É«Ë³ï¿½ï¿½ï¿½ï¿½BGR,ï¿½ï¿½ï¿½ï¿½Ï·ï¿½ï¿½Ë³ï¿½ï¿½ï¿½ï¿½RGB
   tempcol1 := (GRPlistTextCol and $FF0000) shr 16 + GRPlistTextCol and $FF00 + (GRPlistTextCol and $FF) shl 16;
-  tempstr := inputbox('×Ô¶¨ÒåÑÕÉ«','ÇëÒÔÊ®Áù½øÖÆ·½Ê½ÊäÈë£¨RGB£©',Format('%x',[tempcol1]));
+  tempstr := inputbox('ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½É«','ï¿½ï¿½ï¿½ï¿½Ê®ï¿½ï¿½ï¿½ï¿½ï¿½Æ·ï¿½Ê½ï¿½ï¿½ï¿½ë£¨RGBï¿½ï¿½',Format('%x',[tempcol1]));
   if strtoint('$' + tempstr) <> tempcol1 then
   begin
     tempcol1 := strtoint('$' + tempstr);
@@ -439,7 +441,7 @@ begin
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
     image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
     scrollbar2.max := 0;
-    showmessage('idx»ògrpÎÄ¼þ²»´æÔÚ£¡');
+    showmessage('idxï¿½ï¿½grpï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú£ï¿½');
     exit;
   end;
   idx := fileopen(edit1.Text, fmopenread);
@@ -455,7 +457,7 @@ begin
     bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
     image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    showmessage('idxÎÄ¼þ´íÎó£¡');
+    showmessage('idxï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½');
     exit;
   end;
 
@@ -495,14 +497,14 @@ begin
     bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
     bufbmp2.Canvas.CopyRect(bufbmp2.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
     image1.Canvas.CopyRect(image1.Canvas.ClipRect,bufbmp.Canvas,bufbmp.Canvas.ClipRect);
-    showmessage('grpÎÄ¼þ´íÎó£¡');
+    showmessage('grpï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½');
 
     fileclose(grp);
     fileclose(idx);
     exit;
   end;
   combobox2.Clear;
-  combobox2.Items.Add('È«²¿');
+  combobox2.Items.Add('È«ï¿½ï¿½');
   combobox2.ItemIndex := 0;
   beginpic := 0;
   endpic := filenum - 1;
@@ -527,7 +529,7 @@ begin
   try
     display;
   except
-    showmessage('´íÎó£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½');
     exit;
   end;
   Form3initial := true;
@@ -592,7 +594,7 @@ begin
   display;
 end;
 
-procedure TForm3.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm3.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   filenum := 0;
   copynum := -1;
@@ -603,7 +605,7 @@ begin
   bufbmp2.Free;
   bufbmp3.Free;
   Form3initial := false;
-  action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure TForm3.FormCreate(Sender: TObject);
@@ -670,7 +672,7 @@ begin
   bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
   bufbmp.Canvas.Font.Color := GRPlisttextcol;//clyellow;
   bufbmp.Canvas.Font.Size := 10;
-  bufbmp.Canvas.Font.Name := 'ËÎÌå';
+  bufbmp.Canvas.Font.Name := 'ï¿½ï¿½ï¿½ï¿½';
   bufbmp.Canvas.Brush.Style := bsclear;
 
   bufbmp2 := Tbitmap.Create;
@@ -859,7 +861,7 @@ begin
   tempgrpbmp.Canvas.CopyRect(tempgrpbmp.Canvas.ClipRect, PBMP.Canvas, PBMP.Canvas.ClipRect);
   setlength(tempcolor, tempgrpbmp.Height, tempgrpbmp.Width * 3);
   for I := 0 to tempgrpbmp.Height - 1 do
-    copymemory(@tempcolor[I][0],tempgrpbmp.ScanLine[I],tempgrpbmp.Width * 3);   }
+    Move(@tempcolor[I][0],tempgrpbmp.ScanLine[I],tempgrpbmp.Width * 3);   }
 
   if len >8 then
   begin
@@ -906,7 +908,7 @@ begin
           //tempcolor[iy + dy][ix * 3] := GB[temp];
           //tempcolor[iy + dy][ix * 3 + 1] := GG[temp];
           //tempcolor[iy + dy][ix * 3 + 2] := GR[temp];
-          PBMP.canvas.Pixels[ix, iy + dy] := (GB[temp] shl 16) or (GG[temp] shl 8) or GR[temp];
+          PBMP.Canvas.Pixels[ix, iy + dy] := (GB[temp] shl 16) or (GG[temp] shl 8) or GR[temp];
         //end;
         dec(state);
         inc(ix);
@@ -968,12 +970,12 @@ begin
   begin
     if Radiogroup1.ItemIndex = 0 then
     begin
-    tempslt := messagebox(self.Handle,'´ËÍ¼Æ¬ÎªPNG¸ñÊ½£¬ÊÇ·ñÏë´æÎªRLE8¸ñÊ½£¿Ñ¡Ôñ¡°ÊÇ¡±±£´æÎªRLE8¸ñÊ½£»Ñ¡Ôñ¡°·ñ¡±ÓÃÒ»¸öPNGÌæ»»£»Ñ¡Ôñ¡°È¡Ïû¡±½áÊøµ±Ç°²Ù×÷¡£','ÌáÊ¾', MB_YESNOCANCEL);
+    tempslt := messagebox(self.Handle,'ï¿½ï¿½Í¼Æ¬ÎªPNGï¿½ï¿½Ê½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ÎªRLE8ï¿½ï¿½Ê½ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½Ç¡ï¿½ï¿½ï¿½ï¿½ï¿½ÎªRLE8ï¿½ï¿½Ê½ï¿½ï¿½Ñ¡ï¿½ñ¡°·ï¿½ï¿½ï¿½Ò»ï¿½ï¿½PNGï¿½æ»»ï¿½ï¿½Ñ¡ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½','ï¿½ï¿½Ê¾', MB_YESNOCANCEL);
     if tempslt = IDNo then
     begin
       opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
       tempstr := opendialog1.Title;
-      opendialog1.Title := 'Ñ¡ÔñÒ»¸öPNGÍ¼Æ¬Ìæ»»µ±Ç°';
+      opendialog1.Title := 'Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½PNGÍ¼Æ¬ï¿½æ»»ï¿½ï¿½Ç°';
       if opendialog1.Execute then
       begin
         tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1015,7 +1017,7 @@ begin
     begin
       opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
       tempstr := opendialog1.Title;
-      opendialog1.Title := 'Ñ¡ÔñÒ»¸öPNGÍ¼Æ¬Ìæ»»µ±Ç°';
+      opendialog1.Title := 'Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½PNGÍ¼Æ¬ï¿½æ»»ï¿½ï¿½Ç°';
       if opendialog1.Execute then
       begin
         tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1084,12 +1086,12 @@ begin
   collen := 256;//grpcollen;
   for I := 0 to 255 do
   begin
-    copymemory(@TEMPR[0],@R[0],256);
-    copymemory(@TEMPB[0],@B[0],256);
-    copymemory(@TEMPG[0],@G[0],256);
-    copymemory(@R[0],@GR[0],256);
-    copymemory(@B[0],@GB[0],256);
-    copymemory(@G[0],@GG[0],256);
+    Move(R[0], TEMPR[0], 256);
+    Move(B[0], TEMPB[0], 256);
+    Move(G[0], TEMPG[0], 256);
+    Move(GR[0], R[0], 256);
+    Move(GB[0], B[0], 256);
+    Move(GG[0], G[0], 256);
   end;
 
   Form2.Initial;
@@ -1115,7 +1117,7 @@ var
 begin
   temppic := movelock;
   if filenum = 1 then
-    showmessage('Ö»Ê£Ò»ÕÅÍ¼Æ¬£¬²»¿ÉÒÔÉ¾³ý')
+    showmessage('Ö»Ê£Ò»ï¿½ï¿½Í¼Æ¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¾ï¿½ï¿½')
   else if temppic = filenum - 1 then
   begin
     dec(filenum);
@@ -1170,8 +1172,8 @@ begin
   Pinteger(@tempdata[1])^ := GRPpic[temppic].size;
   if GRPpic[temppic].size > 0 then
   begin
-    copymemory(@Tempdata[5], @GRPpic[temppic].data[0], GRPpic[temppic].size);
-    copymemory(@grplistcopydata[0], @GRPpic[temppic].data[0], GRPpic[temppic].size);
+    Move(GRPpic[temppic].data[0], Tempdata[5], GRPpic[temppic].size);
+    Move(GRPpic[temppic].data[0], grplistcopydata[0], GRPpic[temppic].size);
   end;
   temphandle := 0;
   tempquit := true;
@@ -1180,7 +1182,7 @@ begin
   tempbuf.dwData := GRPpic[temppic].size + 5;
   tempbuf.cbData := GRPpic[temppic].size + 5;
   tempbuf.lpData := tempchar;
-  copymemory(tempchar,@tempdata[0], GRPpic[temppic].size + 5);
+  Move(tempchar^, tempdata[0], GRPpic[temppic].size + 5);
   while (tempquit) do
   begin
     FormH := 0;
@@ -1211,7 +1213,7 @@ begin
   GRPpic[temppic].size := length(grplistcopydata);
   setlength(GRPpic[temppic].data, GRPpic[temppic].size);
   if GRPpic[temppic].size > 0 then
-    copymemory(@GRPpic[temppic].data[0], @grplistcopydata[0], GRPpic[temppic].size);
+    Move(grplistcopydata[0], GRPpic[temppic].data[0], GRPpic[temppic].size);
   temppic := -1;
   display;
 end;
@@ -1314,7 +1316,7 @@ procedure TForm3.PNG1Click(Sender: TObject);
   Pdat:Pbytearray;
 begin
   //
-  if SelectDirectory('Ñ¡Ôñ±£´æÎÄ¼þ¼Ð',dir,Dir) then
+  if SelectDirectory('Ñ¡ï¿½ñ±£´ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½',dir,Dir) then
   begin
     if dir[length(dir)] <> '\' then
       dir :=dir + '\';
@@ -1343,7 +1345,7 @@ begin
         PNGrs.Free;
       end;
     end;
-    showmessage('±£´æ³É¹¦');
+    showmessage('ï¿½ï¿½ï¿½ï¿½É¹ï¿½');
   end;}
 
 begin
@@ -1361,7 +1363,7 @@ begin
   temppic := movelock;
   opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
   tempstr := opendialog1.Title;
-  opendialog1.Title := 'Ñ¡ÔñÒ»¸öPNGÍ¼Æ¬Ìæ»»µ±Ç°';
+  opendialog1.Title := 'Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½PNGÍ¼Æ¬ï¿½æ»»ï¿½ï¿½Ç°';
   if opendialog1.Execute then
   begin
     tempslt := fileopen(opendialog1.FileName, fmopenread);
@@ -1387,7 +1389,7 @@ begin
   temppic := movelock;
   opendialog1.Filter := 'PNG files (*.Png)|*.Png|All files (*.*)|*.*';
   tempstr := opendialog1.Title;
-  opendialog1.Title := 'Ñ¡ÔñÒ»¸öPNGÍ¼Æ¬Ìæ»»µ±Ç°';
+  opendialog1.Title := 'Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½PNGÍ¼Æ¬ï¿½æ»»ï¿½ï¿½Ç°';
   if opendialog1.Execute then
   begin
     try
@@ -1402,11 +1404,11 @@ begin
       B[I] := GB[I];
       G[I] := GG[I];
       {opymemory(@TEMPR[0],@R[0],256);
-      copymemory(@TEMPB[0],@B[0],256);
-      copymemory(@TEMPG[0],@G[0],256);
-      copymemory(@R[0],@GR[0],256);
-      copymemory(@B[0],@GB[0],256);
-      copymemory(@G[0],@GG[0],256); }
+      Move(@B[0], @TEMPB[0],256);
+      Move(@G[0], @TEMPG[0],256);
+      Move(@GR[0], @R[0],256);
+      Move(@GB[0], @B[0],256);
+      Move(@GG[0], @G[0],256); }
     end;
     tempslt := fileopen(opendialog1.FileName, fmopenread);
     grppic[temppic].size := fileseek(tempslt,0,2);
@@ -1492,7 +1494,7 @@ begin
   bufbmp.Canvas.FillRect(bufbmp.Canvas.ClipRect);
   bufbmp.Canvas.Font.Color := GRPListTextCol;//clyellow;
   bufbmp.Canvas.Font.Size := 10;
-  bufbmp.Canvas.Font.Name := 'ËÎÌå';
+  bufbmp.Canvas.Font.Name := 'ï¿½ï¿½ï¿½ï¿½';
 
 
   iy := 0;
@@ -1535,10 +1537,10 @@ begin
           tempbmpdata.width := bufbmp3.Width;
           setlength(tempbmpdata.data, tempbmpdata.height, tempbmpdata.width * 3);
           for i2 := 0 to bufbmp3.Height - 1 do
-            copymemory(@tempbmpdata.data[i2][0], bufbmp3.ScanLine[i2], tempbmpdata.width * 3);
+            Move(bufbmp3.ScanLine[i2]^, tempbmpdata.data[i2][0], tempbmpdata.width * 3);
           DatadrawRLE8(@(grppic[I].data[0]), grppic[I].size, @tempbmpdata, 0, 0, false);
           for i2 := 0 to bufbmp3.Height - 1 do
-            copymemory(bufbmp3.ScanLine[i2], @tempbmpdata.data[i2][0], tempbmpdata.width * 3);
+            Move(tempbmpdata.data[i2][0], bufbmp3.ScanLine[i2]^, tempbmpdata.width * 3);
           if (temph <= grplistsquareh - grplisttitleh) and (tempw <= grplistsquarew) then
           begin
             hd := temph;
@@ -1627,7 +1629,7 @@ procedure copyGRP(AFrom, Ato:integer);
 begin
   GRPpic[ATo].size := GRPpic[AFrom].size;
   setlength(GRPpic[ATo].data, GRPpic[ATo].size);
-  CopyMemory(@GRPpic[ATo].data[0] ,@GRPpic[AFrom].data[0], GRPpic[AFrom].size);
+  Move(GRPpic[AFrom].data[0], GRPpic[ATo].data[0], GRPpic[AFrom].size);
 end;
 
 procedure MEMdrawRLE8(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
@@ -1685,11 +1687,11 @@ begin
         try
           if iy + dy < PBMP.Height then
           begin
-            Pbuf := Pbmp.ScanLine[iy + dy];
+            Pbuf := PBMP.ScanLine[iy + dy];
             if ix + state - 2 < PBMP.Width then
-              copymemory((Pbuf + ix), (Ppic + I), state - 2)
+              Move((Ppic + I)^, (Pbuf + ix)^, state - 2)
             else if ix < PBMP.Width then
-              copymemory((Pbuf + ix), (Ppic + I), PBMP.Width - ix);
+              Move((Ppic + I)^, (Pbuf + ix)^, PBMP.Width - ix);
           end;
         except
           //showmessage('cuowu');
@@ -1744,8 +1746,8 @@ begin
     dx := dx - xs;
   end;
 
-  //ÔÚÆÁÄ»Íâ
-  if (dx > Pbmp.width) or (dx + pw < 0) or (dy > Pbmp.height) or (dy + ph < 0) then
+  //ï¿½ï¿½ï¿½ï¿½Ä»ï¿½ï¿½
+  if (dx > PBMP.width) or (dx + pw < 0) or (dy > PBMP.height) or (dy + ph < 0) then
     exit;
 
   for iy := 0 to ph - 1 do
@@ -1778,26 +1780,26 @@ begin
           //PBMP.canvas.Pixels[ix, iy + dy] := (GB[temp] shl 16) or (GG[temp] shl 8) or GR[temp];
           if PBMP.pixelperbit = pf24bit then
           begin
-            if (iy + dy >= 0) and (iy + dy <PBMP.height) and (ix >= 0) and (ix <PBMP.width) then
+            if (iy + dy >= 0) and (iy + dy < PBMP.height) and (ix >= 0) and (ix < PBMP.width) then
             begin
-              PBmp.data[iy + dy][ix * 3] := GB[temp];
-              PBmp.data[iy + dy][ix * 3 + 1] := GG[temp];
-              PBmp.data[iy + dy][ix * 3 + 2] := GR[temp];
+              PBMP.data[iy + dy][ix * 3] := GB[temp];
+              PBMP.data[iy + dy][ix * 3 + 1] := GG[temp];
+              PBMP.data[iy + dy][ix * 3 + 2] := GR[temp];
             end;
           end
           else if PBMP.pixelperbit = pf8bit then
           begin
-            if (iy + dy >= 0) and (iy + dy <PBMP.height) and (ix >= 0) and (ix <PBMP.width) then
-              PBmp.data[iy + dy][ix] := temp;
+            if (iy + dy >= 0) and (iy + dy < PBMP.height) and (ix >= 0) and (ix < PBMP.width) then
+              PBMP.data[iy + dy][ix] := temp;
           end
-          else if PBMP.pixelperbit = pf32bit then
+          else if PBMP.pixelperbit = pf4bit then
           begin
-            if (iy + dy >= 0) and (iy + dy <PBMP.height) and (ix >= 0) and (ix <PBMP.width) then
+            if (iy + dy >= 0) and (iy + dy < PBMP.height) and (ix >= 0) and (ix < PBMP.width) then
             begin
-              PBmp.data[iy + dy][ix * 4 ] := GB[temp];
-              PBmp.data[iy + dy][ix * 4 + 1] := GG[temp];
-              PBmp.data[iy + dy][ix * 4 + 2 ] := GR[temp];
-              PBmp.data[iy + dy][ix * 4 + 3 ] := 0;
+              PBMP.data[iy + dy][ix * 4 ] := GB[temp];
+              PBMP.data[iy + dy][ix * 4 + 1] := GG[temp];
+              PBMP.data[iy + dy][ix * 4 + 2 ] := GR[temp];
+              PBMP.data[iy + dy][ix * 4 + 3 ] := 0;
             end;
           end;
 
@@ -1815,3 +1817,14 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+
+
+
+

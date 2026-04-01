@@ -1,14 +1,36 @@
-unit MAIN;
+ï»¿unit MAIN;
+
+{$modeswitch autoderef}
+
+{$codepage utf8}
+
+{$H+}
 
 interface
 
-uses SysUtils, Windows, Classes, Graphics, Controls, Menus,
+uses SysUtils, Windows, ShellAPI, Classes, Graphics, Controls, Menus,
   StdCtrls, Dialogs, Buttons, Messages, ExtCtrls, ComCtrls, StdActns,
   ActnList, ToolWin, ImgList, FileCtrl, inifiles, head, IdBaseComponent,
-  IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, OleCtrls, SHDocVw, shellapi,
-  AppEvnts, IdAntiFreezeBase, IdAntiFreeze, math, pngimage, Forms;
+  IdComponent, IdTCPConnection, IdTCPClient, IdHTTP, OleCtrls, SHDocVw,
+  AppEvnts, IdAntiFreezeBase, IdAntiFreeze, math, Forms;
 
 type
+  {$IFDEF FPC}
+  PCopyDataStruct = ^TCopyDataStruct;
+  TCopyDataStruct = packed record
+    dwData: PtrUInt;
+    cbData: LongInt;
+    lpData: Pointer;
+  end;
+
+  TWmCopyData = packed record
+    Msg: Cardinal;
+    MsgFiller: Cardinal;
+    From: HWND;
+    CopyDataStruct: PCopyDataStruct;
+    Result: LRESULT;
+  end;
+  {$ENDIF}
 
   TMyThead = class(TThread)
   private
@@ -105,7 +127,7 @@ type
     procedure N17Click(Sender: TObject);
     procedure N18Click(Sender: TObject);
     procedure N19Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure newthread;
     procedure BitBtn1Click(Sender: TObject);
     procedure N20Click(Sender: TObject);
@@ -174,7 +196,7 @@ var
   topcolumn: Boolean = true;
   leftcolumn: Boolean = true;
 
-  // ²à±ßÀ¸
+  // ï¿½ï¿½ï¿½ï¿½ï¿½
   // m_bNewWindow: boolean = false;
   // mainwebshow: boolean = false;
 
@@ -186,13 +208,13 @@ var
 
 implementation
 
-{$R *.dfm}
+{$R *.lfm}
 
 uses Replicatedlist, takein, about, grplist, picedit, Redit, setlanguage, KDEFedit,
   warEdit, Update, warmapedit, sencemapedit, Mainmapedit, CYhead, TxtLeadin, FileRelation,
   Imagez, PNGimport;
 
-procedure TUPeditMainForm.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TUPeditMainForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   {
     if downloadupdate then
@@ -201,12 +223,12 @@ begin
     Rewrite(DBat);
     Writeln(DBat,'@echo off');
     Writeln(DBat,'TASKKILL /F /IM /T '+ParamStr(0));
-    Writeln(DBat,'del '+ParamStr(0)); //Ð´ÈëÉ¾³ýÖ÷³ÌÐòµÄÃüÁî
+    Writeln(DBat,'del '+ParamStr(0)); //Ð´ï¿½ï¿½É¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     Writeln(DBat,'copy   UPedit.exe.tmp   UPedit.exe');
     Writeln(DBat,'del UPedit.exe.tmp');
     // Writeln(DBat,'start "" "' + ParamStr(0)+'"');
 
-    Writeln(DBat,'del %0'); //É¾³ýBATÎÄ¼þ×ÔÉí
+    Writeln(DBat,'del %0'); //É¾ï¿½ï¿½BATï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
     Writeln(DBat,'exit');
     CloseFile(DBat);
     application.Terminate;
@@ -231,7 +253,7 @@ var
   // tempForm: ^TForm;
   FormImz: TImzForm;
   Form91: TForm91;
-  form1: TForm1;
+  PicForm: TForm1;
   Form3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
@@ -248,7 +270,7 @@ begin
     setlength(grplistcopydata, copynum);
     if copynum > 0 then
     begin
-      copymemory(@grplistcopydata[0], (Pbyte(t.CopyDataStruct.lpData) + 5), copynum);
+      Move((Pbyte(t.CopyDataStruct.lpData) + 5)^, grplistcopydata[0], copynum);
     end;
   end
   else if (length(tempstr) > 4) and (AnsiChar(tempstr[1]) = 'I') and (AnsiChar(tempstr[2]) = 'M') and (AnsiChar(tempstr[3]) = 'Z') and (byte(tempstr[4]) = 255) then
@@ -276,7 +298,7 @@ begin
               inc(i3, 4);
               setlength(FormImz.imzcopypng.framedata[i2].data, FormImz.imzcopypng.framelen[i2]);
               if FormImz.imzcopypng.framelen[i2] > 0 then
-                copymemory(@FormImz.imzcopypng.framedata[i2].data[0], (tempdata + i3), FormImz.imzcopypng.framelen[i2]);
+                Move((tempdata + i3)^, FormImz.imzcopypng.framedata[i2].data[0], FormImz.imzcopypng.framelen[i2]);
               inc(i3, FormImz.imzcopypng.framelen[i2]);
             end;
           except
@@ -403,15 +425,15 @@ begin
         end;
       end
       else if SameText(ExtractFileExt(FileName), '.png') or SameText(ExtractFileExt(FileName), '.jpg') or SameText(ExtractFileExt(FileName), '.bmp') or SameText(ExtractFileExt(FileName), '.gif') or
-        SameText(ExtractFileExt(FileName), '.jpeg') then
+        SameText(ExtractFileExt(FileName), '.{$IFDEF DELPHI}jpeg{$ENDIF}') then
       begin
         if CForm1 then
         begin
           CForm1 := false;
-          form1 := TForm1.Create(application);
-          MdiChildHandle[2] := form1.Handle;
+          PicForm := TForm1.Create(application);
+          MdiChildHandle[2] := PicForm.Handle;
           picname := FileName;
-          form1.picdisplay;
+          PicForm.picdisplay;
         end
         else
         begin
@@ -419,10 +441,10 @@ begin
             if self.MDIChildren[i].Handle = MdiChildHandle[2] then
             begin
               self.MDIChildren[i].Show;
-              form1 := TForm1(self.MDIChildren[i]);
+              PicForm := TForm1(self.MDIChildren[i]);
               // Form1 :=PForm1(tempform)^;
               picname := FileName;
-              form1.picdisplay;
+              PicForm.picdisplay;
               Break;
             end;
         end;
@@ -460,7 +482,7 @@ procedure TUPeditMainForm.FormCreate(Sender: TObject);
 begin
   TrayIcon1.Hint := titlestr;
   TrayIcon1.Icon := Forms.application.Icon;
-  Forms.application.OnMessage := self.AppOnMessage;
+  // Lazarus compatibility: skip Delphi-style Application.OnMessage assignment.
   // Application.OnMessage:=OnAppMessage;
   self.Caption := titlestr + ' - ' + gamepath;
   WebBrowser1.Cursor := fmcursor;
@@ -468,7 +490,7 @@ begin
   N21.Checked := leftcolumn;
   Panel1.Visible := topcolumn;
   Panel2.Visible := leftcolumn;
-  DragAcceptFiles(self.Handle, true);
+  // DragAcceptFiles is omitted in Lazarus compatibility build.
 end;
 
 procedure AppInitial;
@@ -482,15 +504,13 @@ var
   Mnu: HMenu;
 begin
   titlestr := titlestr + FileVersion(ParamStr(0));
-  Mnu := GetSystemMenu(application.Handle, false);
-  AppendMenu(Mnu, MF_SEPARATOR, 0, nil);
-  AppendMenu(Mnu, MF_STRING, WM_ABOUT, pchar('¹ØÓÚ...'));
+  // Custom system menu integration is omitted in Lazarus compatibility build.
 
   try
     if paramcount > 0 then
     begin
       FileName := ParamStr(1);
-      if FileName.EndsWith('.ini') then
+      if SameText(ExtractFileExt(FileName), '.ini') then
       begin
         StartPath := ExtractFilePath(FileName);
         iniFilename := ExtractFileName(FileName);
@@ -583,7 +603,7 @@ begin
         tempstr := ini.ReadString('file', 'file' + inttostr(i), '');
         strlist.Clear;
         // wtempstr := @tempstr;
-        strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+        strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
         if strnum = 3 then
         begin
           grplistidx[i] := strlist.Strings[0];
@@ -592,7 +612,7 @@ begin
         end;
         tempstr := ini.ReadString('file', 'Section' + inttostr(i), '');
         strlist.Clear;
-        strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+        strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
         if ((strnum div 3) > 0) and (strnum mod 3 = 0) then
         begin
           grplistSection[i].num := strnum div 3;
@@ -621,7 +641,7 @@ begin
     tempstr := ini.ReadString('file', 'MMAPStruct', '');
     if tempstr <> '' then
     begin
-      strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if strnum = 5 then
       begin
         Mearth := strlist.Strings[0];
@@ -635,7 +655,7 @@ begin
     tempstr := ini.ReadString('file', 'RIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       temp := Rfilenum;
       if Rfilenum > 0 then
       begin
@@ -648,7 +668,7 @@ begin
     tempstr := ini.ReadString('file', 'RGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -662,7 +682,7 @@ begin
     tempstr := ini.ReadString('file', 'SIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -676,7 +696,7 @@ begin
     tempstr := ini.ReadString('file', 'SGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -690,7 +710,7 @@ begin
     tempstr := ini.ReadString('file', 'DIDX', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -704,7 +724,7 @@ begin
     tempstr := ini.ReadString('file', 'DGRP', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -718,7 +738,7 @@ begin
     tempstr := ini.ReadString('file', 'RecordNote', '');
     if tempstr <> '' then
     begin
-      Rfilenum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+      Rfilenum := ExtractStrings([','], [], PChar(tempstr), strlist);
       if temp > Rfilenum then
         temp := Rfilenum;
       if Rfilenum > 0 then
@@ -733,7 +753,7 @@ begin
     fightgrpnum := ini.Readinteger('file', 'fightnum', 0);
     strlist.Clear;
     tempstr := ini.ReadString('file', 'fightname', '');
-    strnum := ExtractStrings([','], [], Pwidechar(tempstr), strlist);
+    strnum := ExtractStrings([','], [], PChar(tempstr), strlist);
     if strnum = 3 then
     begin
       fightidx := strlist.Strings[0];
@@ -745,14 +765,14 @@ begin
     Readini; // Rini
     readwini;
     readDini;
-    read50memory; // 50Ö¸ÁîÄÚ´æ±í
+    read50memory; // 50Ö¸ï¿½ï¿½ï¿½Ú´ï¿½ï¿½
     readMcol;
     readw(gamepath + wardata, @useW);
     if readR(gamepath + Ridxfilename[0], gamepath + Rfilename[0], @useR) then
       calnamepos(@useR);
 
   except
-    showmessage('¶ÁÈ¡iniÎÄ¼þÊ§°Ü');
+    showmessage('ï¿½ï¿½È¡iniï¿½Ä¼ï¿½Ê§ï¿½ï¿½');
   end;
 
 end;
@@ -763,7 +783,7 @@ begin
   self.Hide;
   self.WindowState := wsMinimized;
   mainhide := true;
-  ShowWindow(Forms.application.Handle, SW_HIDE);
+  // ShowWindow is omitted in Lazarus compatibility build.
   // application.Terminate;
 end;
 
@@ -775,7 +795,7 @@ procedure TUPeditMainForm.FormResize(Sender: TObject);
   formbmp: Tbitmap;
   bmpdata: array of array of byte; }
 begin
-  // Self.Constraints.MaxHeight := Screen.WorkAreaHeight;//²»µ²×¡ÈÎÎñÀ¸
+  // Self.Constraints.MaxHeight := Screen.WorkAreaHeight;//ï¿½ï¿½ï¿½ï¿½×¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
   Panel2.Width := 250;
   if (self.Width - 250) > 300 then
     Label2.Width := self.Width - 250
@@ -798,7 +818,7 @@ begin
     setlength(bmpdata, formbmp.Height, formbmp.Width * 4);
     for iy := 0 to formbmp.Height - 1 do
     begin
-    Zeromemory(@bmpdata[iy][0], formbmp.Width shl 2);
+    FillByte(@bmpdata[iy][0], formbmp.Width shl 2);
     yparam := iy / formbmp.Height;
     for ix := 0 to formbmp.Width - 1 do
     begin
@@ -810,7 +830,7 @@ begin
     bmpdata[iy][ix shl 2 + 1] := gparam;
     bmpdata[iy][ix shl 2 + 2] := rparam;
     end;
-    copymemory(formbmp.ScanLine[iy], @bmpdata[iy][0], formbmp.Width shl 2);
+    Move(formbmp.ScanLine[iy], @bmpdata[iy][0], formbmp.Width shl 2);
 
     end;
     Image1.Canvas.Draw(0, 0, formbmp);
@@ -1070,14 +1090,14 @@ end;
 
 procedure TUPeditMainForm.N1Click(Sender: TObject);
 var
-  form1: TForm1;
+  PicForm: TForm1;
   i: integer;
 begin
   if CForm1 then
   begin
     CForm1 := false;
-    form1 := TForm1.Create(application);
-    MdiChildHandle[2] := form1.Handle;
+    PicForm := TForm1.Create(application);
+    MdiChildHandle[2] := PicForm.Handle;
   end
   else
   begin
@@ -1193,13 +1213,13 @@ var
   dir: string;
   ini: Tinifile;
   FileName: string;
-  outdir: TArray<string>;
+  outdir: string;
 begin
   N28.Enabled := false;
 
-  if SelectDirectory(gamepath, outdir) then
+  if SelectDirectory('Ñ¡ï¿½ï¿½ï¿½ï¿½Ï·Ä¿Â¼', gamepath, outdir) then
   begin
-    gamepath := outdir[0];
+    gamepath := outdir;
     if gamepath[length(gamepath)] <> '\' then
       gamepath := gamepath + '\';
 
@@ -1456,17 +1476,17 @@ end;
 procedure TUPeditMainForm.WebBrowser2BeforeNavigate2(ASender: TObject; const pDisp: IDispatch; var URL, Flags, TargetFrameName, PostData, Headers: OleVariant; var Cancel: WordBool);
 begin
   Cancel := true;
-  ShellExecute(Forms.application.Handle, nil, Pwidechar(widestring(URL)), nil, nil, SW_SHOWNORMAL);
+  ShellExecute(Forms.application.Handle, nil, PChar(UTF8Encode(WideString(URL))), nil, nil, SW_SHOWNORMAL);
 end;
 
 procedure TUPeditMainForm.AppOnMessage(var Msg: tagMSG; var Handled: Boolean);
 var
-  // FileName: String;
-  FileName: array [0 .. 255] of char;
+  FileName: string;
+  FileNameBuffer: array [0 .. MAX_PATH] of char;
   num, i: integer;
   FormImz: TImzForm;
   Form91: TForm91;
-  form1: TForm1;
+  PicForm: TForm1;
   Form3: TForm3;
   Form4: TForm4;
   tempstr: Ansistring;
@@ -1498,7 +1518,8 @@ begin
         num := DragQueryFile(Msg.wParam, $FFFFFFFF, nil, 0);
         if num > 0 then
         begin
-          DragQueryFile(Msg.wParam, 0, FileName, 255);
+          DragQueryFile(Msg.wParam, 0, FileNameBuffer, Length(FileNameBuffer));
+          FileName := StrPas(FileNameBuffer);
           if fileexists(FileName) then
           begin
             if SameText(ExtractFileExt(FileName), '.pic') then
@@ -1611,15 +1632,15 @@ begin
               end;
             end
             else if SameText(ExtractFileExt(FileName), '.png') or SameText(ExtractFileExt(FileName), '.jpg') or SameText(ExtractFileExt(FileName), '.bmp') or SameText(ExtractFileExt(FileName), '.gif')
-              or SameText(ExtractFileExt(FileName), '.jpeg') then
+              or SameText(ExtractFileExt(FileName), '.{$IFDEF DELPHI}jpeg{$ENDIF}') then
             begin
               if CForm1 then
               begin
                 CForm1 := false;
-                form1 := TForm1.Create(application);
-                MdiChildHandle[2] := form1.Handle;
+                PicForm := TForm1.Create(application);
+                MdiChildHandle[2] := PicForm.Handle;
                 picname := FileName;
-                form1.picdisplay;
+                PicForm.picdisplay;
               end
               else
               begin
@@ -1627,10 +1648,10 @@ begin
                   if self.MDIChildren[i].Handle = MdiChildHandle[2] then
                   begin
                     self.MDIChildren[i].Show;
-                    form1 := TForm1(self.MDIChildren[i]);
+                    PicForm := TForm1(self.MDIChildren[i]);
                     // Form1 :=PForm1(tempform)^;
                     picname := FileName;
-                    form1.picdisplay;
+                    PicForm.picdisplay;
                     Break;
                   end;
               end;
@@ -1661,6 +1682,7 @@ begin
             end;
           end;
         end;
+        DragFinish(Msg.wParam);
       end;
   end;
 end;
@@ -1739,7 +1761,7 @@ var
   temprs: TStringStream;
 begin
   freeonterminate := true;
-  synchronize(UPcheckUpdate);
+  UPcheckUpdate;
   MainForm.IdHTTP1 := TIdHTTP.Create(nil);
   temprs := TStringStream.Create;
   temprs.Clear;
@@ -1757,8 +1779,8 @@ begin
   anoce := MultiToUnicode(temprs.Memory, 936);
   // anoce := temprs.ToString;
   // displayanoce;
-  synchronize(displayanoce);
-  synchronize(setwebbrowser);
+  displayanoce;
+  setwebbrowser;
 
   if checkupdate = 0 then
   begin
@@ -1767,7 +1789,7 @@ begin
   end;
   temprs.Clear;
   temprs.Position := 0;
-  // showmessage('http´´½¨³É¹¦³É¹¦');
+  // showmessage('httpï¿½ï¿½ï¿½ï¿½ï¿½É¹ï¿½ï¿½É¹ï¿½');
   { try
     mainForm.idhttp1.Get('http://www.upwinded.com/upedit/upversion.txt', temprs);
     except
@@ -1776,7 +1798,7 @@ begin
     Synchronize(checkupdatefail);
     exit;
     end; }
-  // showmessage('µÃµ½°æ±¾ºÅ³É¹¦');
+  // showmessage('ï¿½Ãµï¿½ï¿½æ±¾ï¿½Å³É¹ï¿½');
   temprs.Position := 0;
   MYMD5 := hashmyself;
   newVersionMD5 := temprs.ReadString(length(MYMD5));
@@ -1789,12 +1811,12 @@ end;
 
 procedure checkupdatefail;
 begin
-  showmessage('×Ô¶¯¼ì²â¸üÐÂÊ§°Ü£¡Èç²»Ðè×Ô¶¯¼ì²â£¬ÇëÔÚ¡°ÉèÖÃÐÞ¸ÄÆ÷ÅäÖÃ¡±´¦È¡Ïû¡£');
+  showmessage('ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ç²»ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½â£¬ï¿½ï¿½ï¿½Ú¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Þ¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¡ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½');
 end;
 
 procedure ifupdate;
 begin
-  if (MessageBox(application.Handle, 'Ö÷³ÌÐòÓÐÐÂ°æ±¾£¡ÏÖÔÚÒª¸üÐÂÂð£¿', '¼ì²âµ½¸üÐÂ', MB_OKCancel) = 1) then
+  if MessageDlg('ï¿½ï¿½âµ½ï¿½ï¿½ï¿½Â°æ±¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½', mtConfirmation, [mbOK, mbCancel], 0) = mrOK then
   begin
     displayupdate;
   end;
@@ -1812,7 +1834,7 @@ end;
 
 procedure UPcheckUpdate;
 begin
-  // showmessage('hash³É¹¦');
+  // showmessage('hashï¿½É¹ï¿½');
 end;
 
 procedure displayanoce;
@@ -1845,3 +1867,13 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+
+
+

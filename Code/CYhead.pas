@@ -1,10 +1,12 @@
-unit CYhead;
+ï»¿unit CYhead;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, head, PNGimage;
+  Dialogs, ExtCtrls, StdCtrls, head;
 
 type
   TForm89 = class(TForm)
@@ -32,7 +34,7 @@ type
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure drawPNG(num: integer);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure Button5Click(Sender: TObject);
     procedure Button6Click(Sender: TObject);
     procedure Button7Click(Sender: TObject);
@@ -63,7 +65,7 @@ implementation
 uses
   main, CYheadoutput;
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TForm89.Button10Click(Sender: TObject);
 begin
@@ -116,7 +118,7 @@ begin
   end;
   fileclose(Fgrp);
   CYheadNownum := 1;
-  label3.Caption := 'µ±Ç°±àºÅ£º' + inttostr(CYheadNownum) +'/' + inttostr(CYheadnum);
+  label3.Caption := 'å½“å‰åºå·ï¼š' + inttostr(CYheadNownum) + '/' + inttostr(CYheadnum);
   drawPNG(CYheadNownum - 1);
 end;
 
@@ -136,9 +138,9 @@ begin
   end;
   fileclose(Fidx);
   fileclose(Fgrp);
-  showmessage('±£´æ³É¹¦£¡');
+  showmessage('ä¿å­˜æˆåŠŸï¼');
   except
-    showmessage('±£´æ³ö´í£¡');
+    showmessage('ä¿å­˜å¤±è´¥ï¼');
   end;
 end;
 
@@ -150,7 +152,7 @@ begin
       dec(CYheadNOwnum)
     else
       CYheadNownum := 1;
-    label3.Caption := 'µ±Ç°±àºÅ£º' + inttostr(CYheadNownum) +'/' + inttostr(CYheadnum);
+    label3.Caption := 'å½“å‰åºå·ï¼š' + inttostr(CYheadNownum) + '/' + inttostr(CYheadnum);
     drawPNG(CYheadNownum - 1);
   end;
 end;
@@ -163,7 +165,7 @@ begin
       inc(CYheadNOwnum)
     else
       CYheadNownum := CYheadNum;
-    label3.Caption := 'µ±Ç°±àºÅ£º' + inttostr(CYheadNownum) +'/' + inttostr(CYheadnum);
+    label3.Caption := 'å½“å‰åºå·ï¼š' + inttostr(CYheadNownum) + '/' + inttostr(CYheadnum);
     drawPNG(CYheadNownum - 1);
   end;
 end;
@@ -194,7 +196,7 @@ begin
     inc(CYheadNOwnum, 10);
     if CYheadNownum > CYheadNum then
       CYheadNownum := CYheadNum;
-    label3.Caption := 'µ±Ç°±àºÅ£º' + inttostr(CYheadNownum) +'/' + inttostr(CYheadnum);
+    label3.Caption := 'å½“å‰åºå·ï¼š' + inttostr(CYheadNownum) + '/' + inttostr(CYheadnum);
     drawPNG(CYheadNownum - 1);
   end;
 end;
@@ -206,7 +208,7 @@ begin
     dec(CYheadNOwnum, 10);
     if CYheadNownum < 1 then
       CYheadNownum := 1;
-    label3.Caption := 'µ±Ç°±àºÅ£º' + inttostr(CYheadNownum) +'/' + inttostr(CYheadnum);
+    label3.Caption := 'å½“å‰åºå·ï¼š' + inttostr(CYheadNownum) + '/' + inttostr(CYheadnum);
     drawPNG(CYheadNownum - 1);
   end;
 end;
@@ -238,7 +240,7 @@ begin
     PNGrs.Free;
     image1.Refresh;
     except
-      showmessage('´ò¿ªPNGÍ¼Æ¬³ö´íÁË£¡');
+      showmessage('è¯»å– PNG å›¾ç‰‡å¤±è´¥ï¼');
       PNGrs.Free;
       rs.Free;
     end;
@@ -255,7 +257,7 @@ begin
     image1.Canvas.CopyRect(tempCYbmp.Canvas.ClipRect, tempCYbmp.Canvas, tempCYbmp.Canvas.ClipRect);
     tempCYbmp.Free;
     except
-      showmessage('´ò¿ªRLE8Í¼Æ¬Ê§°ÜÁË£¡');
+      showmessage('è¯»å– RLE8 å›¾ç‰‡å¤±è´¥ï¼');
      tempCYbmp.Free;
      rs.Free;
     end;
@@ -264,12 +266,12 @@ begin
 
 end;
 
-procedure TForm89.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm89.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   CYheadnum := 0;
   setlength(CYheadgrp, CYheadnum);
   CForm89 := true;
-  action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure TForm89.FormResize(Sender: TObject);
@@ -341,5 +343,14 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+
+
 
 

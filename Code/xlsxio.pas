@@ -1,4 +1,6 @@
-unit xlsxio;
+﻿unit xlsxio;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -58,3 +60,5 @@ implementation
 
 
 end.
+
+

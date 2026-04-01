@@ -1,4 +1,6 @@
-unit Replicatedlist;
+﻿unit Replicatedlist;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -47,7 +49,7 @@ type
     procedure Edit2Change(Sender: TObject);
     procedure Edit3Change(Sender: TObject);
     procedure Button1Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
   private
     { Private declarations }
   public
@@ -70,7 +72,7 @@ implementation
 uses
   main, Redit;
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TForm86.Button1Click(Sender: TObject);
 var
@@ -157,10 +159,10 @@ begin
   end;
 end;
 
-procedure TForm86.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm86.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   CForm86 := true;
-  action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure TForm86.FormCreate(Sender: TObject);
@@ -271,3 +273,7 @@ begin
 end;
 
 end.
+
+
+
+

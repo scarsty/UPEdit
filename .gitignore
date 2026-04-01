@@ -16,3 +16,7 @@ Code/kdef/__history
 *.bat
 *.zip
 Code/__recovery
+*.o
+*.ppu
+*.bak
+Code/backup

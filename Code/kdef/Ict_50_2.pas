@@ -1,4 +1,6 @@
-unit Ict_50_2;
+﻿unit Ict_50_2;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -34,3 +36,6 @@ implementation
 {$R *.dfm}
 
 end.
+
+
+

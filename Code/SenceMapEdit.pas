@@ -1,10 +1,12 @@
-unit SenceMapEdit;
+ï»¿unit SenceMapEdit;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs,head, iniFiles, ExtCtrls, ComCtrls, StdCtrls,math, Spin, ImzObject, ImageZ, PNGimage;
+  Dialogs,head, iniFiles, ExtCtrls, ComCtrls, StdCtrls,math, Spin, ImzObject, ImageZ;
 
 type
 
@@ -21,7 +23,7 @@ type
     GroupBox1: TGroupBox;
     Label15: TLabel;
     Label16: TLabel;
-    µ±Ç°¿ÕÖÐ: TLabel;
+    LabelCurrent: TLabel;
     Label17: TLabel;
     Button3: TButton;
     Button4: TButton;
@@ -93,7 +95,7 @@ type
     ExportSkyCheckBox: TCheckBox;
     ExportEventCheckBox: TCheckBox;
     ExportImageButton: TButton;
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure Image1DragDrop(Sender, Source: TObject; X, Y: Integer);
     procedure Image1DragOver(Sender, Source: TObject; X, Y: Integer;
@@ -161,7 +163,7 @@ procedure copyscenemapevent(source,destination:Pmapevent);
 var
   TileScale: integer = 1;
 
-  undoAmount: integer = 10; //Ä¬ÈÏ³·Ïú´ÎÊý
+  undoAmount: integer = 10; //Ä¬ï¿½Ï³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
   undotimes : integer = 0;
   undoSavetimes: integer = 1;
 
@@ -196,7 +198,7 @@ var
   scenelock :boolean= true;
   needupdate : boolean;
 
-  highselect: boolean = false; //ÅúÁ¿º£°ÎÉèÖÃÑ¡ÔñÇøÓò
+  highselect: boolean = false; //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
   highendx: integer = -1;
   highendy: integer = -1;
   eventpictime: integer = 0;
@@ -206,7 +208,11 @@ implementation
 uses
    main,grplist,kdefedit;
 
-{$R *.dfm}
+// {$R *.lfm}
+
+type
+  PByteLine = ^TByteLine;
+  TByteLine = array[0..65535] of Byte;
 
 function ClampTileScale(Value: integer): integer;
 begin
@@ -262,8 +268,8 @@ procedure SaveBitmapAsTransparentPng(Source: TBitmap; const FileName: string);
 var
   PNG: TPNGObject;
   XIndex, YIndex: integer;
-  AlphaData: PByteArray;
-  PixelData: array of byte;
+  AlphaData: PByteLine;
+  PixelData: array of Byte;
 begin
   PNG := TPNGObject.Create;
   try
@@ -272,11 +278,11 @@ begin
     SetLength(PixelData, Source.Width * 3);
     for YIndex := 0 to Source.Height - 1 do
   begin
-      CopyMemory(@PixelData[0], Source.ScanLine[YIndex], Source.Width * 3);
-      AlphaData := PNG.AlphaScanline[YIndex];
+      Move(Source.ScanLine[YIndex]^, PixelData[0], Source.Width * 3);
+      AlphaData := PByteLine(PNG.AlphaScanline[YIndex]);
       for XIndex := 0 to Source.Width - 1 do
         if PixelData[XIndex * 3] shl 16 + PixelData[XIndex * 3 + 1] shl 8 + PixelData[XIndex * 3 + 2] = usualtrans then
-          AlphaData[XIndex] := 0;
+          AlphaData^[XIndex] := 0;
     end;
     PNG.SaveToFile(FileName);
   finally
@@ -287,7 +293,7 @@ end;
 procedure ReplaceBitmapColor(Target: TBitmap; OldColor, NewColor: Cardinal);
 var
   XIndex, YIndex: integer;
-  PixelData: PByteArray;
+  PixelData: PByteLine;
   OldBlue, OldGreen, OldRed: byte;
   NewBlue, NewGreen, NewRed: byte;
 begin
@@ -299,13 +305,13 @@ begin
   NewRed := NewColor and $FF;
   for YIndex := 0 to Target.Height - 1 do
   begin
-    PixelData := Target.ScanLine[YIndex];
+    PixelData := PByteLine(Target.ScanLine[YIndex]);
     for XIndex := 0 to Target.Width - 1 do
-      if (PixelData[XIndex * 3] = OldBlue) and (PixelData[XIndex * 3 + 1] = OldGreen) and (PixelData[XIndex * 3 + 2] = OldRed) then
+      if (PixelData^[XIndex * 3] = OldBlue) and (PixelData^[XIndex * 3 + 1] = OldGreen) and (PixelData^[XIndex * 3 + 2] = OldRed) then
       begin
-        PixelData[XIndex * 3] := NewBlue;
-        PixelData[XIndex * 3 + 1] := NewGreen;
-        PixelData[XIndex * 3 + 2] := NewRed;
+        PixelData^[XIndex * 3] := NewBlue;
+        PixelData^[XIndex * 3 + 1] := NewGreen;
+        PixelData^[XIndex * 3 + 2] := NewRed;
       end;
   end;
 end;
@@ -497,7 +503,7 @@ begin
   end;
 end;
 
-procedure TForm12.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm12.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   setlength(scenegrp, 0);
   scenemapfile.num := 0;
@@ -510,7 +516,7 @@ begin
   sceneopbmp.Free;
   scenebufbmp.Free;
   CForm12 := true;
-  action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure readDini;
@@ -612,7 +618,7 @@ begin
     scenesmallbmp.Palette := ScenePalle;}
     if not (readscenegrp(gamepath + Smapidx, gamepath + smapgrp) = 1) then
     begin
-      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼þ´íÎó£¡');
+      showmessage('ï¿½ï¿½È¡IDXï¿½ï¿½GRPï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -639,7 +645,7 @@ begin
 
     if not imzFile.ReadImzFromFile(@imzFIle.imzFile, gamepath + SMAPIMZ) then
     begin
-      showmessage('¶ÁÈ¡IMZÎÄ¼þÊ§°Ü£¡');
+      showmessage('ï¿½ï¿½È¡IMZï¿½Ä¼ï¿½Ê§ï¿½Ü£ï¿½');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -663,7 +669,7 @@ begin
 
     if not imzFile.ReadImzFromFolder(@imzFIle.imzFile, gamepath + SMAPPNGpath) then
     begin
-      showmessage('¶ÁÈ¡IMZÎÄ¼þ¼ÐÊ§°Ü£¡');
+      showmessage('ï¿½ï¿½È¡IMZï¿½Ä¼ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -803,7 +809,7 @@ begin
      needupdate := false;
      scenelock :=true;
   except
-    showmessage('µ÷É«°åÉèÖÃÊ§°Ü£¡');
+    showmessage('ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½');
     //self.Close;
     //exit;
   end;
@@ -865,7 +871,7 @@ begin
   
   if not  (readDAndS(combobox1.ItemIndex) = 1) then
   begin
-    showmessage('³¡¾°µØÍ¼±à¼­Æ÷´ò¿ªÊ§°Ü£¡³¡¾°ÎÄ¼þ´íÎó»òÕÒ²»µ½£¡¿ÉÄÜÊÇÓÎÏ·Â·¾¶ÉèÖÃÎÊÌâ£¬»òÕßiniÅäÖÃÎÊÌâ£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½à¼­ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï·Â·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â£¬ï¿½ï¿½ï¿½ï¿½iniï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â£¡');
     self.Close;
     exit;
   end;
@@ -873,7 +879,7 @@ begin
 
 
   for I := 0 to scenemapfile.num - 1 do
-    combobox2.Items.Add(CalRname(3,I));
+    combobox2.Items.Add(IntToStr(I));
   combobox2.ItemIndex := 0;
 
     // FreeMem(pLogPalle,PalSize);
@@ -890,7 +896,7 @@ begin
   undotimes := 0;
   undoSavetimes := 1;
  except
-   showmessage('³¡¾°µØÍ¼±à¼­Æ÷´ò¿ªÊ§°Ü£¡´íÎó£¡');
+   showmessage('ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½à¼­ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½');
    self.Close;
    exit;
  end;
@@ -901,7 +907,7 @@ begin
 
   {if not (readscenegrp(gamepath + Smapidx, gamepath + smapgrp) = 1) then
   begin
-    showmessage('IDX»òGRPÎÄ¼þ´íÎó£¡');
+    showmessage('IDXï¿½ï¿½GRPï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½');
     exit;
   end;}
 
@@ -921,7 +927,7 @@ begin
   //image1.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
   scenelock := false;
   except
-    showmessage('³¡¾°µØÍ¼±à¼­Æ÷´ò¿ªÊ§°Ü£¡³¡¾°µØÍ¼Êý¾Ý´íÎó£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½à¼­ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½ï¿½Ý´ï¿½ï¿½ï¿½');
     self.Close;
     exit;
   end;
@@ -1674,7 +1680,7 @@ begin
       begin
         if SceneEditMode <> RLEMode then
           for I := 0 to ScenePNGbuf.Height - 1 do
-            copymemory(@ScenePNGbuf.data[I][0], scenebufbmpPNG.ScanLine[I], ScenePNGbuf.width * 4);
+            Move(ScenePNGbuf.data[I][0], scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.width * 4);
          for Ix := scenecopymap.x - 1 downto 0 do
            for iy := scenecopymap.y - 1 downto 0 do
              if (scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] > 0) or ((scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] = 0) and (scenelayer = 0)) then
@@ -1703,7 +1709,7 @@ begin
               //warmapfile.map[combobox1.ItemIndex].maplayer[warlayer].pic[wartempy + iy][wartempx + ix] := warcopymap.maplayer[warlayer].pic[iy][ix];
         if SceneEditMode <> RLEMode then
           for I := 0 to ScenePNGbuf.Height - 1 do
-            copymemory(scenebufbmpPNG.ScanLine[I], @ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4);
+            Move(scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4);
 
       end;
 
@@ -1855,7 +1861,7 @@ var
 begin
   if not ScenemapInitial then
     exit;
-  //ÊÂ¼þ²ã¶¯×÷¶¯»­¸üÐÂ
+  //ï¿½Â¼ï¿½ï¿½ã¶¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
   try
 
     if scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx] >= 0 then
@@ -2027,11 +2033,11 @@ try
   fileclose(idx);
   fileclose(grp);
 
-  showmessage('±£´æ³É¹¦£¡');
+  showmessage('ï¿½ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½');
 except
   fileclose(idx);
   fileclose(grp);
-  showmessage('±£´æÊ§°Ü£¡');
+  showmessage('ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½');
 end;
 end;
 
@@ -2056,7 +2062,7 @@ begin
   IncludeEvent := ExportEventCheckBox.Checked;
   if not (IncludeGround or IncludeBuilding or IncludeSky or IncludeEvent) then
   begin
-    showmessage('ÇëÖÁÉÙÑ¡ÔñÒ»¸öµ¼³ö²ã¡£');
+    showmessage('ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ã¡£');
     exit;
   end;
 
@@ -2153,7 +2159,7 @@ begin
       ReplaceBitmapColor(ExportBitmap, usualtrans, clBlack);
       ExportBitmap.SaveToFile(FileName);
     end;
-    showmessage('µ¼³öÍ¼Æ¬³É¹¦£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½Í¼Æ¬ï¿½É¹ï¿½ï¿½ï¿½');
   finally
     ExportBitmap.Free;
   end;
@@ -2181,9 +2187,9 @@ begin
         scenemapfile.map[scenemapfile.num - 1].maplayer[I].pic[iy][ix] := scenemapfile.map[combobox2.ItemIndex].maplayer[I].pic[iy][ix]
   end;
     combobox2.Items.Add(inttostr(scenemapfile.num - 1));
-    showmessage('Ìí¼ÓÌùÍ¼³É¹¦£¡ÒÑ¸´ÖÆµ±Ç°³¡¾°µÄµ½ÐÂ³¡¾°£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½É¹ï¿½ï¿½ï¿½ï¿½Ñ¸ï¿½ï¿½Æµï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½Â³ï¿½ï¿½ï¿½ï¿½ï¿½');
   except
-    showmessage('Ìí¼ÓÊ§°Ü');
+    showmessage('ï¿½ï¿½ï¿½Ê§ï¿½ï¿½');
   end;
 end;
 
@@ -2203,9 +2209,9 @@ begin
   dec(scenemapfile.num);
   combobox2.Items.Delete(temp - 1);
   setlength(scenemapfile.map, scenemapfile.num);
-  showmessage('É¾³ý×îºóÒ»¸ö³¡¾°³É¹¦£¡');
+  showmessage('É¾ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½');
   except
-    showmessage('É¾³ýÊ§°Ü£¡');
+    showmessage('É¾ï¿½ï¿½Ê§ï¿½Ü£ï¿½');
   end;
 end;
 
@@ -2326,11 +2332,11 @@ begin
       scenelock := false;
       except
         fileclose(FH);
-        showmessage('µØÍ¼´íÎó£¡');
+        showmessage('ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½');
       end;
     end
     else
-      showmessage('ÎÄ¼þ²»´æÔÚ£¡');
+      showmessage('ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú£ï¿½');
   end;
   scenelock := false;
 end;
@@ -2368,7 +2374,7 @@ var
 begin
   if scenelayer <> 6 then
   begin
-    showmessage('ÇëÑ¡Ôñ²Ù×÷Í¼²ãÎª"È«²¿"£¬È»ºóÓÃÊó±êÀ¨³öÒ»¿éÇøÓò');
+    showmessage('ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½ï¿½ï¿½Í¼ï¿½ï¿½Îª"È«ï¿½ï¿½"ï¿½ï¿½È»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½');
   end
   else
   begin
@@ -2481,7 +2487,7 @@ begin
   readDAndS(combobox1.ItemIndex);
   combobox2.Clear;
   for I := 0 to scenemapfile.num - 1 do
-    combobox2.Items.Add(CalRname(3,I));
+    combobox2.Items.Add(IntToStr(I));
   combobox2.ItemIndex := 0;
       if SceneEditMode = RLEMode then
       begin
@@ -2675,13 +2681,13 @@ begin
      (Pdata + (X + 2 * I + 1))^ := 83;
 
   end;
-   Pdata := sceneopbmp2.ScanLine[Y - TileH];
+  Pdata := sceneopbmp2.ScanLine[Y - TileH];
    (Pdata + (X - TileW))^ := 83;
    (Pdata + (X + 17))^ := 83;
 
   for I := 1 to 8 do
   begin
-     Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
+    Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
      (Pdata + (X - 19 + 2 * I))^ := 83;
      (Pdata + (X - 19 + 2 * I + 1))^ := 83;
      (Pdata + (X+ 17- 2 * I))^ := 83;
@@ -2712,13 +2718,13 @@ begin
      Pcardinal(Pdata + (X + 2 * I + 1)* 4)^ := clpurple;
 
   end;
-   Pdata := sceneopbmp2.ScanLine[Y - TileH];
+  Pdata := sceneopbmp2.ScanLine[Y - TileH];
    Pcardinal(Pdata + (X - TileW)* 4)^ := clpurple;
    Pcardinal(Pdata + (X + 17)* 4)^ := clpurple;
 
   for I := 1 to 8 do
   begin
-     Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
+    Pdata := sceneopbmp2.ScanLine[Y - TileH - I];
      Pcardinal(Pdata + (X - 19 + 2 * I)* 4)^ := clpurple;
      Pcardinal(Pdata + (X - 19 + 2 * I + 1)* 4)^ := clpurple;
      Pcardinal(Pdata + (X+ 17- 2 * I)* 4)^ := clpurple;
@@ -2805,7 +2811,7 @@ begin
   end;
     fileclose(FSGrp);
   except
-    //showmessage('µØÍ¼´íÎó£¡');
+    //showmessage('ï¿½ï¿½Í¼ï¿½ï¿½ï¿½ï¿½');
     fileclose(FSGrp);
     result := 0;
     exit;
@@ -3018,7 +3024,7 @@ begin
   begin
     sceneopbmp2.Canvas.Lock;
     for I := 0 to ScenePNGbuf.Height - 1 do
-      copymemory(sceneopbmp2.ScanLine[I], @ScenePNGbuf.data[I][0], ScenePNGbuf.Width * 4);
+      Move(sceneopbmp2.ScanLine[I]^, ScenePNGbuf.data[I][0], ScenePNGbuf.Width * 4);
     sceneopbmp2.Canvas.UnLock;
   end;
   evtnum := -1;
@@ -3102,7 +3108,7 @@ begin
         temp := (Ppic + I)^;
         try
           //Pbuf := Pbmp.ScanLine[iy + dy];
-          //copymemory((Pbuf + ix), (Ppic + I), state - 2);
+          //Move((Pbuf + ix), (Ppic + I), state - 2);
           if (iy + dy < PBMP.Height)and (iy + dy >= 0) then
           begin
             Pbuf := Pbmp.ScanLine[iy + dy];
@@ -3110,17 +3116,17 @@ begin
             begin
               if ix + state - 2 < PBMP.Width then
               begin
-                copymemory(Pbuf, (Ppic + I - ix), state - 2 + ix);
+                Move((Ppic + I - ix)^, Pbuf^, state - 2 + ix);
               end
               else
               begin
-                copymemory((Pbuf), (Ppic + I - ix), PBMP.Width);
+                Move((Ppic + I - ix)^, Pbuf^, PBMP.Width);
               end;
             end
             else if ix + state - 2 < PBMP.Width then
-              copymemory((Pbuf + ix), (Ppic + I), state - 2)
+              Move((Ppic + I)^, (Pbuf + ix)^, state - 2)
             else if ix < PBMP.Width then
-              copymemory((Pbuf + ix), (Ppic + I), PBMP.Width - ix);
+              Move((Ppic + I)^, (Pbuf + ix)^, PBMP.Width - ix);
           end;
         except
 
@@ -3163,7 +3169,7 @@ begin
   begin
     setlength(destination.maplayer[I].pic, destination.y,destination.x);
     for i1 := 0 to destination.y - 1 do
-      copymemory(@(destination.maplayer[I].pic[i1][0]), @(source.maplayer[I].pic[i1][0]), destination.x * 2);
+      Move(source.maplayer[I].pic[i1][0], destination.maplayer[I].pic[i1][0], destination.x * 2);
   end;
 end;
 
@@ -3173,10 +3179,22 @@ var
 begin
   //
   for I := 0 to 200 - 1 do
-    copymemory(@(destination.sceneevent[I]), @(source.sceneevent[I]), sizeof(Tsceneevent));
+    Move(source.sceneevent[I], destination.sceneevent[I], sizeof(Tsceneevent));
 end;
 
 end.
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,6 @@
-unit PNGimportModify;
+﻿unit PNGimportModify;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -44,7 +46,7 @@ var
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TForm95.Edit1Change(Sender: TObject);
 var
@@ -117,3 +119,6 @@ begin
 end;
 
 end.
+
+
+

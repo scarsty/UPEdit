@@ -1,4 +1,6 @@
-unit New50Instruct;
+﻿unit New50Instruct;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -35,3 +37,6 @@ begin
 end;
 
 end.
+
+
+

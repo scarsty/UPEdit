@@ -1,0 +1,7 @@
+﻿object Ict_4 : TForm
+  Left = 0
+  Height = 400
+  Top = 0
+  Width = 600
+  Caption = 'Ict_4'
+end

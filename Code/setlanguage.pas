@@ -1,4 +1,6 @@
-unit setlanguage;
+﻿unit setlanguage;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -31,7 +33,7 @@ var
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TForm8.Button1Click(Sender: TObject);
 var
@@ -86,3 +88,6 @@ begin
 end;
 
 end.
+
+
+

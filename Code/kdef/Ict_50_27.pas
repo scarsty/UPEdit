@@ -1,4 +1,6 @@
-unit Ict_50_27;
+﻿unit Ict_50_27;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -56,3 +58,6 @@ begin
 end;
 
 end.
+
+
+

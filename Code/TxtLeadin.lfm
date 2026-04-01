@@ -1,0 +1,7 @@
+﻿object TxtLeadin : TForm
+  Left = 0
+  Height = 400
+  Top = 0
+  Width = 600
+  Caption = 'TxtLeadin'
+end

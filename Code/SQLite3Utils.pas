@@ -1,4 +1,4 @@
-{*
+﻿{*
  * SQLite for Delphi and FreePascal/Lazarus
  *
  * This unit contains miscellaneous utility functions.
@@ -92,3 +92,4 @@ begin
 end;
 
 end.
+

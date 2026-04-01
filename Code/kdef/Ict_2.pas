@@ -1,4 +1,6 @@
-unit Ict_2;
+﻿unit Ict_2;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -31,3 +33,6 @@ uses
 {$R *.dfm}
 
 end.
+
+
+

@@ -1,0 +1,9 @@
+object Form: TForm
+  Left = -1
+  Height = 500
+  Top = 0
+  Width = 750
+  Caption = 'opendisplay'
+  DesignTimePPI = 120
+  LCLVersion = '4.6.0.0'
+end

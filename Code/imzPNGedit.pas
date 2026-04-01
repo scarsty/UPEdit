@@ -1,10 +1,12 @@
-unit imzPNGedit;
+ï»¿unit imzPNGedit;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, imagez, ExtCtrls, StdCtrls, Spin, PNGimage, Math, Head;
+  Dialogs, imagez, ExtCtrls, StdCtrls, Spin, Math, Head;
 
 type
   TImzPNGeditForm = class(TForm)
@@ -50,7 +52,7 @@ type
     procedure Button4Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
     procedure Button8Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
   private
     { Private declarations }
@@ -69,7 +71,7 @@ type
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TImzPNGeditForm.Image1MouseUp(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
@@ -181,7 +183,7 @@ begin
   begin
     tempimzPNG.framelen[I] := imzPNG.framelen[I];
     setlength(tempimzPNG.framedata[I].data, tempimzPNG.framelen[I]);
-    copymemory(@tempimzPNG.framedata[I].data[0], @imzPNG.framedata[I].data[0], tempimzPNG.framelen[I]);
+    Move(imzPNG.framedata[I].data[0], tempimzPNG.framedata[I].data[0], tempimzPNG.framelen[I]);
   end;
 
   Edit1.Text := inttostr(tempimzPNG.x);
@@ -291,7 +293,7 @@ begin
   end;
 end;
 
-procedure TImzPNGeditForm.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TImzPNGeditForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   PNG.destroy;
 end;
@@ -321,7 +323,7 @@ begin
   begin
     imzPNG.framelen[I] := tempimzPNG.framelen[I];
     setlength(imzPNG.framedata[I].data, imzPNG.framelen[I]);
-    copymemory(@imzPNG.framedata[I].data[0], @tempimzPNG.framedata[I].data[0], imzPNG.framelen[I]);
+    Move(tempimzPNG.framedata[I].data[0], imzPNG.framedata[I].data[0], imzPNG.framelen[I]);
   end;
   self.Close;
 end;
@@ -391,7 +393,7 @@ begin
     begin
       tempimzPNG.framelen[I + 1] := tempimzPNG.framelen[I];
       setlength(tempimzPNG.framedata[I + 1].data, tempimzPNG.framelen[I + 1]);
-      copymemory(@tempimzPNG.framedata[I + 1].data[0], @tempimzPNG.framedata[I].data[0], tempimzPNG.framelen[I + 1]);
+      Move(tempimzPNG.framedata[I].data[0], tempimzPNG.framedata[I + 1].data[0], tempimzPNG.framelen[I + 1]);
     end;
     FH := fileopen(opendialog1.FileName, fmopenread);
     tempimzPNG.framelen[framenum - 1] := fileseek(FH, 0, 2);
@@ -451,14 +453,14 @@ begin
     exit;
   if tempimzPNG.frame = 1 then
   begin
-    showmessage('×îºóÒ»Ö¡ÁË');
+    showmessage('ï¿½ï¿½ï¿½Ò»Ö¡ï¿½ï¿½');
     exit;
   end;
   for I := framenum - 1 to tempimzPNG.frame - 2 do
   begin
     tempimzPNG.framelen[I] := tempimzPNG.framelen[I + 1];
     setlength(tempimzPNG.framedata[I].data, tempimzPNG.framelen[I]);
-    copymemory(@tempimzPNG.framedata[I].data[0], @tempimzPNG.framedata[I + 1].data[0], tempimzPNG.framelen[I]);
+    Move(tempimzPNG.framedata[I + 1].data[0], tempimzPNG.framedata[I].data[0], tempimzPNG.framelen[I]);
   end;
   dec(tempimzPNG.frame);
   if tempimzPNG.frame > 0 then
@@ -529,3 +531,13 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+
+
+

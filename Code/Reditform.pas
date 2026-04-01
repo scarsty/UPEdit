@@ -1,4 +1,6 @@
-unit Reditform;
+﻿unit Reditform;
+
+{$modeswitch autoderef}
 
 interface
 
@@ -27,7 +29,7 @@ implementation
 uses
   Redit;
 
-{$R *.dfm}
+// {$R *.lfm}
 
 
 
@@ -37,3 +39,6 @@ begin
 end;
 
 end.
+
+
+

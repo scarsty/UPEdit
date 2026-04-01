@@ -1,10 +1,12 @@
-unit Ict_68;
+ï»¿unit Ict_68;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, head, PNGimage, StdCtrls, ExtCtrls, math;
+  Dialogs, head, StdCtrls, ExtCtrls, math;
 
 type
   TForm38 = class(TForm)
@@ -135,7 +137,7 @@ begin
   end;
   combobox2.Clear;
   listbox1.Clear;
-  combobox2.Items.Add('-2Ä¬ÈÏÖµ');
+  combobox2.Items.Add('-2Ä¬ï¿½ï¿½Öµ');
   for I := 0 to namestrnum - 1 do
   begin
     combobox2.Items.Add(inttostr(I)+ ':' + displaystr(readTalkStr(@namestr[I])));
@@ -179,7 +181,7 @@ procedure TForm38.Button3Click(Sender: TObject);
 begin
   inc(talkstrnum);
   setlength(talkstr, talkstrnum);
-  WriteTalkStr(@talkstr[talkstrnum - 1], widestring('ÕˆÝ”ÈëŒ¦Ô’ƒÈÈÝ£¬ÈôžéÔ­°æŒ¦Ô’£¬Ã¿¸ô12‚€h×Ö¼ÓÒ»‚€ÐÇÌ–*'));
+  WriteTalkStr(@talkstr[talkstrnum - 1], widestring('ÕˆÝ”ï¿½ëŒ¦Ô’ï¿½ï¿½ï¿½Ý£ï¿½ï¿½ï¿½ï¿½Ô­ï¿½æŒ¦Ô’ï¿½ï¿½Ã¿ï¿½ï¿½12ï¿½ï¿½ï¿½hï¿½Ö¼ï¿½Ò»ï¿½ï¿½ï¿½ï¿½Ì–*'));
   combobox5.Items.Add(inttostr(talkstrnum - 1) +':' +displaystr(ReadTalkStr(@talkstr[talkstrnum - 1])));
   combobox5.ItemIndex := talkstrnum - 1;
   edit5.Text := displaystr(readTalkStr(@talkstr[talkstrnum - 1]));
@@ -210,7 +212,7 @@ begin
     edit5.Text := displaystr(ReadTalkStr(@talkstr[talkstrnum - 1]));
   end
   else
-    showmessage('Ö»Ê£Ò»¸ö¶Ô»°£¬²»¿ÉÉ¾³ý');
+    showmessage('Ö»Ê£Ò»ï¿½ï¿½ï¿½Ô»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É¾ï¿½ï¿½');
 end;
 
 procedure TForm38.Button6Click(Sender: TObject);
@@ -235,7 +237,7 @@ begin
     combobox2.Clear;
    // listbox1.Clear;
     listbox1.Items.Strings[listbox1.ItemIndex] :=  inttostr(listbox1.ItemIndex) + ':' + displaystr(readTalkstr(@namestr[listbox1.ItemIndex]));
-    combobox2.Items.Add('-2Ä¬ÈÏÖµ');
+    combobox2.Items.Add('-2Ä¬ï¿½ï¿½Öµ');
     for I := 0 to namestrnum - 1 do
     begin
       combobox2.Items.Add(inttostr(I)+ ':' + displaystr(readtalkstr(@namestr[I])));
@@ -262,7 +264,7 @@ begin
     inc(len, talkoffset[I]);
     setlength(tdata, talkoffset[I]);
     if talkoffset[I] > 0 then
-      copymemory(@tdata[0], @namestr[I].str[0], talkoffset[I]);
+      Move(@tdata[0], @namestr[I].str[0], talkoffset[I]);
     if talkinvert = 0 then
     begin
       for i2 := 0 to talkoffset[I] - 1 do
@@ -368,3 +370,11 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+

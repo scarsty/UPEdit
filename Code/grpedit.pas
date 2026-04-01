@@ -1,4 +1,8 @@
-unit grpedit;
+ï»¿unit grpedit;
+
+{$modeswitch autoderef}
+
+{$H+}
 
 interface
 
@@ -53,7 +57,7 @@ type
     procedure Drawpallet;
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure Image1MouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure Image2MouseDown(Sender: TObject; Button: TMouseButton;
@@ -91,7 +95,7 @@ var
   tempB,tempG,tempR: array[0..255] of byte;
   tempcollen: integer;
 
-  form2title: string = 'ÌùÍ¼±à¼­';
+  form2title: string = 'ç»˜å›¾ç¼–è¾‘';
 
 
 procedure  RotateBitmap90Degrees(ABitmap:   TBitmap);
@@ -99,25 +103,20 @@ procedure  RotateBitmap270Degrees(ABitmap:   TBitmap);
 
 implementation
 
-{$R *.dfm}
+// {$R *.lfm}
 
 uses
   takein, grplist;
 
 procedure TForm2.Button1Click(Sender: TObject);
-var
-  MyFormat : Word;
-  AData : THandle;
-  APalette : HPALETTE;
 begin
-  drawbmp.SaveToClipBoardFormat(MyFormat, AData, APalette);
-  ClipBoard.SetAsHandle(MyFormat,AData);
+  Clipboard.Assign(drawbmp);
 end;
 
 procedure TForm2.Button2Click(Sender: TObject);
 begin
-  if clipboard.HasFormat(CF_BITMAP) then
-    drawbmp.LoadFromClipboardFormat(cf_BitMap,ClipBoard.GetAsHandle(cf_Bitmap),0);
+  if Clipboard.HasFormat(CF_BITMAP) then
+    drawbmp.Assign(Clipboard);
   display;
 end;
 
@@ -140,9 +139,9 @@ begin
       //R[I] := tempR[I];
       //B[I] := tempB[I];
       //G[I] := tempG[I];
-      copymemory(@R[0],@tempR[0],256);
-      copymemory(@B[0],@tempB[0],256);
-      copymemory(@G[0],@tempG[0],256);
+      Move(R[0], tempR[0], 256);
+      Move(B[0], tempB[0], 256);
+      Move(G[0], tempG[0], 256);
     end;
     collen := tempcollen;
   end;
@@ -154,9 +153,9 @@ var
   tempcol1: cardinal;
   tempstr:string;
 begin
-  //canvasµÄÑÕÉ«Ë³ĞòÊÇBGR,¶øÓÎÏ·ÖĞË³ĞòÊÇRGB
+  // canvas é¢œè‰²é¡ºåºä¸º BGRï¼Œæ¸¸æˆä¸­é¡ºåºä¸º RGB
   tempcol1 := (nowcol and $FF0000) shr 16 + nowcol and $FF00 + (nowcol and $FF) shl 16;
-  tempstr := inputbox('×Ô¶¨ÒåÑÕÉ«','ÇëÒÔÊ®Áù½øÖÆ·½Ê½ÊäÈë£¨RGB£©',Format('%x',[tempcol1]));
+  tempstr := inputbox('è‡ªå®šä¹‰é¢œè‰²', 'è¯·ç”¨åå…­è¿›åˆ¶æ–¹å¼è¾“å…¥ï¼ˆRGBï¼‰', Format('%x', [tempcol1]));
   if strtoint('$' + tempstr) <> tempcol1 then
   begin
     tempcol1 := strtoint('$' + tempstr);
@@ -324,17 +323,17 @@ begin
       line   of   bmpBufferR.
     }
     PbmpBufferRFirstScanLine   :=   bmpBufferR;
-    Inc(PbmpBufferRFirstScanLine,   (PbmpInfoR^.biHeight   -   1)   *   BytesPerPixel);
+    Inc(PbmpBufferRFirstScanLine,   (PbmpInfoR.biHeight   -   1)   *   BytesPerPixel);
 
     {   Here 's   the   meat.   Loop   through   the   pixels   and   rotate   appropriately.   }
 
     {   Remember   that   DIBs   have   their   origins   opposite   from   DDBs.   }
-    for   Y   :=   1   to   PbmpInfoR^.biHeight   do
+    for   Y   :=   1   to   PbmpInfoR.biHeight   do
     begin
         PbmpBuffer   :=   PbmpBufferColumnZero;
         PbmpBufferR   :=   PbmpBufferRFirstScanLine;
 
-        for   X   :=   1   to   PbmpInfoR^.biWidth   do
+        for   X   :=   1   to   PbmpInfoR.biWidth   do
         begin
             for   T   :=   1   to   BytesPerPixel   do
             begin
@@ -453,17 +452,17 @@ begin
       line   of   bmpBufferR.
     }
     PbmpBufferColumnZero   :=   bmpBufferR;
-    Inc(PbmpBufferColumnZero,   (PbmpInfoR^.biWidth   -   1)   *   BytesPerScanLineR);
+    Inc(PbmpBufferColumnZero,   (PbmpInfoR.biWidth   -   1)   *   BytesPerScanLineR);
 
     {   Here 's   the   meat.   Loop   through   the   pixels   and   rotate   appropriately.   }
 
     {   Remember   that   DIBs   have   their   origins   opposite   from   DDBs.   }
-    for   Y   :=   1   to   PbmpInfoR^.biHeight   do
+    for   Y   :=   1   to   PbmpInfoR.biHeight   do
     begin
         PbmpBufferR   :=   PbmpBufferColumnZero;
         PbmpBuffer   :=   PbmpBufferRFirstScanLine;
 
-        for   X   :=   1   to   PbmpInfoR^.biWidth   do
+        for   X   :=   1   to   PbmpInfoR.biWidth   do
         begin
             for   T   :=   1   to   BytesPerPixel   do
             begin
@@ -529,7 +528,7 @@ begin
   display;
 end;
 
-procedure TForm2.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm2.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   drawbmp.Free;
   tempBitMaP.Free;
@@ -546,7 +545,7 @@ begin
   if edittype = grp then
   begin
     panel2.Visible := true;
-    label7.Caption := 'ÎªÓëÓÎÏ·µ÷É«°åÑÕÉ«Çø·Ö£¬Í¸Ã÷É«ÈÔÊ¹ÓÃÄ«ÂÌÉ«±³¾°¡£';
+    label7.Caption := 'ä¸ºé¿å…æ¸¸æˆå–è‰²ä¸è°ƒè‰²å†²çªï¼Œé€æ˜è‰²è¯·ä½¿ç”¨å“çº¢è‰²æ›¿ä»£';
     speedbutton4.Visible := true;
   end
   else
@@ -636,7 +635,7 @@ begin
     setlength(PD, drawbmp.Width * 3);
     for Iy := 0 to drawbmp.height - 1 do
     begin
-      copymemory(@PD[0],drawbmp.ScanLine[iy], drawbmp.Width * 3);
+      Move(drawbmp.ScanLine[iy]^, PD[0], drawbmp.Width * 3);
       for Ix := 0 to drawbmp.Width - 1 do
         if tempcol = (PD[ix * 3] shl 16 + PD[ix * 3 + 1] shl 8 + PD[ix * 3 + 2]) then
         begin
@@ -644,7 +643,7 @@ begin
           PD[ix * 3 + 1] := byte(usualtrans shr 8 and $FF);
           PD[ix * 3 + 2] := byte(usualtrans and $FF);
         end;
-      copymemory(drawbmp.ScanLine[iy],@PD[0], drawbmp.Width * 3);
+      Move(PD[0], drawbmp.ScanLine[iy]^, drawbmp.Width * 3);
     end;
     setlength(PD, 0);
     image1.Canvas.CopyRect(image1.Canvas.ClipRect, drawbmp.Canvas,drawbmp.Canvas.ClipRect);
@@ -666,7 +665,7 @@ procedure TForm2.SpeedButton3Click(Sender: TObject);
 begin
   if SpeedButton3.Down then
   begin
-    image1.Hint := 'Êó±ê×ó¼üÊ°È¡£¬ÓÒ¼ü»æÍ¼';
+    image1.Hint := 'å·¦é”®å–è‰²ï¼Œå³é”®ç»˜å›¾';
     image1.ShowHint := true;
   end
   else
@@ -768,3 +767,9 @@ begin
 end;
 
 end.
+
+
+
+
+
+

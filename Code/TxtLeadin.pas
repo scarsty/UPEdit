@@ -1,10 +1,12 @@
-unit TxtLeadin;
+ï»¿unit TxtLeadin;
+
+{$modeswitch autoderef}
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, lua, head, StdCtrls,math, shellAPI, ExtCtrls;
+  Dialogs, lua, head, StdCtrls,math, ExtCtrls;
 
 type
 
@@ -20,7 +22,7 @@ type
     Button2: TButton;
     OpenDialog1: TOpenDialog;
     Label3: TLabel;
-    procedure FormClose(Sender: TObject; var Action: TCloseAction);
+    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure Button2Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
@@ -95,7 +97,7 @@ implementation
 
 uses Main;
 
-{$R *.dfm}
+// {$R *.lfm}
 
 procedure TForm91.Button1Click(Sender: TObject);
 begin
@@ -111,10 +113,10 @@ begin
   openscript(StartPath +'lua.txt');
 end;
 
-procedure TForm91.FormClose(Sender: TObject; var Action: TCloseAction);
+procedure TForm91.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   CForm91 := true;
-  action := cafree;
+  CloseAction := cafree;
 end;
 
 procedure TForm91.FormCreate(Sender: TObject);
@@ -140,61 +142,61 @@ begin
     //luaopen_io(lua_script);
   except
     lua_close(lua_script);
-    showmessage('¼ÓÔØlua³ö´í£¡');
+    showmessage('ï¿½ï¿½ï¿½ï¿½luaï¿½ï¿½ï¿½ï¿½ï¿½');
     exit;
   end;
   try
 
-  Lua_register(lua_script,'GBKtoUnicode' ,lua_GBKtoUnicode);
-  Lua_register(lua_script,'BIG5toUnicode' ,lua_BIG5toUnicode);
-  Lua_register(lua_script,'UnicodetoGBK', lua_UnicodetoGBK);
-  Lua_register(lua_script,'UnicodetoBIG5', lua_UnicodetoBIG5);
+  Lua_register(lua_script,'GBKtoUnicode' ,@lua_GBKtoUnicode);
+  Lua_register(lua_script,'BIG5toUnicode' ,@lua_BIG5toUnicode);
+  Lua_register(lua_script,'UnicodetoGBK', @lua_UnicodetoGBK);
+  Lua_register(lua_script,'UnicodetoBIG5', @lua_UnicodetoBIG5);
 
-  Lua_register(lua_script,'getRname' , lua_getRname);
-  Lua_register(lua_script,'getRnamepos' , lua_getRnamepos);
-  Lua_register(lua_script,'getWname' , lua_getWname);
-  Lua_register(lua_script,'getWnamepos' , lua_getWnamepos);
+  Lua_register(lua_script,'getRname' , @lua_getRname);
+  Lua_register(lua_script,'getRnamepos' , @lua_getRnamepos);
+  Lua_register(lua_script,'getWname' , @lua_getWname);
+  Lua_register(lua_script,'getWnamepos' , @lua_getWnamepos);
 
-  Lua_register(lua_script,'createbyte' , lua_createbyte);
-  Lua_register(lua_script,'createdata' , lua_createdata);
-  Lua_register(lua_script,'copydata' , lua_copydata);
+  Lua_register(lua_script,'createbyte' , @lua_createbyte);
+  Lua_register(lua_script,'createdata' , @lua_createdata);
+  Lua_register(lua_script,'copydata' , @lua_copydata);
 
-  Lua_register(lua_script,'getU32' , lua_getU32);
-  Lua_register(lua_script,'get32' , lua_get32);
-  Lua_register(lua_script,'getU16' , lua_getU16);
-  Lua_register(lua_script,'get16' , lua_get16);
-  Lua_register(lua_script,'getU8' , lua_getU8);
-  Lua_register(lua_script,'get8' , lua_get8);
+  Lua_register(lua_script,'getU32' , @lua_getU32);
+  Lua_register(lua_script,'get32' , @lua_get32);
+  Lua_register(lua_script,'getU16' , @lua_getU16);
+  Lua_register(lua_script,'get16' , @lua_get16);
+  Lua_register(lua_script,'getU8' , @lua_getU8);
+  Lua_register(lua_script,'get8' , @lua_get8);
 
-  Lua_register(lua_script,'setU32' , lua_setU32);
-  Lua_register(lua_script,'set32' , lua_set32);
-  Lua_register(lua_script,'setU16' , lua_setU16);
-  Lua_register(lua_script,'set16' , lua_set16);
-  Lua_register(lua_script,'set8' , lua_set8);
+  Lua_register(lua_script,'setU32' , @lua_setU32);
+  Lua_register(lua_script,'set32' , @lua_set32);
+  Lua_register(lua_script,'setU16' , @lua_setU16);
+  Lua_register(lua_script,'set16' , @lua_set16);
+  Lua_register(lua_script,'set8' , @lua_set8);
 
-  Lua_register(lua_script,'strlength' , lua_strlength);
-  Lua_register(lua_script,'strsize' , lua_strsize);
-  Lua_register(lua_script,'Ansistrsize' , lua_Ansistrsize);
-  Lua_register(lua_script,'cmpdata' , lua_cmpdata);
+  Lua_register(lua_script,'strlength' , @lua_strlength);
+  Lua_register(lua_script,'strsize' , @lua_strsize);
+  Lua_register(lua_script,'Ansistrsize' , @lua_Ansistrsize);
+  Lua_register(lua_script,'cmpdata' , @lua_cmpdata);
 
-  Lua_register(lua_script,'getfilelen' , lua_getfilelen);
-  Lua_register(lua_script,'loadfile' , lua_loadfile);
-  Lua_register(lua_script,'savefile' , lua_savefile);
+  Lua_register(lua_script,'getfilelen' , @lua_getfilelen);
+  Lua_register(lua_script,'loadfile' , @lua_loadfile);
+  Lua_register(lua_script,'savefile' , @lua_savefile);
 
-  Lua_register(lua_script,'gettalkname' , lua_gettalkname);
-  Lua_register(lua_script,'getkdefname' , lua_getkdefname);
-  Lua_register(lua_script,'showmessage' , lua_showmessage);
-  Lua_register(lua_script,'showinteger' , lua_showinteger);
+  Lua_register(lua_script,'gettalkname' , @lua_gettalkname);
+  Lua_register(lua_script,'getkdefname' , @lua_getkdefname);
+  Lua_register(lua_script,'showmessage' , @lua_showmessage);
+  Lua_register(lua_script,'showinteger' , @lua_showinteger);
 
-  Lua_register(lua_script,'getgamecode', Lua_getgamecode);
-  Lua_register(lua_script,'gettxtname', Lua_gettxtname);
-  Lua_register(lua_script,'inttostr', lua_inttostr);
-  Lua_register(lua_script,'strtoint', lua_strtoint);
+  Lua_register(lua_script,'getgamecode', @Lua_getgamecode);
+  Lua_register(lua_script,'gettxtname', @Lua_gettxtname);
+  Lua_register(lua_script,'inttostr', @lua_inttostr);
+  Lua_register(lua_script,'strtoint', @lua_strtoint);
 
-  Lua_register(lua_script,'getxor', Lua_getxor);
+  Lua_register(lua_script,'getxor', @Lua_getxor);
 
   except
-    showmessage('×¢²áº¯ÊýÊ§°Ü£¡');
+    showmessage('×¢ï¿½áº¯ï¿½ï¿½Ê§ï¿½Ü£ï¿½');
     lua_close(lua_script);
     exit;
   end;
@@ -206,9 +208,9 @@ begin
   //lua_pcall(lua_script,0,1,0);
   ExecScript(Pansichar(ansistring(filename)), 'TXTLeadIn');
   except
-    //showmessage('ÔËÐÐlua³ö´í');
+    //showmessage('ï¿½ï¿½ï¿½ï¿½luaï¿½ï¿½ï¿½ï¿½');
     on E: Exception do
-      showmessage('UPeditÌáÊ¾´íÎóÐÅÏ¢£º' + E.ClassName+ ': '+ E.Message);
+      showmessage('UPeditï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½' + E.ClassName+ ': '+ E.Message);
 
   end;
   lua_close(lua_script);
@@ -271,7 +273,7 @@ begin
   P := lua_tostring(L, 1);
   str := MultitoUnicode(Pansichar(P), 936);
   P2 := lua_newuserdata(L, length(str)*sizeof(widechar) + 2);
-  copymemory(P2, @str[1], length(str)*sizeof(widechar) + 2);
+  Move(str[1], P2^, length(str)*sizeof(widechar) + 2);
   result := 1;
 end;
 
@@ -284,7 +286,7 @@ begin
   P := lua_tostring(L, 1);
   str := MultitoUnicode(Pansichar(P),950);
   P2 := lua_newuserdata(L, (length(str) + 1)*sizeof(widechar));
-  copymemory(P2, @str[1], (length(str) + 1)*sizeof(widechar));
+  Move(str[1], P2^, (length(str) + 1)*sizeof(widechar));
   result := 1;
 end;
 
@@ -312,7 +314,7 @@ begin
   result := 1;
 end;
 
-//È¡µÃRÊý¾ÝÃû³Æ£¬µÚÒ»¸ö²ÎÊýÎªÀà±ð£¨Êý×Ö£¬´Ó0¿ªÊ¼£©£¬µÚ¶þ¸ö²ÎÊýÎªÐòºÅ
+//È¡ï¿½ï¿½Rï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö£ï¿½ï¿½ï¿½0ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½Ú¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½
 function lua_getRname(L: lua_state): integer; cdecl;
 var
   I: integer;
@@ -339,7 +341,7 @@ begin
   result := 1;
 end;
 
-//µÃµ½Ò»¸öÃû×ÖÔÚRÊý¾ÝÀïµÄÎ»ÖÃ£¬µÚÒ»¸ö²ÎÊýÎªÀà±ð(Êý×Ö£¬´Ó0¿ªÊ¼)£¬µÚ¶þ¸öÎªÃû³Æ£¬·µ»ØÐòºÅ
+//ï¿½Ãµï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Rï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½Ã£ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½Ö£ï¿½ï¿½ï¿½0ï¿½ï¿½Ê¼)ï¿½ï¿½ï¿½Ú¶ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_getRnamepos(L: lua_state): integer; cdecl;
 var
   I, index, datatype: integer;
@@ -373,7 +375,7 @@ begin
 
 end;
 
-//È¡µÃWÊý¾ÝÃû³Æ£¬Î¨Ò»Ò»¸ö²ÎÊýÎªÐòºÅ£¬·µ»ØÃû³Æ
+//È¡ï¿½ï¿½Wï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ£ï¿½Î¨Ò»Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½Å£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_getWname(L: lua_state): integer; cdecl;
 var
   I: integer;
@@ -399,7 +401,7 @@ begin
   result := 1;
 end;
 
-//µÃµ½Ò»¸öÃû×ÖÔÚWÊý¾ÝÀïµÄÎ»ÖÃ£¬Î¨Ò»µÄ²ÎÊýÎªÃû³Æ£¬·µ»ØÐòºÅ
+//ï¿½Ãµï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Wï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î»ï¿½Ã£ï¿½Î¨Ò»ï¿½Ä²ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½Æ£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_getWnamepos(L: lua_state): integer; cdecl;
 var
   I, index: integer;
@@ -432,7 +434,7 @@ begin
 
 end;
 
-//´´½¨userdata
+//ï¿½ï¿½ï¿½ï¿½userdata
 function lua_createbyte(L: lua_state): integer; cdecl;
 var
   length, I: integer;
@@ -441,7 +443,7 @@ begin
   length := floor(lua_tonumber(L,1));
   P := lua_newuserdata(L, length + 2);
   for I := 0 to length + 2 - 1 do
-    P[I] := 0;
+    P^[I] := 0;
   result := 1;
 end;
 
@@ -456,9 +458,9 @@ begin
   length := floor(lua_tonumber(L, 3));
   P := lua_newuserdata(L, length + 2);
   for I := 0 to length - 1 do
-    P[I] := (Pori + offset + I)^;
-  P[length] := 0;
-  P[length + 1] := 0;
+    P^[I] := (Pori + offset + I)^;
+  P^[length] := 0;
+  P^[length + 1] := 0;
   result := 1;
 end;
 
@@ -729,7 +731,7 @@ begin
   result := 1;
 end;
 
-//¶ÁÈ¡ÎÄ¼þ£¬Ò»¸ö²ÎÊýÎªbuffer£¬µÚ¶þ¸öÎÄ¼þÃû£¬µÚÈý¸öÆ«ÒÆ£¬µÚ4¸ö³¤¶È
+//ï¿½ï¿½È¡ï¿½Ä¼ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªbufferï¿½ï¿½ï¿½Ú¶ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ«ï¿½Æ£ï¿½ï¿½ï¿½4ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_loadfile(L: lua_state): integer; cdecl;
 var
   P: Pbyte;
@@ -748,7 +750,7 @@ begin
   result := 0;
 end;
 
-//±£´æÎÄ¼þ£¬Ò»¸ö²ÎÊýÎªbuffer£¬µÚ¶þ¸öÎÄ¼þÃû£¬µÚÈý¸öÆ«ÒÆ£¬µÚ4¸ö³¤¶È
+//ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªbufferï¿½ï¿½ï¿½Ú¶ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ«ï¿½Æ£ï¿½ï¿½ï¿½4ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_savefile(L: lua_state): integer; cdecl;
 var
   P: Pbyte;
@@ -767,7 +769,7 @@ begin
   result := 0;
 end;
 
-//µÃµ½¶Ô»°ÎÄ¼þµÄÎÄ¼þÃû£¬ÏÈ·µ»Øidx£¬ÔÙ·µ»Øgrp
+//ï¿½Ãµï¿½ï¿½Ô»ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È·ï¿½ï¿½ï¿½idxï¿½ï¿½ï¿½Ù·ï¿½ï¿½ï¿½grp
 function lua_gettalkname(L: lua_state): integer; cdecl;
 var
   grpname, idxname: ansistring;
@@ -779,7 +781,7 @@ begin
   result := 2;
 end;
 
-//ÊÂ¼þÎÄ¼þÃû³Æ
+//ï¿½Â¼ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½
 function lua_getkdefname(L: lua_state): integer; cdecl;
 var
   grpname, idxname: ansistring;
@@ -791,7 +793,7 @@ begin
   result := 2;
 end;
 
-//ÏÔÊ¾ÎÄ×Ö
+//ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½
 function lua_showmessage(L: lua_state): integer; cdecl;
 var
   str: Ansistring;
@@ -819,7 +821,7 @@ begin
   result := 1;
 end;
 
-//·µ»Ø¾ç±¾Ãû×Ö
+//ï¿½ï¿½ï¿½Ø¾ç±¾ï¿½ï¿½ï¿½ï¿½
 function Lua_gettxtname(L: lua_state): integer; cdecl;
 begin
   lua_pushstring(L, Pansichar(Ansistring(txtname)));
@@ -843,3 +845,11 @@ begin
 end;
 
 end.
+
+
+
+
+
+
+
+

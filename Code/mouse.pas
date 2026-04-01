@@ -1,4 +1,8 @@
-unit mouse;
+﻿unit mouse;
+
+{$modeswitch autoderef}
+
+{$H+}
 
 interface
 
@@ -15,14 +19,14 @@ implementation
 
 function CreateTempFile: String;
 var
-  TempFile, TempDir: array[1..256] of WideChar;
-  Files, Dirs: PWideChar;
+  TempFile, TempDir: array[0..MAX_PATH] of Char;
+  Files, Dirs: PChar;
 begin
   Files := @TempFile;
   Dirs := @TempDir;
   GetTEmpPath(256, dirs);
   GetTempFileName(dirs, '~Tmp', 0, Files);
-  Result := Copy(Files, 1, Length(Files));
+  Result := StrPas(Files);
 end;
 
 procedure SaveResourceAsFile(const ResName: string; ResType: pchar; const FileName: string);
@@ -47,10 +51,13 @@ var
 begin
   CursorFile := SaveResourceAsTempFile(ResName,   RT_RCDATA);
   //Result := LoadImage(0, PChar(CursorFile), IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE or LR_LOADFROMFILE);
-  Result := loadcursorfromfile(Pwidechar(CursorFile));
+  Result := loadcursorfromfile(PChar(CursorFile));
   DeleteFile(CursorFile);
   if Result = 0 then
     raise Exception.Create(SysErrorMessage(GetLastError));
 end;
 
 end.
+
+
+
