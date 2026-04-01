@@ -1,4 +1,4 @@
-object Form4: TForm4
+﻿object Form4: TForm4
   Left = 0
   Top = 0
   Caption = 'pic'#22270#29255#32534#36753

@@ -160,21 +160,21 @@ begin
   Form88.progressbar1.max := filenum;
   Form88.ProgressBar1.Min := 0;
   Form88.ProgressBar1.Position := 0;
-  Form88.Label1.Caption := '����0/' + inttostr(filenum);
+  Form88.Label1.Caption := '进度0/' + inttostr(filenum);
   nowPNGpos := 0;
 end;
 
 procedure mustexit;
 begin
   Form88.ProgressBar1.Position := 0;
-  Form88.Label1.Caption := '����';
+  Form88.Label1.Caption := '进度';
   if showmsg then
-    showmessage('��ֹ������');
+    showmessage('终止导出！');
 end;
 
 procedure outputPNGshowerror;
 begin
-  showmessage('��������');
+  showmessage('导出错误！');
 end;
 
 procedure check;
@@ -185,20 +185,20 @@ end;
 procedure updateprocess;
 begin
   Form88.ProgressBar1.Position := nowPNGpos;
-  Form88.Label1.Caption := '����'+ inttostr(nowPNGpos) + '/' + inttostr(filenum);
+  Form88.Label1.Caption := '进度'+ inttostr(nowPNGpos) + '/' + inttostr(filenum);
 end;
 
 procedure endPNGprocess;
 begin
   Form88.ProgressBar1.Position := 0;
-  showmessage('������ɣ�');
-  Form88.Label1.Caption := '����';
+  showmessage('导出完成！');
+  Form88.Label1.Caption := '进度';
 end;
 
 procedure TForm88.Button1Click(Sender: TObject);
 begin
   Dir := Edit1.Text;
-  if SelectFolderDialog(self.handle, 'ѡ�񱣴��ļ���','',Dir) then
+  if SelectFolderDialog(self.handle, '选择保存文件夹','',Dir) then
   begin
     if dir[length(dir)] <> '\' then
       dir :=dir + '\';
@@ -232,7 +232,7 @@ begin
     outputPNGthread := TPNGThread.Create(false);
   end
   else
-    showmessage('���ڵ���PNGͼƬ�У������ĵȴ����Ժ��ٽ��в�����');
+    showmessage('正在导出PNG图片中！请耐心等待，稍后再进行操作！');
 end;
 
 procedure TForm88.Button4Click(Sender: TObject);
@@ -246,9 +246,9 @@ begin
     showmsg := true;
     outputing := false;
    // Form88.ProgressBar1.Position := 0;
-   // Form88.Label1.Caption := '����';
+   // Form88.Label1.Caption := '进度';
     except
-      showmessage('�����ˣ���');
+      showmessage('出错了！！');
     end;
   end;
 

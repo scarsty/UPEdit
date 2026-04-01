@@ -312,7 +312,7 @@ begin
   end
   else
   begin
-    FileName := widestring(tempstr);
+    FileName := tempstr;
     if fileexists(FileName) then
     begin
       if SameText(ExtractFileExt(FileName), '.pic') then
@@ -516,8 +516,13 @@ begin
     Fs.Free;
   end;
 
+  // Already has UTF-8 BOM - nothing to do
+  if (Length(Raw) >= 3) and (Raw[0] = $EF) and (Raw[1] = $BB) and (Raw[2] = $BF) then
+    Exit;
+
   if (Raw[0] = $FF) and (Raw[1] = $FE) then
   begin
+    // UTF-16LE -> UTF-8 with BOM
     CharCount := (Length(Raw) - 2) div 2;
     SetLength(Ws, CharCount);
     for I := 0 to CharCount - 1 do
@@ -528,8 +533,25 @@ begin
     Utf8 := UTF8Encode(Ws);
     Fs := TFileStream.Create(FileName, fmCreate);
     try
+      Fs.WriteByte($EF);
+      Fs.WriteByte($BB);
+      Fs.WriteByte($BF);
       if Length(Utf8) > 0 then
         Fs.WriteBuffer(Utf8[1], Length(Utf8));
+    finally
+      Fs.Free;
+    end;
+  end
+  else
+  begin
+    // Assume UTF-8 without BOM - prepend BOM
+    Fs := TFileStream.Create(FileName, fmCreate);
+    try
+      Fs.WriteByte($EF);
+      Fs.WriteByte($BB);
+      Fs.WriteByte($BF);
+      if Length(Raw) > 0 then
+        Fs.WriteBuffer(Raw[0], Length(Raw));
     finally
       Fs.Free;
     end;
@@ -954,6 +976,7 @@ begin
     CFormImz := false;
     FormImz := TImzForm.Create(application);
     MdiChildHandle[13] := FormImz.Handle;
+    FormImz.Show;
   end
   else
   begin
@@ -1507,6 +1530,7 @@ begin
     CForm94 := false;
     Form94 := TForm94.Create(application);
     MdiChildHandle[12] := Form94.Handle;
+    Form94.Show;
   end
   else
   begin

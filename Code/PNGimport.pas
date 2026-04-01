@@ -267,17 +267,17 @@ end;
 
 procedure PNGimportNoIDXGRPfile;
 begin
-  ShowMessage('ԭIDX��GRP�ļ������ڣ��޷����棡');
+  ShowMessage('原IDX或GRP文件不存在！无法保存！');
 end;
 
 procedure PNGimportSuccess;
 begin
-  ShowMessage('�ɹ���');
+  ShowMessage('原IDX或GRP文件不存在！无法保存！');
 end;
 
 procedure PNGimportError;
 begin
-  ShowMessage('���ִ���');
+  ShowMessage('原IDX或GRP文件不存在！无法保存！');
 end;
 
 procedure DisablePNGimportForm;
@@ -325,12 +325,12 @@ begin
 
   for iy := 0 to ph - 1 do
   begin
-    trans := 0; // ����͸������
-    transcount := 0; // ͸�����ظ���
+    transcount := 0; // 透明像素个数
+    transcount := 0; // 透明像素个数
     // state
-    // Ϊ0�ǳ�ʼ״̬
-    // Ϊ1��͸������״̬
-    // Ϊ2����ͨ��ɫ����״̬
+    // 为1是透明像素状态
+    // 为2是普通颜色像素状态
+    // 为2是普通颜色像素状态
     state := 0;
     linebyte := 0;
     colnum := 0;
@@ -382,7 +382,7 @@ begin
         else
           inc(transcount);
       end
-      else // �������͸������
+      else // 如果不是透明像素
       begin
         // ShowMessage('2');
         if state <> 2 then
@@ -613,12 +613,12 @@ begin
       if PNGFormat[ListBox1.Items.Count] then
       begin
         PNGFormatStr :=  displayname('PNG');
-         // + '  Xƫ�ƣ�' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Yƫ�ƣ�' + inttostr(PNGYs[ListBox1.Items.Count]));
+         // + '  X偏移：' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Y偏移：' + inttostr(PNGYs[ListBox1.Items.Count]));
       end
       else
       begin
-        PNGFormatStr := displayname('RLE8' + '  Xƫ�ƣ�' + inttostr
-        (PNGXs[ListBox1.Items.Count]) + ' Yƫ�ƣ�' + inttostr(PNGYs[ListBox1.Items.Count]));
+        PNGFormatStr := displayname('RLE8' + '  X偏移：' + inttostr
+        (PNGXs[ListBox1.Items.Count]) + ' Y偏移：' + inttostr(PNGYs[ListBox1.Items.Count]));
       end;
       ListBox1.Items.Add(OpenDialog2.Files.Strings[i] + '  ' + PNGFormatStr);
 
@@ -687,13 +687,13 @@ begin
       if PNGFormat[ListBox1.ItemIndex] then
       begin
         PNGFormatStr := displayname('PNG');
-         // + '  Xƫ�ƣ�' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Yƫ�ƣ�' + inttostr(PNGYs[ListBox1.Items.Count]));
+         // + '  X偏移：' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Y偏移：' + inttostr(PNGYs[ListBox1.Items.Count]));
       end
       else
       begin
         Form95Active := false;
-        PNGFormatStr := displayname('RLE8' + '  Xƫ�ƣ�' + inttostr
-        (PNGXs[ListBox1.Items.Count]) + ' Yƫ�ƣ�' + inttostr(PNGYs[ListBox1.Items.Count]));
+        PNGFormatStr := displayname('RLE8' + '  X偏移：' + inttostr
+        (PNGXs[ListBox1.Items.Count]) + ' Y偏移：' + inttostr(PNGYs[ListBox1.Items.Count]));
       end;
       ListBox1.Items.Add(OpenDialog2.Files.Strings[ListBox1.ItemIndex] + '  ' + PNGFormatStr);
         
@@ -742,7 +742,7 @@ begin
   end
   else
   begin
-    ShowMessage('û�п��Ե����PNG�ļ���');
+  ShowMessage('原IDX或GRP文件不存在！无法保存！');
   end;
 end;
 

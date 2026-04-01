@@ -1,4 +1,4 @@
-object Form9: TForm9
+﻿object Form9: TForm9
   Left = 0
   Top = 0
   Margins.Left = 2

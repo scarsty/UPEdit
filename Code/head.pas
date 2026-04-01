@@ -463,7 +463,7 @@ var
 
   fmcursor: integer = 1;
 
-  GameVersion: integer = 0; // 0, ԭ�棻 1��ˮ�
+  GameVersion: integer = 0; // 0, 原版； 1，水浒
 
   StartPath: string;
 
@@ -471,6 +471,7 @@ var
 
 function MultiToUnicode(str: PAnsiChar; codepage: integer): widestring;
 function UnicodeToMulti(str: PWideChar; codepage: integer): Ansistring;
+function UnicodeToMulti(const str: string; codepage: integer): Ansistring; overload;
 function MultiToUtf8(str: PAnsiChar; codepagein, codepageout: integer): utf8string;
 function readOutstr(str: Pointer; len: integer): widestring;
 function writeinstr(str: widestring; data: Pointer; len: integer): Pointer;
@@ -560,6 +561,11 @@ begin
   len := WideCharToMultiByte(codepage, 0, PWideChar(str), -1, nil, 0, nil, nil);
   setlength(result, len);
   WideCharToMultiByte(codepage, 0, PWideChar(str), -1, PAnsiChar(result), len, nil, nil);
+end;
+
+function UnicodeToMulti(const str: string; codepage: integer): Ansistring; overload;
+begin
+  result := UnicodeToMulti(PWideChar(UnicodeString(str)), codepage);
 end;
 
 function MultiToUtf8(str: PAnsiChar; codepagein, codepageout: integer): utf8string;

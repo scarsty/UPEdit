@@ -1,4 +1,4 @@
-object Form69: TForm69
+﻿object Form69: TForm69
   Left = 0
   Top = 0
   Caption = #20889#20837#25112#26007#23646#24615

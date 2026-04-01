@@ -1,4 +1,4 @@
-object Form1: TForm1
+﻿object Form1: TForm1
   Left = 197
   Top = 117
   Caption = #22270#29255#23548#20837

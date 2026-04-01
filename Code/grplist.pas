@@ -1074,7 +1074,14 @@ var
   PNGrs: TPNGObject;
   temprs: Tmemorystream;
 begin
-  drawbmp:= Tbitmap.Create;
+  if not Assigned(Form2) then
+    Application.CreateForm(TForm2, Form2);
+  if not Assigned(drawbmp) then
+  begin
+    drawbmp:= Tbitmap.Create;
+    drawbmp.PixelFormat := pf24bit;
+  end;
+
   drawbmp.PixelFormat := pf24bit;
   temppic := movelock;
   if (grppic[temppic].size >= 8) and (calPNG(@(grppic[temppic].data[0])) = 1) then

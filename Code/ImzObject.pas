@@ -21,7 +21,7 @@ Type
     procedure DrawImzPNGtoCanvas(Acanvas: TCanvas; imzPNG: PimzPNG; count, x, y: integer);
     procedure DrawImztoBitmap(Bmp: Pntbitmap; imz: Pimz; PNGcount, count, x, y: integer);
     procedure DrawImztoCanvas(Acanvas: TCanvas; imz: Pimz; PNGcount, count, x, y: integer);
-    //��ex�ĺ�������ƫ�Ƶ�
+    // 带 Ex 的函数会考虑偏移绘制
     procedure DrawImzPNGtoBitmapEx(Bmp: Pntbitmap; imzPNG: PimzPNG; count, x, y: integer);
     procedure DrawImzPNGtoCanvasEx(Acanvas: TCanvas; imzPNG: PimzPNG; count, x, y: integer);
     procedure DrawImztoBitmapEx(Bmp: Pntbitmap; imz: Pimz; PNGcount, count, x, y: integer);
@@ -46,6 +46,46 @@ const
   imzindexfilename = 'index.ka';
 
 implementation
+
+function ZipReadEntrySafe(zip: pzip_t; const AName: string): ansistring;
+var
+  n, base, lowerName, upperName: string;
+begin
+  Result := '';
+  if zip = nil then
+    exit;
+
+  n := StringReplace(AName, '\\', '/', [rfReplaceAll]);
+  while (Length(n) > 0) and (n[1] = '/') do
+    Delete(n, 1, 1);
+
+  if n = '' then
+    exit;
+
+  Result := zip_express(zip, n);
+  if Length(Result) > 0 then
+    exit;
+
+  lowerName := StringReplace(LowerCase(n), '.png', '.png', [rfReplaceAll]);
+  upperName := StringReplace(lowerName, '.png', '.PNG', [rfReplaceAll]);
+  if upperName <> n then
+  begin
+    Result := zip_express(zip, upperName);
+    if Length(Result) > 0 then
+      exit;
+  end;
+
+  base := ExtractFileName(n);
+  if base <> '' then
+  begin
+    Result := zip_express(zip, base);
+    if Length(Result) > 0 then
+      exit;
+    upperName := StringReplace(base, '.png', '.PNG', [rfReplaceAll, rfIgnoreCase]);
+    if upperName <> base then
+      Result := zip_express(zip, upperName);
+  end;
+end;
 
 procedure TImzFile.ReadAllPNG;
 var
@@ -86,7 +126,12 @@ begin
               for I3 := 0 to tempbmp.Height - 1 do
               begin
                 Move(tempbmp.ScanLine[I3]^, imzFile.imzPNG[I].PNG[I2].data[I3][0], tempbmp.Width * 4);
-                Move(tempPNG.AlphaScanline[I3]^, imzFile.imzPNG[I].PNG[I2].alpha[I3][0], tempbmp.Width);
+                FillChar(imzFile.imzPNG[I].PNG[I2].alpha[I3][0], tempbmp.Width, 255);
+                try
+                  Move(tempPNG.AlphaScanline[I3]^, imzFile.imzPNG[I].PNG[I2].alpha[I3][0], tempbmp.Width);
+                except
+                  // PNG without alpha channel: keep opaque alpha=255.
+                end;
               end;
             end
             else
@@ -200,25 +245,38 @@ end;
 procedure TImzFile.SceneQuickDrawBuf(Buf: PScenePNGBuf; PNGcount, x, y: integer);
 var
   I, I2: integer;
+  pngW, pngH: integer;
 begin
 
   if (imzFile.PNGnum <= 0) or (PNGcount < 0) or (PNGcount >= imzFile.PNGnum) then
     exit;
   if imzFile.imzPNG[PNGcount].frame <= 0 then
     exit;
+
+  pngW := imzFile.imzPNG[PNGcount].PNG[0].width;
+  pngH := imzFile.imzPNG[PNGcount].PNG[0].height;
+  if (pngW <= 0) or (pngH <= 0) then
+    exit;
+  if (Length(imzFile.imzPNG[PNGcount].PNG[0].data) < pngH) or (Length(imzFile.imzPNG[PNGcount].PNG[0].alpha) < pngH) then
+    exit;
+
   x := x - imzFile.imzPNG[PNGcount].x;
   y := y - imzFile.imzPNG[PNGcount].y;
-  if imzFile.imzPNG[PNGcount].PNG[0].width * imzFile.imzPNG[PNGcount].PNG[0].height > 0 then
+  if pngW * pngH > 0 then
   begin
-    for I := 0 to imzFile.imzPNG[PNGcount].PNG[0].height - 1 do
+    for I := 0 to pngH - 1 do
     begin
-      for I2 := 0 to imzFile.imzPNG[PNGcount].PNG[0].width - 1 do
+      if (Length(imzFile.imzPNG[PNGcount].PNG[0].data[I]) < pngW * 4)
+      or (Length(imzFile.imzPNG[PNGcount].PNG[0].alpha[I]) < pngW) then
+        continue;
+      for I2 := 0 to pngW - 1 do
       begin
         if (I + y >= 0) and (I + y < buf.height) and (I2 + x >= 0) and (I2 + x < buf.width) then
         begin
           if imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2] = 255 then
           begin
             Pcardinal(@buf.data[I + y][4 * (I2 + x)])^ := Pcardinal(@imzFile.imzPNG[PNGcount].PNG[0].data[I][I2 * 4])^;
+            buf.data[I + y][4 * (I2 + x) + 3] := 255;
           end
           else //if imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2] <> 0 then
           begin
@@ -227,6 +285,7 @@ begin
             buf.data[I + y][4 *(I2 + x) + 1] := (imzFile.imzPNG[PNGcount].PNG[0].data[I][I2 * 4 + 1] * imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2] + buf.data[I + y][4 * (I2 + x) + 1] * (255 - imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2])) div 255;
             buf.data[I + y][4 *(I2 + x) + 2] := (imzFile.imzPNG[PNGcount].PNG[0].data[I][I2 * 4 + 2] * imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2] + buf.data[I + y][4 * (I2 + x) + 2] * (255 - imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2])) div 255;
             buf.data[I + y][4 *(I2 + x)] := (imzFile.imzPNG[PNGcount].PNG[0].data[I][I2 * 4] * imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2] + buf.data[I + y][4 * (I2 + x)] * (255 - imzFile.imzPNG[PNGcount].PNG[0].alpha[I][I2])) div 255;
+            buf.data[I + y][4 * (I2 + x) + 3] := 255;
           end;
         end;
       end;
@@ -392,8 +451,23 @@ begin
     end;
     fnameu8:=fname;
     zip:= zip_open(@fnameu8[1]);
+    if zip = nil then
+    begin
+      tempimz.PNGnum := 0;
+      setlength(tempimz.imzPNG, 0);
+      Result := false;
+      exit;
+    end;
 
-    str:=zip_express(zip, indexfile);
+    str:=ZipReadEntrySafe(zip, indexfile);
+    if Length(str) <= 0 then
+    begin
+      zip_close(zip);
+      tempimz.PNGnum := 0;
+      setlength(tempimz.imzPNG, 0);
+      Result := false;
+      exit;
+    end;
     tempimz.PNGnum := length(str) shr 2;
       setlength(tempimz.imzPNG, tempimz.PNGnum);
       for I := 0 to tempimz.PNGnum - 1 do
@@ -401,20 +475,20 @@ begin
         tempimz.imzPNG[I].x := psmallint(@str[1+i*4])^;
         tempimz.imzPNG[I].y := psmallint(@str[3+i*4])^;
       end;
-
       for I := 0 to tempimz.PNGnum - 1 do
     begin
       tempimz.imzPNG[I].frame := 0;
-      if zip_has_file(zip, inttostr(I) + '.png') then
+      str := ZipReadEntrySafe(zip, inttostr(I) + '.png');
+      if Length(str) > 0 then
       begin
         tempimz.imzPNG[I].frame := 1;
         setlength(tempimz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
         setlength(tempimz.imzPNG[I].framedata, tempimz.imzPNG[I].frame);
         try
-          str := zip_express(zip, inttostr(I) + '.png');
           tempimz.imzPNG[I].framelen[0] := length(str);
           setlength(tempimz.imzPNG[I].framedata[0].data, tempimz.imzPNG[I].framelen[0]);
-          move(str[1], tempimz.imzPNG[I].framedata[0].data[0], tempimz.imzPNG[I].framelen[0]);
+          if tempimz.imzPNG[I].framelen[0] > 0 then
+            move(str[1], tempimz.imzPNG[I].framedata[0].data[0], tempimz.imzPNG[I].framelen[0]);
         finally
 
         end;
@@ -422,7 +496,7 @@ begin
       else
       begin
         i2 := 0;
-        while (zip_has_file(zip, inttostr(I) + '_' + inttostr(i2) + '.png')) do
+        while Length(ZipReadEntrySafe(zip, inttostr(I) + '_' + inttostr(i2) + '.png')) > 0 do
           inc(i2);
         tempimz.imzPNG[I].frame := i2;
         setlength(tempimz.imzPNG[I].framelen, tempimz.imzPNG[I].frame);
@@ -430,10 +504,11 @@ begin
         for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
         begin
           try
-            str := zip_express(zip,  inttostr(I) + '_' + inttostr(i2) + '.png');
+            str := ZipReadEntrySafe(zip, inttostr(I) + '_' + inttostr(I2) + '.png');
             tempimz.imzPNG[I].framelen[I2] := length(str);
             setlength(tempimz.imzPNG[I].framedata[I2].data, tempimz.imzPNG[I].framelen[I2]);
-            move(str[1], tempimz.imzPNG[I].framedata[I2].data[0], tempimz.imzPNG[I].framelen[I2]);
+            if tempimz.imzPNG[I].framelen[I2] > 0 then
+              move(str[1], tempimz.imzPNG[I].framedata[I2].data[0], tempimz.imzPNG[I].framelen[I2]);
           finally
 
           end;
@@ -567,7 +642,7 @@ begin
         for I2 := 0 to tempimz.imzPNG[I].frame - 1 do
         begin
           try
-            FH := Fileopen(path + inttostr(I) + '_' + inttostr(i2) + '.png', fmopenread);
+            FH := Fileopen(path + inttostr(I) + '_' + inttostr(I2) + '.png', fmopenread);
             tempimz.imzPNG[I].framelen[I2] := fileseek(FH, 0, 2);
             fileseek(FH, 0, 0);
             setlength(tempimz.imzPNG[I].framedata[I2].data, tempimz.imzPNG[I].framelen[I2]);

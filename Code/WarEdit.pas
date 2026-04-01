@@ -94,14 +94,14 @@ var
   warmappersonnum: integer;
   warselectcontinue: integer;
   warsmallmapsize: integer;
-  warexcelopname: string = 'ս������';
+  warexcelopname: string = '战斗数据';
 
   strings: array [0 .. 9999] of array [0 .. 9999] of ansistring;
 
 procedure readWini;
 function readW(grp: string; PWF: PWFile): boolean;
 procedure CalWnamePos(PWF: PWFile);
-function calWname(index: integer): widestring;
+function calWname(index: integer): string;
 procedure readWareditgrp;
 procedure addnewWdata(PWF: PWFile; PWD: PRData);
 
@@ -236,7 +236,7 @@ begin
 
     iniF.Free;
   except
-    // showmessage('��ȡini�ļ�����');
+    // showmessage('读取ini文件错误');
     exit;
   end;
 end;
@@ -318,7 +318,7 @@ begin
 
       result := true;
     except
-      // showmessage('��ȡ�ļ�����');
+      // showmessage('读取文件错误');
       fileclose(F);
       exit;
     end;
@@ -341,7 +341,7 @@ begin
     tempwar := 7
   else
     tempwar := 5;
-  // ��������
+  // 计算我方数量
   warmax := 0;
   for I := 0 to ListBox1.Items.Count - 1 do
   begin
@@ -370,7 +370,7 @@ begin
       warfriend[wselect[I].labelcount - 1].Y := ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[I].pos1].Rarray[wselect[I].pos2].dataarray[wselect[I].pos3]);
   end;
 
-  // ��������
+  // 计算敌方数量
   warmax := 0;
   tempwar := 6;
   for I := 0 to ListBox1.Items.Count - 1 do
@@ -412,14 +412,14 @@ var
   xls: plxw_workbook;
   sheet: plxw_worksheet;
 begin
-  SaveDialog1.Filter := 'excel�ļ�|*.xlsx';
+  SaveDialog1.Filter := 'excel文件|*.xlsx';
   if SaveDialog1.Execute then
   begin
     try
       filename := SaveDialog1.filename;
       if not SameText(ExtractFileExt(filename), '.xlsx') then
         filename := filename + '.xlsx';
-      xls := workbook_new(pansichar(UnicodeToMulti(Pwidechar(filename), 65001)));
+      xls := workbook_new(pansichar(UnicodeToMulti(filename, 65001)));
       sheet := workbook_add_worksheet(xls, 'Sheet1');
       temp := 1;
       for i2 := 0 to Wtypedataitem - 1 do
@@ -465,9 +465,9 @@ begin
       // ExcelApp:=Unassigned;
       // xls.Save(FileName);
       workbook_close(xls);
-      showmessage('����Excel�ɹ���');
+      showmessage('导出Excel成功！');
     except
-      showmessage('����Excel����');
+      showmessage('导出Excel成功！');
       exit;
     end;
   end;
@@ -488,7 +488,7 @@ var
   i1: integer;
 begin
 
-  OpenDialog1.Filter := 'excel����ļ�|*.xlsx';
+  OpenDialog1.Filter := 'excel表格文件|*.xlsx';
   if OpenDialog1.Execute then
   begin
     try
@@ -498,7 +498,7 @@ begin
       // XLSReadWriteII41.Read;
       // xls := TXlsFile.Create (opendialog1.Filename);
       // xls.ActiveSheetByName := 'Sheet1';
-      xls := xlsxioread_open(pansichar(UnicodeToMulti(Pwidechar(OpenDialog1.filename), 936)));
+      xls := xlsxioread_open(pansichar(UnicodeToMulti(OpenDialog1.filename, 936)));
       sheet := xlsxioread_sheet_open(xls, 'Sheet1', XLSXIOREAD_SKIP_EMPTY_ROWS);
       i2 := 0;
       // while True do
@@ -569,9 +569,9 @@ begin
 
       ComboBox1Select(Sender);
 
-      showmessage('����Excel�ɹ���');
+      showmessage('导出Excel成功！');
     except
-      showmessage('����Excel����');
+      showmessage('导出Excel成功！');
       exit;
     end;
   end;
@@ -642,7 +642,7 @@ end;
 
 procedure TForm10.Button3Click(Sender: TObject);
 begin
-  if MessageBox(Self.Handle, '�Ƿ���������Ե�ǰֵΪȱʡֵ��', '�������', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, '是否添加项到最后，以当前值为缺省值？', '添加项到最后', MB_OKCANCEL) = 1 then
   begin
     if warFile.Wtype.datanum < 0 then
     begin
@@ -665,10 +665,10 @@ var
   arrg: boolean;
 begin
   if warFile.Wtype.datanum = 1 then
-    showmessage('ֻʣ���һ��벻Ҫɾ����')
+    showmessage('只剩最后一项，请不要删除！')
   else
   begin
-    if MessageBox(Self.Handle, '�Ƿ�ɾ�����һ�', 'ɾ�����һ��', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, '是否添加项到最后，以当前值为缺省值？', '添加项到最后', MB_OKCANCEL) = 1 then
     begin
       temp := ComboBox1.ItemIndex;
       arrg := false;
@@ -692,15 +692,15 @@ var
   i2, i3, i4, i5: integer;
   temp: integer;
 begin
-  if MessageBox(Self.Handle, '����Excel��Ҫ�����Ѿ���װExcel�����ҵ���ʱ��ϳ����������벻Ҫ���в�����ȷʵҪ������', '����Excel', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, '是否添加项到最后，以当前值为缺省值？', '添加项到最后', MB_OKCANCEL) = 1 then
   begin
 
     ExcelApp := CreateOleObject('Excel.Application');
-    ExcelApp.Caption := 'UPedit����Excel����';
+    ExcelApp.Caption := 'UPedit导出Excel操作';
     ExcelApp.visible := true;
     ExcelApp.WorkBooks.Add;
-    // ExcelApp.WorkSheets[2].name := '��Ʒ';
-    // ExcelApp.Cells[1,4].Value := '��һ�е�����';
+    // ExcelApp.Cells[1,4].Value := '第一行第四列';
+    // ExcelApp.Cells[1,4].Value := '第一行第四列';
 
     if integer(ExcelApp.workSheets.Count) < 1 then
       ExcelApp.workSheets.Add;
@@ -709,7 +709,7 @@ begin
     // ExcelApp.WorkSheets[1].name := warExcelopname;
 
     temp := 1;
-    ExcelApp.Caption := 'UPedit����Excel������(' + warexcelopname + ')';
+    ExcelApp.Caption := 'UPedit导出Excel操作中(' + warexcelopname + ')';
 
     for i2 := 0 to Wtypedataitem - 1 do
       if Wini.Wterm[i2].datanum > 0 then
@@ -726,7 +726,7 @@ begin
           end;
     for i2 := 0 to warFile.Wtype.datanum - 1 do
     begin
-      ExcelApp.Caption := 'UPedit����Excel������(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
+      ExcelApp.Caption := 'UPedit导出Excel操作中(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
       temp := 1;
       for i3 := 0 to warFile.Wtype.Rdata[i2].num - 1 do
         for i4 := 0 to warFile.Wtype.Rdata[i2].Rdataline[i3].len - 1 do
@@ -737,10 +737,10 @@ begin
           end;
     end;
 
-    ExcelApp.Caption := 'UPedit����Excel��ɣ�';
+    ExcelApp.Caption := 'UPedit导出Excel操作';
     ExcelApp := Unassigned;
     SetForegroundWindow(application.Handle);
-    showmessage('����Excel��ɣ��뵽Excel�����б����ļ���');
+      showmessage('导出Excel成功！');
   end;
 end;
 
@@ -750,18 +750,18 @@ var
   i2, i3, i4, i5: integer;
   temp, temp2: integer;
 begin
-  if MessageBox(Self.Handle, '����Excel��Ҫ�����Ѿ���װExcel�����ҵ���ʱ��ϳ����������벻Ҫ���в�����ȷʵҪ������', '����Excel', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, '是否添加项到最后，以当前值为缺省值？', '添加项到最后', MB_OKCANCEL) = 1 then
   begin
-    OpenDialog1.Filter := 'excel����ļ�|*.xls;*.xlsx';
+  OpenDialog1.Filter := 'excel表格文件|*.xlsx';
     if OpenDialog1.Execute then
     begin
       ExcelApp := CreateOleObject('Excel.Application');
-      ExcelApp.Caption := 'UPedit����Excel����';
+    ExcelApp.Caption := 'UPedit导出Excel操作';
       ExcelApp.visible := true;
       ExcelApp.WorkBooks.Open(OpenDialog1.filename);
 
       // ExcelApp.workSheets[1].activate;
-      ExcelApp.Caption := 'UPedit����Excel������(' + warexcelopname + ')';
+    ExcelApp.Caption := 'UPedit导出Excel操作中(' + warexcelopname + ')';
 
       i2 := 2;
       while true do
@@ -783,7 +783,7 @@ begin
 
       for i2 := 0 to warFile.Wtype.datanum - 1 do
       begin
-        ExcelApp.Caption := 'UPedit����Excel������(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
+      ExcelApp.Caption := 'UPedit导出Excel操作中(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
         temp := 0;
         for i3 := 0 to warFile.Wtype.Rdata[i2].num - 1 do
         begin
@@ -803,7 +803,7 @@ begin
 
       end;
 
-      ExcelApp.Caption := 'UPedit����Excel��ɣ�';
+    ExcelApp.Caption := 'UPedit导出Excel操作';
       ExcelApp := Unassigned;
       CalWnamePos(@warFile);
       ComboBox1.Clear;
@@ -814,7 +814,7 @@ begin
       ComboBox1Select(Sender);
       ExcelApp.Quit;
       SetForegroundWindow(application.Handle);
-      showmessage('����Excel��ɣ�');
+      showmessage('导出Excel成功！');
     end;
   end;
 end;
@@ -1104,7 +1104,7 @@ begin
     ComboBox1.ItemIndex := 0;
     displayW;
   except
-    showmessage('��ս�����ݳ����');
+      showmessage('导出Excel成功！');
     exit;
   end;
   try
@@ -1134,7 +1134,7 @@ begin
     if warselectcontinue = 1 then
       CheckBox2.Checked := true;
   except
-    showmessage('��ʾս������ͼ�����');
+      showmessage('导出Excel成功！');
   end;
   countwarpos;
 end;
@@ -1273,7 +1273,7 @@ begin
             end;
         if not(iswarmapperson) then
         begin
-          if warmappersontype = 1 then // �Ѿ�
+          if warmappersontype = 1 then // 友军
           begin
             for I := 0 to ListBox1.Count - 1 do
               if (warmappersonnum = wselect[I].labelcount - 1) and (wselect[I].labeltype = 1) then
@@ -1370,7 +1370,7 @@ begin
   begin
     if (warfriend[I].X = axp) and (warfriend[I].Y = ayp) and (not(autowarfriend) or (warfriend[I].personnum >= 0)) then
     begin
-      tempstr := ' �Ѿ�' + inttostr(I + 1);
+      tempstr := ' 友军' + inttostr(I + 1);
       break;
     end;
   end;
@@ -1379,7 +1379,7 @@ begin
     begin
       if (warenemy[I].X = axp) and (warenemy[I].Y = ayp) and (warenemy[I].personnum >= 0) then
       begin
-        tempstr := ' �о�' + inttostr(I + 1);
+      tempstr := ' 友军' + inttostr(I + 1);
         break;
       end;
     end;
@@ -1442,11 +1442,11 @@ begin
     begin
       if warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3].datatype = 0 then
         WriteRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3],
-          strtoint64(InputBox('�޸�', '�޸Ĵ�����ֵ', inttostr(ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2]
+          strtoint64(InputBox('修改', '修改此项数值', inttostr(ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2]
           .dataarray[wselect[ListBox1.ItemIndex].pos3])))))
       else
         WriteRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3],
-          displaybackstr(InputBox('�޸�', '�޸Ĵ����ַ���', displaystr(readRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex]
+          displaybackstr(InputBox('修改', '修改此项字符串', displaystr(readRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex]
           .pos2].dataarray[wselect[ListBox1.ItemIndex].pos3])))));
     end
     else
@@ -1525,12 +1525,12 @@ begin
   end;
 end;
 
-function calWname(index: integer): widestring;
+function calWname(index: integer): string;
 var
   I: integer;
 begin
   if (index >= 0) and (index < warFile.Wtype.datanum) and (warFile.Wtype.namepos >= 0) then
-    result := inttostr(index) + widestring(displaystr(readRDataStr(@warFile.Wtype.Rdata[index].Rdataline[warFile.Wtype.namepos].Rarray[0].dataarray[0])))
+    result := inttostr(index) + string(displaystr(readRDataStr(@warFile.Wtype.Rdata[index].Rdataline[warFile.Wtype.namepos].Rarray[0].dataarray[0])))
   else
     result := inttostr(index);
   for I := 1 to length(result) - 1 do
@@ -1576,7 +1576,7 @@ begin
     fileclose(grp);
 
   except
-    // showmessage('����');
+    // showmessage('保存错误');
     try
       fileclose(idx);
     except

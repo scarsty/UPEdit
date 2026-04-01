@@ -1,4 +1,4 @@
-object Form90: TForm90
+﻿object Form90: TForm90
   Left = 0
   Top = 0
   BorderStyle = bsNone

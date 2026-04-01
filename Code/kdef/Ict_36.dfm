@@ -1,4 +1,4 @@
-object Form33: TForm33
+﻿object Form33: TForm33
   Left = 0
   Top = 0
   Caption = #21028#26029#20027#35282#24615#21035' or JMP'#21464#37327#26159#21542#20026#38646

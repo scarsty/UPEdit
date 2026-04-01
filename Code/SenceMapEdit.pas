@@ -1,4 +1,4 @@
-unit SenceMapEdit;
+﻿unit SenceMapEdit;
 
 {$modeswitch autoderef}
 
@@ -163,7 +163,7 @@ procedure copyscenemapevent(source,destination:Pmapevent);
 var
   TileScale: integer = 1;
 
-  undoAmount: integer = 10; //Ĭ�ϳ�������
+  undoAmount: integer = 10; //默认撤销次数
   undotimes : integer = 0;
   undoSavetimes: integer = 1;
 
@@ -198,7 +198,7 @@ var
   scenelock :boolean= true;
   needupdate : boolean;
 
-  highselect: boolean = false; //������������ѡ������
+  highselect: boolean = false; //批量海拔设置选择区域
   highendx: integer = -1;
   highendy: integer = -1;
   eventpictime: integer = 0;
@@ -616,7 +616,7 @@ begin
     scenesmallbmp.Palette := ScenePalle;}
     if not (readscenegrp(gamepath + Smapidx, gamepath + smapgrp) = 1) then
     begin
-      showmessage('��ȡIDX��GRP�ļ�����');
+      showmessage('读取IDX或GRP文件错误！');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -643,7 +643,7 @@ begin
 
     if not imzFile.ReadImzFromFile(@imzFIle.imzFile, gamepath + SMAPIMZ) then
     begin
-      showmessage('��ȡIMZ�ļ�ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -667,7 +667,7 @@ begin
 
     if not imzFile.ReadImzFromFolder(@imzFIle.imzFile, gamepath + SMAPPNGpath) then
     begin
-      showmessage('��ȡIMZ�ļ���ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -782,6 +782,7 @@ var
     Palle:HPalette;
   tempstr: string;
 begin
+  DoubleBuffered := True;
   SceneEditMode := RLEMode;
   ImzFile := TimzFile.create;
   ScenemapInitial := false;
@@ -807,7 +808,7 @@ begin
      needupdate := false;
      scenelock :=true;
   except
-    showmessage('��ɫ������ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
     //self.Close;
     //exit;
   end;
@@ -879,7 +880,7 @@ begin
   
   if not  (readDAndS(combobox1.ItemIndex) = 1) then
   begin
-    showmessage('������ͼ�༭����ʧ�ܣ������ļ�������Ҳ�������������Ϸ·���������⣬����ini�������⣡');
+      showmessage('读取IDX或GRP文件错误！');
     self.Close;
     exit;
   end;
@@ -904,7 +905,7 @@ begin
   undotimes := 0;
   undoSavetimes := 1;
  except
-   showmessage('������ͼ�༭����ʧ�ܣ�����');
+      showmessage('读取IDX或GRP文件错误！');
    self.Close;
    exit;
  end;
@@ -915,7 +916,7 @@ begin
 
   {if not (readscenegrp(gamepath + Smapidx, gamepath + smapgrp) = 1) then
   begin
-    showmessage('IDX��GRP�ļ�����');
+      showmessage('读取IDX或GRP文件错误！');
     exit;
   end;}
 
@@ -935,7 +936,7 @@ begin
   //image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect);
   scenelock := false;
   except
-    showmessage('������ͼ�༭����ʧ�ܣ�������ͼ���ݴ���');
+      showmessage('读取IDX或GRP文件错误！');
     self.Close;
     exit;
   end;
@@ -1606,7 +1607,6 @@ begin
     pointy := image1.Height div 2 - 31 * TileW;
     statusbar1.Canvas.Brush.Color := clbtnface;
     statusbar1.Canvas.FillRect(statusbar1.Canvas.ClipRect);
-    statusbar1.Repaint;
     statusbar1.Canvas.TextOut(10,10,'X='+inttostr(axp) + ',Y='+inttostr(ayp));
     if SceneEditMode = RLEMode then
       scenebufbmp.Canvas.CopyRect(scenebufbmp.Canvas.ClipRect, sceneopbmp.Canvas,sceneopbmp.Canvas.ClipRect)
@@ -1688,7 +1688,8 @@ begin
       begin
         if SceneEditMode <> RLEMode then
           for I := 0 to ScenePNGbuf.Height - 1 do
-            Move(ScenePNGbuf.data[I][0], scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.width * 4);
+            if (Length(ScenePNGbuf.data) > I) and (Length(ScenePNGbuf.data[I]) >= ScenePNGbuf.width * 4) and (ScenePNGbuf.width > 0) then
+              Move(ScenePNGbuf.data[I][0], scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.width * 4);
          for Ix := scenecopymap.x - 1 downto 0 do
            for iy := scenecopymap.y - 1 downto 0 do
              if (scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] > 0) or ((scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] = 0) and (scenelayer = 0)) then
@@ -1717,7 +1718,8 @@ begin
               //warmapfile.map[combobox1.ItemIndex].maplayer[warlayer].pic[wartempy + iy][wartempx + ix] := warcopymap.maplayer[warlayer].pic[iy][ix];
         if SceneEditMode <> RLEMode then
           for I := 0 to ScenePNGbuf.Height - 1 do
-            Move(scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4);
+            if (Length(ScenePNGbuf.data) > I) and (Length(ScenePNGbuf.data[I]) >= ScenePNGbuf.width * 4) and (ScenePNGbuf.width > 0) then
+              Move(ScenePNGbuf.data[I][0], scenebufbmpPNG.ScanLine[I]^, ScenePNGbuf.width * 4);
 
       end;
 
@@ -1869,7 +1871,7 @@ var
 begin
   if not ScenemapInitial then
     exit;
-  //�¼��㶯����������
+  // 事件点动态动画刷新
   try
 
     if scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx] >= 0 then
@@ -2041,11 +2043,11 @@ try
   fileclose(idx);
   fileclose(grp);
 
-  showmessage('����ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
 except
   fileclose(idx);
   fileclose(grp);
-  showmessage('����ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
 end;
 end;
 
@@ -2070,7 +2072,7 @@ begin
   IncludeEvent := ExportEventCheckBox.Checked;
   if not (IncludeGround or IncludeBuilding or IncludeSky or IncludeEvent) then
   begin
-    showmessage('������ѡ��һ�������㡣');
+      showmessage('读取IDX或GRP文件错误！');
     exit;
   end;
 
@@ -2167,7 +2169,7 @@ begin
       ReplaceBitmapColor(ExportBitmap, usualtrans, clBlack);
       ExportBitmap.SaveToFile(FileName);
     end;
-    showmessage('����ͼƬ�ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
   finally
     ExportBitmap.Free;
   end;
@@ -2195,9 +2197,9 @@ begin
         scenemapfile.map[scenemapfile.num - 1].maplayer[I].pic[iy][ix] := scenemapfile.map[combobox2.ItemIndex].maplayer[I].pic[iy][ix]
   end;
     combobox2.Items.Add(inttostr(scenemapfile.num - 1));
-    showmessage('�����ͼ�ɹ����Ѹ��Ƶ�ǰ�����ĵ��³�����');
+      showmessage('读取IDX或GRP文件错误！');
   except
-    showmessage('���ʧ��');
+      showmessage('读取IDX或GRP文件错误！');
   end;
 end;
 
@@ -2217,9 +2219,9 @@ begin
   dec(scenemapfile.num);
   combobox2.Items.Delete(temp - 1);
   setlength(scenemapfile.map, scenemapfile.num);
-  showmessage('ɾ�����һ�������ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
   except
-    showmessage('ɾ��ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
   end;
 end;
 
@@ -2340,11 +2342,11 @@ begin
       scenelock := false;
       except
         fileclose(FH);
-        showmessage('��ͼ����');
+      showmessage('读取IDX或GRP文件错误！');
       end;
     end
     else
-      showmessage('�ļ������ڣ�');
+      showmessage('读取IDX或GRP文件错误！');
   end;
   scenelock := false;
 end;
@@ -2382,7 +2384,7 @@ var
 begin
   if scenelayer <> 6 then
   begin
-    showmessage('��ѡ�����ͼ��Ϊ"ȫ��"��Ȼ�����������һ������');
+      showmessage('读取IDX或GRP文件错误！');
   end
   else
   begin
@@ -2819,7 +2821,7 @@ begin
   end;
     fileclose(FSGrp);
   except
-    //showmessage('��ͼ����');
+    //showmessage('贴图错误');
     fileclose(FSGrp);
     result := 0;
     exit;
@@ -2837,8 +2839,10 @@ begin
     //sceneopbmp2.IgnorePalette := true;
 
   if SceneEDitMode <> RLEMode then
-    for I := 0 to ScenePNGbuf.Height - 1 do
-      fillchar(ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4, #0);
+    if (ScenePNGbuf.width > 0) and (ScenePNGbuf.Height > 0) and (Length(ScenePNGbuf.data) >= ScenePNGbuf.Height) then
+      for I := 0 to ScenePNGbuf.Height - 1 do
+        if Length(ScenePNGbuf.data[I]) >= ScenePNGbuf.width * 4 then
+          fillchar(ScenePNGbuf.data[I][0], ScenePNGbuf.width * 4, #0);
 
   pointx := sceneOPBMP2.Width DIV 2;
   pointy := sceneopbmp2.Height div 2 - 31 * TileW;
@@ -3032,7 +3036,8 @@ begin
   begin
     sceneopbmp2.Canvas.Lock;
     for I := 0 to ScenePNGbuf.Height - 1 do
-      Move(sceneopbmp2.ScanLine[I]^, ScenePNGbuf.data[I][0], ScenePNGbuf.Width * 4);
+      if (Length(ScenePNGbuf.data) > I) and (Length(ScenePNGbuf.data[I]) >= ScenePNGbuf.width * 4) and (ScenePNGbuf.width > 0) then
+        Move(ScenePNGbuf.data[I][0], sceneopbmp2.ScanLine[I]^, ScenePNGbuf.Width * 4);
     sceneopbmp2.Canvas.UnLock;
   end;
   evtnum := -1;

@@ -140,7 +140,7 @@ begin
     //luaopen_io(lua_script);
   except
     lua_close(lua_script);
-    showmessage('����lua�����');
+    showmessage('加载lua出错！');
     exit;
   end;
   try
@@ -194,7 +194,7 @@ begin
   Lua_register(lua_script,'getxor', @Lua_getxor);
 
   except
-    showmessage('ע�ắ��ʧ�ܣ�');
+    showmessage('注册函数失败！');
     lua_close(lua_script);
     exit;
   end;
@@ -206,9 +206,9 @@ begin
   //lua_pcall(lua_script,0,1,0);
   ExecScript(Pansichar(ansistring(filename)), 'TXTLeadIn');
   except
-    //showmessage('����lua����');
+    //showmessage('运行lua出错');
     on E: Exception do
-      showmessage('UPedit��ʾ������Ϣ��' + E.ClassName+ ': '+ E.Message);
+      showmessage('UPedit提示错误信息：' + E.ClassName+ ': '+ E.Message);
 
   end;
   lua_close(lua_script);
@@ -295,7 +295,7 @@ var
 begin
 
   P := lua_touserdata(L, 1);
-  str := UnicodetoMulti(Pwidechar(P),936);
+  str := UnicodetoMulti(string(PWideChar(P)),936);
   lua_pushstring(L, @str[1]);
   result := 1;
 end;
@@ -307,12 +307,12 @@ var
 begin
 
   P := lua_touserdata(L, 1);
-  str := UnicodetoMulti(Pwidechar(P),950);
+  str := UnicodetoMulti(string(PWideChar(P)),950);
   lua_pushstring(L, @str[1]);
   result := 1;
 end;
 
-//ȡ��R�������ƣ���һ������Ϊ������֣���0��ʼ�����ڶ�������Ϊ���
+//取得R数据名称，第一个参数为类别（数字，从0开始），第二个参数为序号
 function lua_getRname(L: lua_state): integer; cdecl;
 var
   I: integer;
@@ -339,18 +339,18 @@ begin
   result := 1;
 end;
 
-//�õ�һ��������R�������λ�ã���һ������Ϊ���(���֣���0��ʼ)���ڶ���Ϊ���ƣ��������
+//得到一个名字在R数据里的位置，第一个参数为类别(数字，从0开始)，第二个为名称，返回序号
 function lua_getRnamepos(L: lua_state): integer; cdecl;
 var
   I, index, datatype: integer;
   tempstr: string;
   namestr: AnsiString;
-  namewstr: widestring;
+  namewstr: string;
 begin
   datatype := floor(lua_tonumber(L, 1));
   namestr := lua_toString(L, 2);
   index := -1;
-  namewstr := WideString(namestr);
+  namewstr := string(namestr);
   if useR.Rtype[datatype].namepos < 0 then
   begin
     Lua_pushnumber(L, index);
@@ -373,7 +373,7 @@ begin
 
 end;
 
-//ȡ��W�������ƣ�Ψһһ������Ϊ��ţ���������
+//取得W数据名称，唯一一个参数为序号，返回名称
 function lua_getWname(L: lua_state): integer; cdecl;
 var
   I: integer;
@@ -399,17 +399,17 @@ begin
   result := 1;
 end;
 
-//�õ�һ��������W�������λ�ã�Ψһ�Ĳ���Ϊ���ƣ��������
+//得到一个名字在W数据里的位置，唯一的参数为名称，返回序号
 function lua_getWnamepos(L: lua_state): integer; cdecl;
 var
   I, index: integer;
   tempstr: string;
   namestr: Ansistring;
-  namewstr: WideString;
+  namewstr: string;
 begin
   namestr := lua_tostring(L, 1);
   index := -1;
-  namewstr := widestring(namestr);
+  namewstr := string(namestr);
   if usew.Wtype.namepos < 0 then
   begin
     Lua_pushnumber(L, index);
@@ -432,7 +432,7 @@ begin
 
 end;
 
-//����userdata
+//创建userdata
 function lua_createbyte(L: lua_state): integer; cdecl;
 var
   length, I: integer;
@@ -625,7 +625,7 @@ var
   len: integer;
 begin
   Pstr := lua_touserdata(L,1);
-  str := widestring(Pwidechar(Pstr));
+  str := string(PWideChar(Pstr));
   len := length(str);
   lua_pushnumber(L, len);
   result := 1;
@@ -638,7 +638,7 @@ var
   len: integer;
 begin
   Pstr := lua_touserdata(L,1);
-  str := widestring(Pwidechar(Pstr));
+  str := string(PWideChar(Pstr));
   len := length(str) * sizeof(widechar);
   lua_pushnumber(L, len);
   result := 1;
@@ -658,7 +658,7 @@ end;
 function lua_inttostr(L: lua_state): integer; cdecl;
 var
   num: integer;
-  str: WideString;
+  str: string;
   P: Pbyte;
 begin
   num := floor(lua_tonumber(L,1));
@@ -673,7 +673,7 @@ var
   P: Pbyte;
 begin
   P := lua_touserdata(L, 1);
-  num := strtoint(widestring(Pwidechar(P)));
+  num := strtoint(string(PWideChar(P)));
   lua_pushnumber(L, num);
   result := 1;
 end;
@@ -719,7 +719,7 @@ var
 begin
   filename := lua_tostring(L,1);
   try
-    H := fileopen(widestring(filename), fmopenreadwrite);
+    H := fileopen(string(filename), fmopenreadwrite);
     len := fileseek(H, 0, 2);
     fileclose(H);
   except
@@ -729,7 +729,7 @@ begin
   result := 1;
 end;
 
-//��ȡ�ļ���һ������Ϊbuffer���ڶ����ļ�����������ƫ�ƣ���4������
+//读取文件，一个参数为buffer，第二个文件名，第三个偏移，第4个长度
 function lua_loadfile(L: lua_state): integer; cdecl;
 var
   P: Pbyte;
@@ -741,14 +741,14 @@ begin
   filename := lua_tostring(L,2);
   offset := floor(lua_tonumber(L,3));
   length := floor(lua_tonumber(L,4));
-  Fhandle := fileopen(widestring(filename), fmopenread);
+  Fhandle := fileopen(string(filename), fmopenread);
   fileseek(Fhandle, offset, 0);
   fileread(Fhandle, P^, length);
   fileclose(Fhandle);
   result := 0;
 end;
 
-//�����ļ���һ������Ϊbuffer���ڶ����ļ�����������ƫ�ƣ���4������
+//保存文件，一个参数为buffer，第二个文件名，第三个偏移，第4个长度
 function lua_savefile(L: lua_state): integer; cdecl;
 var
   P: Pbyte;
@@ -760,14 +760,14 @@ begin
   filename := lua_tostring(L,2);
   offset := floor(lua_tonumber(L,3));
   length := floor(lua_tonumber(L,4));
-  Fhandle := fileopen(widestring(filename), fmopenreadwrite);
+  Fhandle := fileopen(string(filename), fmopenreadwrite);
   fileseek(Fhandle, offset, 0);
   filewrite(Fhandle, P^, length);
   fileclose(Fhandle);
   result := 0;
 end;
 
-//�õ��Ի��ļ����ļ������ȷ���idx���ٷ���grp
+//得到对话文件的文件名，先返回idx，再返回grp
 function lua_gettalkname(L: lua_state): integer; cdecl;
 var
   grpname, idxname: ansistring;
@@ -779,7 +779,7 @@ begin
   result := 2;
 end;
 
-//�¼��ļ�����
+//事件文件名称
 function lua_getkdefname(L: lua_state): integer; cdecl;
 var
   grpname, idxname: ansistring;
@@ -791,13 +791,13 @@ begin
   result := 2;
 end;
 
-//��ʾ����
+//显示文字
 function lua_showmessage(L: lua_state): integer; cdecl;
 var
   str: Ansistring;
 begin
   str := Lua_tostring(L, 1);
-  showmessage(widestring(str));
+  showmessage(string(str));
   //writeln(widestring(str));
   result := 0;
 end;
@@ -819,7 +819,7 @@ begin
   result := 1;
 end;
 
-//���ؾ籾����
+//返回剧本名字
 function Lua_gettxtname(L: lua_state): integer; cdecl;
 begin
   lua_pushstring(L, Pansichar(Ansistring(txtname)));

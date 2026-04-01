@@ -1,4 +1,4 @@
-unit WarMapEdit;
+﻿unit WarMapEdit;
 
 {$modeswitch autoderef}
 
@@ -287,7 +287,7 @@ begin
   begin
     if not (readWarmapgrp = 1) then
     begin
-      showmessage('��ȡIDX��GRP�ļ�����');
+      showmessage('读取IDX或GRP文件错误！');
       WarMapInitial := false;
       RadioGroup1.ItemIndex := integer(WarEditMode);
       exit;
@@ -304,7 +304,7 @@ begin
   begin
     if not imzFile.ReadImzFromFile(gamepath + WMAPIMZ) then
     begin
-      showmessage('��ȡIMZ�ļ�ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
       WarMapInitial := false;
       RadioGroup1.ItemIndex := integer(WarEditMode);
       exit;
@@ -321,7 +321,7 @@ begin
   begin
     if not imzFile.ReadImzFromFolder(gamepath + WMAPPNGpath) then
     begin
-      showmessage('��ȡIMZ�ļ���ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
       warMapInitial := false;
       RadioGroup1.ItemIndex := integer(warEditMode);
       exit;
@@ -470,9 +470,9 @@ begin
         warmapfile.map[warmapfile.num - 1].maplayer[I].pic[iy][ix] := warmapfile.map[combobox1.ItemIndex].maplayer[I].pic[iy][ix]
   end;
     combobox1.Items.Add(inttostr(warmapfile.num - 1));
-    showmessage('�����ͼ�ɹ����Ѹ��Ƶ�ǰ�����ĵ��³�����');
+      showmessage('读取IDX或GRP文件错误！');
   except
-    showmessage('���ʧ��');
+      showmessage('读取IDX或GRP文件错误！');
   end;
 end;
 
@@ -490,9 +490,9 @@ begin
   dec(warmapfile.num);
   combobox1.Items.Delete(temp - 1);
   setlength(warmapfile.map, warmapfile.num);
-  showmessage('ɾ���ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
   except
-    showmessage('ɾ��ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
   end;
 end;
 
@@ -515,9 +515,9 @@ try
   end;
   fileclose(idx);
   fileclose(grp);
-  showmessage('����ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
 except
-  showmessage('����ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
 end;
 end;
 
@@ -567,7 +567,7 @@ var
 begin
   if warlayer <> 2 then
   begin
-    showmessage('��ѡ�����ͼ��Ϊ"ȫ��"��Ȼ�����������һ������');
+      showmessage('读取IDX或GRP文件错误！');
   end
   else
   begin
@@ -651,7 +651,7 @@ begin
     exit;
   if not (ExportGroundCheckBox.Checked or ExportBuildingCheckBox.Checked) then
   begin
-    showmessage('������ѡ��һ�������㡣');
+      showmessage('读取IDX或GRP文件错误！');
     exit;
   end;
 
@@ -714,7 +714,7 @@ begin
       ReplaceBitmapColor(ExportBitmap, usualtrans, clBlack);
       ExportBitmap.SaveToFile(FileName);
     end;
-    showmessage('����ͼƬ�ɹ���');
+      showmessage('读取IDX或GRP文件错误！');
   finally
     ExportBitmap.Free;
   end;
@@ -817,6 +817,7 @@ var
     PalleEntry:TPaletteEntry;
     Palle:HPalette;
 begin
+  DoubleBuffered := True;
    ImzFile := TimzFile.Create;
    WarEditMode := RLEMode;
    WarmapInitial := false;
@@ -837,7 +838,7 @@ begin
    //
      Palle:=CreatePalette(pLogPalette(@plogpalle)^);
   except
-    showmessage('��ɫ������ʧ�ܣ�');
+      showmessage('读取IDX或GRP文件错误！');
   end;
   warlayer := -1;
   combobox2.ItemIndex := 0;
@@ -892,7 +893,7 @@ begin
   try
   if not ({(readWarmapgrp = 1) and }(readwardef(gamepath + warmapdefidx,gamepath + warmapdefgrp,@warmapfile) = 1)) then
   begin
-    showmessage('ս����ͼ�༭����ʧ�ܣ�ԭ���������ͼ���ͼ�ļ�����򲻴��ڣ�������Ϸ·�����ã��Լ�ini�ļ����ã�');
+      showmessage('读取IDX或GRP文件错误！');
     self.Close;
     exit;
   end;
@@ -901,7 +902,7 @@ begin
     combobox1.Items.Add(inttostr(I));
   combobox1.ItemIndex := 0;
   except
-    showmessage('ս����ͼ�༭����ʧ�ܣ�ԭ�������ս�������ļ�����򲻴��ڣ�������Ϸ·�����ã��Լ�ini�ļ����ã�');
+      showmessage('读取IDX或GRP文件错误！');
     self.Close;
     exit;
   end;
@@ -928,7 +929,7 @@ begin
   wartempy := -1;
   timer1.Enabled := true;
   except
-    showmessage('ս����ͼ�༭����ʧ�ܣ�ԭ�������ս����ͼ�ļ�����');
+      showmessage('读取IDX或GRP文件错误！');
     self.Close;
     exit;
   end;
@@ -955,7 +956,7 @@ begin
   end;
 
   warcopymapmode := 0;
-  //��ק���º���ͼ���ͬ��
+  // 拖拽后刷新并同步显示
   self.BringToFront;
 end;
 
@@ -1244,7 +1245,6 @@ begin
 
     statusbar1.Canvas.Brush.Color := clbtnface;
     statusbar1.Canvas.FillRect(statusbar1.Canvas.ClipRect);
-    statusbar1.Repaint;
     statusbar1.Canvas.TextOut(10,10,'X='+inttostr(axp) + ',Y='+inttostr(ayp));
     if WarEditMode = RLEMode then
     begin
@@ -1423,7 +1423,7 @@ begin
   except
     fileclose(F);
     result := 0;
-    //showmessage('idx����');
+    //showmessage('idx错误');
     exit;
   end;
   try
@@ -1450,7 +1450,7 @@ begin
     fileclose(FF);
   except
     fileclose(FF);
-    //showmessage('��ͼ����');
+    //showmessage('贴图错误');
     result := 0;
     exit;
   end;
@@ -1488,7 +1488,7 @@ begin
     fileclose(idx);
     fileclose(grp);
     result := 0;
-   // showmessage('����');
+  // showmessage('保存错误');
   end;
 
 end;
@@ -1569,7 +1569,7 @@ begin
   begin
     warbufbmppng.Canvas.Lock;
     for I := 0 to warPNGbuf.Height - 1 do
-      Move(warbufbmppng.ScanLine[I]^, warPNGbuf.data[I][0], warPNGbuf.Width * 4);
+      Move(warPNGbuf.data[I][0], warbufbmppng.ScanLine[I]^, warPNGbuf.Width * 4);
     warbufbmppng.Canvas.UnLock;
     waropbmppng.Canvas.CopyRect(waropbmppng.Canvas.ClipRect, warbufbmppng.Canvas, warbufbmppng.Canvas.ClipRect);
   end;

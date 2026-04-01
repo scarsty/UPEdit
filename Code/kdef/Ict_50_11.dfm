@@ -1,4 +1,4 @@
-object Form52: TForm52
+﻿object Form52: TForm52
   Left = 0
   Top = 0
   Caption = #23383#31526#20018#21512#24182

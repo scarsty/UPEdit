@@ -1,4 +1,4 @@
-object inctGuide: TinctGuide
+﻿object inctGuide: TinctGuide
   Left = 0
   Top = 0
   Margins.Left = 2

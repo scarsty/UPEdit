@@ -1,4 +1,4 @@
-object Form64: TForm64
+﻿object Form64: TForm64
   Left = 0
   Top = 0
   Caption = #21462#20869#23384#22320#22336#25968#25454

@@ -1,4 +1,4 @@
-object Form78: TForm78
+﻿object Form78: TForm78
   Left = 0
   Top = 0
   Caption = #26174#31034#22270#29255

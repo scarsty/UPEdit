@@ -1,4 +1,4 @@
-object Form62: TForm62
+﻿object Form62: TForm62
   Left = 0
   Top = 0
   Caption = #35835#21462'S*'#25968#25454

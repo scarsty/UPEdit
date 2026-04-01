@@ -58,7 +58,7 @@ procedure TForm14.Button4Click(Sender: TObject);
 begin
   inc(talkstrnum);
   setlength(talkstr, talkstrnum);
-  Writetalkstr(@talkstr[talkstrnum - 1], WideString('Ոݔ�댦Ԓ���ݣ����ԭ�挦Ԓ��ÿ��12���h�ּ�һ����̖*'));
+  Writetalkstr(@talkstr[talkstrnum - 1], '請輸入對話內容，若為原版對話，每隔12個漢字加一個星號*');
   combobox2.Items.Add(inttostr(talkstrnum - 1) +':' + displaystr(ReadTalkStr(@talkstr[talkstrnum - 1])));
   combobox2.ItemIndex := talkstrnum - 1;
   edit1.Text := displaystr(ReadTalkStr(@talkstr[talkstrnum - 1]));
@@ -77,7 +77,7 @@ begin
     edit1.Text := displaystr(readTalkStr(@talkstr[talkstrnum - 1]));
   end
   else
-    showmessage('ֻʣһ���Ի�������ɾ��');
+    showmessage('只剩一个对话，不可删除');
 end;
 
 procedure TForm14.ComboBox2Select(Sender: TObject);

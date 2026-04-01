@@ -315,7 +315,7 @@ begin
     updown1.Position := 0;
     updown2.Position := 0;
     if isgif and (gif.Images.Count > 1) then
-      showmessage('GIFͼƬֻ��ʾ��һ֡������֡����ͬ��һ֡�����ɵ��룡');
+      showmessage('GIF图片只显示第一帧，所有帧设置同第一帧，都可导入！');
 end;
 
 procedure TForm1.Button5Click(Sender: TObject);
@@ -329,7 +329,7 @@ begin
   try
   if not (fileexists(edit2.Text) and fileexists(edit3.Text)) then
   begin
-    showmessage('GRP��IDX�ļ������ڣ�');
+      showmessage('GIF图片只显示第一帧，所有帧设置同第一帧，都可导入！');
     exit;
   end;
   if ISGIF then
@@ -412,11 +412,11 @@ begin
   end;
     setlength(data, 0);
     setlength(grpdata, 0);
-    messagebox(0, '����ɹ���', '�ɹ���', MB_OK or MB_iconasterisk);
+    messagebox(0, '导入成功！', '成功！', MB_OK or MB_iconasterisk);
     progressbar1.Position := 0;
   except
     progressbar1.Position := 0;
-    messagebox(0, '����ʧ�ܣ�', '��ʾ��', MB_OK or MB_ICONHAND);
+    messagebox(0, '导入失败！', '提示！', MB_OK or MB_ICONHAND);
     setlength(data, 0);
     setlength(grpdata, 0);
     exit;
@@ -788,11 +788,11 @@ begin
   begin
     for Iy := Arect.Top to Arect.Bottom - 1 do
     begin
-      trans := 0;//����͸������
-      transcount := 0;//͸�����ظ���
+      transcount := 0;//透明像素个数
+      transcount := 0;//透明像素个数
       //state
-      //Ϊ0�ǳ�ʼ״̬
-      //Ϊ1��͸������״̬
+      //为1是透明像素状态
+      //为2是普通颜色像素状态
       //Ϊ2����ͨ��ɫ����״̬
       state := 0;
       linebyte := 0;
@@ -857,7 +857,7 @@ begin
             inc(transcount);
           end;
         end
-        else//�������͸������
+        else//如果不是透明像素
         begin
           if state <> 2 then
           begin

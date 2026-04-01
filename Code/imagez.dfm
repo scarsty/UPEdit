@@ -1,4 +1,4 @@
-object ImzForm: TImzForm
+﻿object ImzForm: TImzForm
   Left = 0
   Top = 0
   Margins.Left = 2

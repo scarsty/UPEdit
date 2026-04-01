@@ -1,4 +1,4 @@
-object Form60: TForm60
+﻿object Form60: TForm60
   Left = 0
   Top = 0
   Caption = #35835#21462'D*'#25968#25454

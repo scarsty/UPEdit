@@ -1,4 +1,4 @@
-object Form47: TForm47
+﻿object Form47: TForm47
   Left = 0
   Top = 0
   Caption = #22235#21017#36816#31639

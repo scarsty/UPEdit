@@ -1,4 +1,4 @@
-object Form8: TForm8
+﻿object Form8: TForm8
   Left = 0
   Top = 0
   Caption = #35774#32622#32534#36753#22120#37197#32622

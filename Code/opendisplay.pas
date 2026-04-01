@@ -97,7 +97,7 @@ begin
   //opendisbmp.Canvas.s
   self.Canvas.Brush.Style := bsclear;
   self.Canvas.Font.Color := clblack;
-  self.Canvas.Font.Name := '����';
+  self.Canvas.Font.Name := '宋体';
   self.Canvas.Font.Size := 16;
   processint:= 0;
   opendisbmp.Width := self.Width;
@@ -106,7 +106,7 @@ begin
   //image1.Canvas.StretchDraw(image1.Canvas.ClipRect, opendisbmp);
   //self.Canvas.CopyRect(self.Canvas.ClipRect,opendisbmp.Canvas,opendisbmp.Canvas.ClipRect);
   //image1.Canvas.Font.Color := Random($FFFFFF);
-  self.Canvas.TextOut(0, 0, '����������...');
+  self.Canvas.TextOut(0, 0, '程序载入中...');
   self.Refresh;
   JPG.Free;
   tempdisbmp.Free;}
@@ -123,7 +123,7 @@ begin
 
   BlendFunction.BlendOp := AC_SRC_OVER;
   BlendFunction.BlendFlags := 0;
-  BlendFunction.SourceConstantAlpha := 1; // ͸����
+  BlendFunction.SourceConstantAlpha := 1; // 透明度
   BlendFunction.AlphaFormat := AC_SRC_ALPHA;
 
   SetWindowLong(Self.Handle, GWL_EXSTYLE, GetWindowLong(Self.Handle,
@@ -145,7 +145,7 @@ begin
   //
   ptDst := Point(Self.Left, Self.Top);
   ptSrc := Point(0, 0);
-  BlendFunction.SourceConstantAlpha := alpha; // ͸����
+  BlendFunction.SourceConstantAlpha := alpha; // 透明度
   UpdateLayeredWindow(Self.Handle,
      Self.Canvas.Handle,
      @ptDst,

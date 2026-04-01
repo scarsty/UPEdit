@@ -1,4 +1,4 @@
-unit MainMapEdit;
+﻿unit MainMapEdit;
 
 {$modeswitch autoderef}
 
@@ -731,6 +731,7 @@ var
   PalleEntry: TPaletteEntry;
   Palle: HPalette;
 begin
+  DoubleBuffered := True;
   MMapInitial := false;
   ImzFile := TimzFile.Create;
 
@@ -1380,7 +1381,6 @@ begin
 
       StatusBar1.Canvas.Brush.Color := clbtnface;
       StatusBar1.Canvas.FillRect(StatusBar1.Canvas.ClipRect);
-      StatusBar1.Repaint;
       StatusBar1.Canvas.TextOut(10, 10, 'X=' + inttostr(axp) + ',Y=' + inttostr(ayp));
       if MMapEditMode = RLEMode then
       begin
@@ -1700,8 +1700,10 @@ begin
   end
   else
   begin
-    for i := 0 to MMapPNGBuf.height - 1 do
-      fillchar(MMapPNGBuf.data[i][0], MMapPNGBuf.width * 4, #0);
+    if (MMapPNGBuf.width > 0) and (MMapPNGBuf.height > 0) and (Length(MMapPNGBuf.data) >= MMapPNGBuf.height) then
+      for i := 0 to MMapPNGBuf.height - 1 do
+        if Length(MMapPNGBuf.data[i]) >= MMapPNGBuf.width * 4 then
+          fillchar(MMapPNGBuf.data[i][0], MMapPNGBuf.width * 4, #0);
   end;
 
   MX := ScrollBar1.Position + ScrollBar2.Position - MMApfile.Map[0].Y div 2;
@@ -2078,7 +2080,8 @@ begin
   begin
     Mmapopbmp2.Canvas.Lock;
     for i := 0 to MMapPNGBuf.height - 1 do
-      Move(Mmapopbmp2.ScanLine[i]^, MMapPNGBuf.data[i][0], MMapPNGBuf.width * 4);
+      if (Length(MMapPNGBuf.data) > i) and (Length(MMapPNGBuf.data[i]) >= MMapPNGBuf.width * 4) and (MMapPNGBuf.width > 0) then
+        Move(MMapPNGBuf.data[i][0], Mmapopbmp2.ScanLine[i]^, MMapPNGBuf.width * 4);
     Mmapopbmp2.Canvas.UnLock;
   end;
 

@@ -1,4 +1,4 @@
-object Form50: TForm50
+﻿object Form50: TForm50
   Left = 0
   Top = 0
   Caption = #25226'X'#25353'Format'#26684#24335#20889#20837#23383#31526#20018'S'

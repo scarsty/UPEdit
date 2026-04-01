@@ -137,7 +137,7 @@ begin
   end;
   combobox2.Clear;
   listbox1.Clear;
-  combobox2.Items.Add('-2Ĭ��ֵ');
+  combobox2.Items.Add('-2默认值');
   for I := 0 to namestrnum - 1 do
   begin
     combobox2.Items.Add(inttostr(I)+ ':' + displaystr(readTalkStr(@namestr[I])));
@@ -181,7 +181,7 @@ procedure TForm38.Button3Click(Sender: TObject);
 begin
   inc(talkstrnum);
   setlength(talkstr, talkstrnum);
-  WriteTalkStr(@talkstr[talkstrnum - 1], widestring('Ոݔ�댦Ԓ���ݣ����ԭ�挦Ԓ��ÿ��12���h�ּ�һ����̖*'));
+  WriteTalkStr(@talkstr[talkstrnum - 1], '請輸入對話內容，若為原版對話，每隔12個漢字加一個星號*');
   combobox5.Items.Add(inttostr(talkstrnum - 1) +':' +displaystr(ReadTalkStr(@talkstr[talkstrnum - 1])));
   combobox5.ItemIndex := talkstrnum - 1;
   edit5.Text := displaystr(readTalkStr(@talkstr[talkstrnum - 1]));
@@ -212,14 +212,14 @@ begin
     edit5.Text := displaystr(ReadTalkStr(@talkstr[talkstrnum - 1]));
   end
   else
-    showmessage('ֻʣһ���Ի�������ɾ��');
+    showmessage('只剩一个对话，不可删除');
 end;
 
 procedure TForm38.Button6Click(Sender: TObject);
 begin
   inc(namestrnum);
   setlength(namestr, namestrnum);
-  WriteTalkStr(@namestr[namestrnum - 1], widestring(edit6.Text));
+  WriteTalkStr(@namestr[namestrnum - 1], edit6.Text);
   listbox1.Items.Add(inttostr(namestrnum - 1)+ ':' + displaystr(readtalkstr(@namestr[namestrnum - 1])));
   listbox1.ItemIndex := namestrnum - 1;
   combobox2.Items.Add(inttostr(namestrnum - 1)+ ':' + displaystr(readtalkstr(@namestr[namestrnum - 1])))
@@ -231,13 +231,13 @@ var
 begin
   if listbox1.ItemIndex >= 0 then
   begin
-    WriteTalkStr(@namestr[listbox1.ItemIndex], widestring(edit6.Text));
+    WriteTalkStr(@namestr[listbox1.ItemIndex], edit6.Text);
     temp1 := combobox2.ItemIndex;
     temp2 := listbox1.ItemIndex;
     combobox2.Clear;
    // listbox1.Clear;
     listbox1.Items.Strings[listbox1.ItemIndex] :=  inttostr(listbox1.ItemIndex) + ':' + displaystr(readTalkstr(@namestr[listbox1.ItemIndex]));
-    combobox2.Items.Add('-2Ĭ��ֵ');
+  combobox2.Items.Add('-2默认值');
     for I := 0 to namestrnum - 1 do
     begin
       combobox2.Items.Add(inttostr(I)+ ':' + displaystr(readtalkstr(@namestr[I])));
@@ -264,7 +264,7 @@ begin
     inc(len, talkoffset[I]);
     setlength(tdata, talkoffset[I]);
     if talkoffset[I] > 0 then
-      Move(namestr[I].str[0], tdata[0], talkoffset[I]);
+      Move(PByte(@namestr[I].str[0])^, tdata[0], talkoffset[I]);
     if talkinvert = 0 then
     begin
       for i2 := 0 to talkoffset[I] - 1 do

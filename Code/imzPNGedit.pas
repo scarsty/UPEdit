@@ -451,7 +451,7 @@ begin
     exit;
   if tempimzPNG.frame = 1 then
   begin
-    showmessage('���һ֡��');
+    showmessage('最后一帧了');
     exit;
   end;
   for I := framenum - 1 to tempimzPNG.frame - 2 do

@@ -1,4 +1,4 @@
-object Form32: TForm32
+﻿object Form32: TForm32
   Left = 0
   Top = 0
   Caption = #35774#32622#20154#29289#27494#21151

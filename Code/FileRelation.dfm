@@ -1,4 +1,4 @@
-object Form92: TForm92
+﻿object Form92: TForm92
   Left = 0
   Top = 0
   Caption = #25991#20214#20851#32852#35774#32622

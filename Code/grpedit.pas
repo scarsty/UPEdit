@@ -102,7 +102,7 @@ procedure  RotateBitmap90Degrees(ABitmap:   TBitmap);
 procedure  RotateBitmap270Degrees(ABitmap:   TBitmap);
 
 implementation
-{$R *.dfm}
+{$R *.lfm}
 uses
   takein, grplist;
 

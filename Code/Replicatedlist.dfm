@@ -1,4 +1,4 @@
-object Form86: TForm86
+﻿object Form86: TForm86
   Left = 0
   Top = 0
   Caption = #22797#21051#29256#21015#34920#25991#20214#32534#36753

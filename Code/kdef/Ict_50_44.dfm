@@ -1,4 +1,4 @@
-object Form81: TForm81
+﻿object Form81: TForm81
   Left = 0
   Top = 0
   Caption = #25773#25918#25928#26524

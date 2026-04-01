@@ -1,4 +1,4 @@
-object FlashForm: TFlashForm
+﻿object FlashForm: TFlashForm
   Left = 0
   Top = 0
   BorderStyle = bsNone

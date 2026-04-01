@@ -71,23 +71,20 @@ var
 procedure outMapover;
 procedure outMapcheck;
 function CalRNameWithoutNum(datatype, index: integer): string;
-procedure outMapcreatepal;//����256��ɫ��...
+procedure outMapcreatepal;//创建256调色板...
+procedure outMapcreatebmp;//正在创建bmp...
 
-procedure outMapcreatebmp;//���ڴ���bmp...
+procedure outMaplayer1;//'正在绘制地面层...');
 
-procedure outMaplayer1;//'���ڻ��Ƶ����...');
+procedure outMaplayer2;//('正在绘制表面层...');
 
-procedure outMaplayer2;//('���ڻ��Ʊ����...');
+procedure outMapcount;//('正在计算需要绘制的建筑顺序...');
 
+procedure outMaplayer3;//('正在绘制建筑...');
 
-procedure outMapcount;//('���ڼ�����Ҫ���ƵĽ���˳��...');
-
-procedure outMaplayer3;//('���ڻ��ƽ���...');
-
-procedure outMaplayer4;//('������ӳ�������...');
-procedure outMapzoompic;//'��������...');
-
-procedure outMapsave;//('���ڱ���bmp�ļ�...');
+procedure outMaplayer4;//('正在添加场景名称...');
+procedure outMapzoompic;//'正在缩放...');
+procedure outMapsave;//('正在保存bmp文件...');
 
 
 implementation
@@ -420,57 +417,57 @@ end;
 
 procedure outMapover;
 begin
-  Form93.memo1.Lines.Add('������ɣ�');
+  Form93.memo1.Lines.Add('导出完成！');
 end;
 
 procedure outMapcheck;
 begin
-  Form93.memo1.Lines.Add('����������ֹ��');
+  Form93.memo1.Lines.Add('导出错误，终止！');
 end;
 
 procedure outMapcreatepal;
 begin
-  Form93.memo1.Lines.Add('���ڴ���256��ɫ��...');
+  Form93.memo1.Lines.Add('正在创建256调色板...');
 end;
 
 procedure outMapcreatebmp;
 begin
-  Form93.memo1.Lines.Add('���ڴ���bmp...');
+  Form93.memo1.Lines.Add('正在创建bmp...');
 end;
 
 procedure outMaplayer1;
 begin
-  Form93.memo1.Lines.Add('���ڻ��Ƶ����...');
+  Form93.memo1.Lines.Add('正在绘制地面层...');
 end;
 
 procedure outMaplayer2;
 begin
-  Form93.memo1.Lines.Add('���ڻ��Ʊ����...');
+  Form93.memo1.Lines.Add('正在绘制表面层...');
 end;
 
 procedure outMapcount;
 begin
-  Form93.memo1.Lines.Add('���ڼ�����Ҫ���ƵĽ���˳��...');
+  Form93.memo1.Lines.Add('正在计算需要绘制的建筑顺序...');
 end;
 
 procedure outMaplayer3;
 begin
-  Form93.memo1.Lines.Add('���ڻ��ƽ���...');
+  Form93.memo1.Lines.Add('正在绘制建筑...');
 end;
 
 procedure outMaplayer4;
 begin
-  Form93.memo1.Lines.Add('������ӳ�������...');
+  Form93.memo1.Lines.Add('正在添加场景名称...');
 end;
 
 procedure outMapzoompic;
 begin
-  Form93.memo1.Lines.Add('��������...');
+  Form93.memo1.Lines.Add('正在缩放...');
 end;
 
 procedure outMapsave;
 begin
-  Form93.memo1.Lines.Add('���ڱ���ͼƬ�ļ�...');
+  Form93.memo1.Lines.Add('正在保存图片文件...');
 end;
 
 
@@ -483,12 +480,12 @@ begin
    Mmapoutputname := Checkbox1.Checked and Mmapoutputlayer3;
    if not (Mmapoutputlayer1 or Mmapoutputlayer2 or Mmapoutputlayer3) then
    begin
-     showmessage('δѡ���κ���Ҫ���Ƶ�ͼ��!');
+     showmessage('未选择任何需要绘制的图层!');
      exit;
    end;
    if outMMapEditMode <> RLEMode then
    begin
-     if MessageBox(Self.Handle, '��Ϊ��PNGģʽ�������ٶ��൱�����ڻ��Ƶ����ʱ�Ῠס�ܳ�ʱ�䡣ȷʵҪ������ͼ��',  '����Excel', MB_OKCANCEL) <> 1 then
+     if MessageBox(Self.Handle, '因为是PNG模式，绘制速度相当慢，在绘制地面层时会卡住很长时间。确实要导出地图吗？',  '导出Excel', MB_OKCANCEL) <> 1 then
        exit;
    end;
    outMAPfilename := edit1.Text;
@@ -503,7 +500,7 @@ begin
    memo1.Clear;
    if outMMapEditMode <> RLEMode then
    begin
-     Form93.memo1.Lines.Add('��Ϊ��PNGģʽ�������ٶ��൱�����ڻ��Ƶ����ʱ�Ῠס�ܳ�ʱ��!');
+     Form93.memo1.Lines.Add('因为是PNG模式，绘制速度相当慢，在绘制地面层时会卡住很长时间!');
    end;
 
    OutMapThread := TOutMapThread.Create(false);

@@ -223,11 +223,11 @@ begin
     filename := SaveDialog1.filename;
     if not SameText(ExtractFileExt(filename), '.xlsx') then
       filename := filename + '.xlsx';
-    xls := workbook_new(pansichar(UnicodeToMulti(PWideChar(UnicodeString(filename)), 65001)));
+    xls := workbook_new(pansichar(UnicodeToMulti(filename, 65001)));
 
     for i1 := 0 to RFile.typenumber - 1 do
     begin
-      sheet := workbook_add_worksheet(xls, pansichar(UnicodeToMulti(PWideChar(UnicodeString(typename[i1])), 65001)));
+      sheet := workbook_add_worksheet(xls, pansichar(UnicodeToMulti(typename[i1], 65001)));
       temp := 0;
       if i1 = 0 then
       begin
@@ -244,11 +244,11 @@ begin
               begin
                 if i3 > 0 then
                 begin
-                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(Rini[i1].Rterm[i2 + i4].name + inttostr(i3)))), 65001)), nil);
+                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(displaystr(Rini[i1].Rterm[i2 + i4].name + inttostr(i3)), 65001)), nil);
                 end
                 else
                 begin
-                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(Rini[i1].Rterm[i2 + i4].name))), 65001)), nil);
+                  worksheet_write_string(sheet, temp, 0, pansichar(UnicodeToMulti(displaystr(Rini[i1].Rterm[i2 + i4].name), 65001)), nil);
                 end;
                 inc(temp);
               end;
@@ -263,7 +263,7 @@ begin
               begin
                 if RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datatype = 1 then
                 begin
-                  worksheet_write_string(sheet, temp, i2 + 1, pansichar(UnicodeToMulti(PWideChar(UnicodeString(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]))), 65001)), nil)
+                  worksheet_write_string(sheet, temp, i2 + 1, pansichar(UnicodeToMulti(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]), 65001)), nil)
                 end
                 else
                 begin
@@ -290,11 +290,11 @@ begin
               begin
                 if i3 > 0 then
                 begin
-                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(Rini[i1].Rterm[i2 + i4].name + inttostr(i3))), 65001)), nil)
+                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(Rini[i1].Rterm[i2 + i4].name + inttostr(i3), 65001)), nil)
                 end
                 else
                 begin
-                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(Rini[i1].Rterm[i2 + i4].name)), 65001)), nil);
+                  worksheet_write_string(sheet, 0, temp, pansichar(UnicodeToMulti(Rini[i1].Rterm[i2 + i4].name, 65001)), nil);
                 end;
                 inc(temp);
               end;
@@ -310,7 +310,7 @@ begin
               begin
                 if RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datatype = 1 then
                 begin
-                  worksheet_write_string(sheet, i2 + 1, temp, pansichar(UnicodeToMulti(PWideChar(UnicodeString(displaystr(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])))),
+                  worksheet_write_string(sheet, i2 + 1, temp, pansichar(UnicodeToMulti(displaystr(readRDatastr(@RFile.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])),
                     65001)), nil)
                 end
                 else
@@ -358,7 +358,7 @@ begin
     // XLSReadWriteII41.Filename := opendialog1.Filename;
     // XLSReadWriteII41.Read;
     // xls := TXlsFile.Create (opendialog1.Filename);
-    xls := xlsxioread_open(pansichar(UnicodeToMulti(PWideChar(UnicodeString(OpenDialog1.filename)), 936)));
+    xls := xlsxioread_open(pansichar(UnicodeToMulti(OpenDialog1.filename, 936)));
     RFile.typenumber := typenumber;
     for i1 := 0 to RFile.typenumber - 1 do
     begin
@@ -1783,7 +1783,7 @@ begin
                     1:
                       value_str := MultiToUnicode(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0], 950);
                     2:
-                      value_str := widestring(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]); // 宽字符编码测试，繁体似乎也可用
+                      value_str := string(PWideChar(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0])); // 宽字符编码测试，繁体似乎也可用
                   else
                     value_str := putf8char(@PRF.Rtype[i1].Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].data[0]);
                   end;

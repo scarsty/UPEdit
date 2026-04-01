@@ -110,7 +110,7 @@ var
   eventamount, noweventnum: integer;
   talkstr: array of Ttalkstr;
   talkstrnum: integer;
-  InstructGuideini: TInstructGuide; //ͨ��ָ���Ƶ�����
+  InstructGuideini: TInstructGuide; //通用指令制导配置
   InstructGuideComboboxini: TInstructGuideComboboxes;
   KDEFini : TKDEFini;
   KDEF50: Tkdef50;
@@ -125,19 +125,19 @@ procedure Copyevent(dest,source:Pevent);
 procedure clearIct(Ict: Pattrib);
 procedure Addattrib(ent: Pevent; atrb: Pattrib; num: integer);
 procedure AddIct(ent: Pevent; atrb: Pattrib; num: integer);
-function calRname(datatype, index: integer): widestring;
-function calattribname(atrb: Pattrib):widestring;
-function CalInstructGuideName(atrb: Pattrib): widestring;
+function calRname(datatype, index: integer): string;
+function calattribname(atrb: Pattrib):string;
+function CalInstructGuideName(atrb: Pattrib): string;
 function GetInstructNeedGuide(atrb: Pattrib): Boolean;
-function CalInstructGuideParamName(atrb: Pattrib; param: integer): widestring;
+function CalInstructGuideParamName(atrb: Pattrib; param: integer): string;
 procedure deleteatrb(ent: Pevent; num: integer);
 procedure saveevent(destent,sourceent:Pevent);
 procedure SaveEventtoData(destent: Peventdata; sourceent:Pevent);
 procedure SaveDataToEvent(destent: Pevent; sourceent:Peventdata);
-function calWname(index: integer): widestring;
+function calWname(index: integer): string;
 procedure readname;
-function cutstr(str:widestring): widestring;
-function E_getstr(bit,t,x: smallint): widestring;
+function cutstr(str:string): string;
+function E_getstr(bit,t,x: smallint): string;
 
 implementation
 
@@ -158,7 +158,7 @@ procedure TForm7.Button10Click(Sender: TObject);
 var
   tempattrib: Tattrib;
   tempatrbnum, I, temp, temppos: integer;
-  tempstr: widestring;
+  tempstr: string;
 begin
   temppos := 0;
   FOrm9.RadioGroup1.Visible := false;
@@ -166,13 +166,13 @@ begin
   Form9.RadioGroup1.ItemIndex := 0;
   Form9.RadioGroup2.ItemIndex := 0;
   Form9.ListBox1.Clear;
-  Form9.ListBox1.Items.Add('-1(FFFF):�¼�����');
+  Form9.ListBox1.Items.Add('-1(FFFF):事件结束');
   for I := 0 to kdefini.KDEFnum - 1 do
   begin
     temp := kdefini.KDEFitem[I].index;
     tempstr := inttostr(I) + '(' + Format('%x', [temp and $FFFF])+ '):';
     if kdefini.KDEFitem[I].note = '' then
-      tempstr := tempstr + 'δָ֪��'
+      tempstr := tempstr + '未知指令'
     else
       tempstr := tempstr + displayname(kdefini.KDEFitem[I].note);
     FOrm9.ListBox1.Items.Add(tempstr);
@@ -249,8 +249,8 @@ var
   I: integer;
 begin
   if nowevent.attribamount = 1 then
-    showmessage('ֻʣһ��ָ��޷�ɾ����')
-  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, PChar('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' ��'),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
+    showmessage('只剩一个指令，无法删除！')
+  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, PChar(string('确实要删除指令:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' 吗？')),  '删除指令', MB_OKCANCEL) = 1) then
   begin
     deleteatrb(@nowevent,listbox1.ItemIndex);
     saveeventtoData(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -265,7 +265,7 @@ begin
     for I := 0 to nowevent.attribamount - 1 do
       if nowevent.attrib[listbox1.ItemIndex].labelfrom = nowevent.attrib[I].labelstatus then
         break;
-    if (MessageBox(Self.Handle, PChar('ȷʵҪɾ��ָ��:' + listbox1.Items.Strings[I] + ' ��'),  'ɾ��ָ��', MB_OKCANCEL) = 1) then
+    if (MessageBox(Self.Handle, PChar(string('确实要删除指令:' + listbox1.Items.Strings[I] + ' 吗？')),  '删除指令', MB_OKCANCEL) = 1) then
     begin
       deleteatrb(@nowevent,I);
       //saveevent(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -300,17 +300,17 @@ begin
   setlength(Kevent[eventamount - 1].attrib[1].par, 1);
   Kevent[eventamount - 1].attrib[1].par[0] := -1;}
   combobox2.Items.Add(inttostr(eventamount - 1));
-  showmessage('����¼���ɣ����' + inttostr(eventamount - 1));
+  showmessage('添加事件完成，编号' + inttostr(eventamount - 1));
 end;
 
 procedure TForm7.Button13Click(Sender: TObject);
 begin
   if eventamount = 1 then
   begin
-    showmessage('ֻʣһ���¼����޷�ɾ����');
+    showmessage('只剩一个事件，无法删除！');
     exit;
   end
-  else if MessageBox(Self.Handle, 'ȷʵҪɾ�����һ���¼���',  'ɾ���¼�', MB_OKCANCEL) = 1 then
+  else if MessageBox(Self.Handle, '确实要删除最后一个事件吗？',  '删除事件', MB_OKCANCEL) = 1 then
   begin
     dec(eventamount);
     setlength(Kevent, eventamount);
@@ -634,7 +634,7 @@ var
   I,I2,I3,len,strnum,atrbnum: integer;
   strlist: TStringlist;
   tempstr: string;
-  handlestr: widestring;
+  handlestr: string;
 begin
   try
     saveeventtodata(@Kevent[combobox2.ItemIndex],@nowevent);
@@ -645,7 +645,7 @@ begin
     for I := 0 to memo1.Lines.Count - 1 do
     begin
       len := 0;
-      handlestr := widestring(memo1.Lines.Strings[I]);
+      handlestr := string(memo1.Lines.Strings[I]);
       for i2 := 1 to length(handlestr) do
       begin
         if handlestr[i2] = ';' then
@@ -690,7 +690,7 @@ begin
     displayevent;
     listbox2.Clear;
   except
-    showmessage('�Ӽ��а帴��ʧ�ܣ�');
+    showmessage('从剪切板复制失败！');
     strlist.Free;
     savedatatoevent(@noworievent, @Kevent[combobox2.ItemIndex]);
     //calkdef(@noworievent, @nowevent);
@@ -704,7 +704,7 @@ procedure TForm7.Button1Click(Sender: TObject);
 begin
   inc(talkstrnum);
   setlength(talkstr, talkstrnum);
-  WriteTalkStr(@talkstr[talkstrnum - 1], widestring('Ոݔ�댦Ԓ���ݣ����ԭ�挦Ԓ��ÿ��12���h�ּ�һ����̖*'));
+  WriteTalkStr(@talkstr[talkstrnum - 1], string('請輸入對話內容，若為原版對話，每隔12個漢字加一個星號*'));
   //arrangetalktocombobox;
   combobox1.Items.Add(inttostr(talkstrnum - 1) + ':'+ readtalkstr(@talkstr[talkstrnum - 1]));
   combobox1.ItemIndex := talkstrnum - 1;
@@ -716,7 +716,7 @@ var
   temp2: integer;
 begin
   temp2 := combobox1.ItemIndex;
-  WriteTalkStr(@talkstr[temp2], widestring(edit1.Text));
+  WriteTalkStr(@talkstr[temp2], string(edit1.Text));
   combobox1.Items.Strings[temp2] := inttostr(temp2) + ':'+ readtalkstr(@talkstr[temp2]);
   //arrangetalktocombobox;
   combobox1.ItemIndex := temp2;
@@ -733,13 +733,13 @@ begin
     edit1.Text := displaystr(readtalkstr(@talkstr[talkstrnum - 1]));
   end
   else
-    showmessage('ֻʣһ���Ի�������ɾ��');
+    showmessage('只剩一个对话，不可删除');
 end;
 
 procedure TForm7.Button4Click(Sender: TObject);
 var
-  nextVal, len, I, I2, len2, Ncount, a: integer;
-  Astr, Bstr, Cstr: widestring;
+  len, I, I2, len2, Ncount, a: integer;
+  Astr, Bstr, Cstr: string;
   ini: Tinifile;
 begin
   Ncount := strtoint(edit2.Text);
@@ -751,8 +751,8 @@ begin
     ini.WriteInteger('Kdef','talkarrange', Kdefini.talkarrange);
     ini.Free;
   end;
-  //ȥ�Ǻ�
-  Cstr := widestring(edit1.Text);
+  //去星号
+  Cstr := string(edit1.Text);
   len := length(Cstr);
   len2 := len;
   for I := 1 to len do
@@ -801,7 +801,7 @@ var
 begin
   if eventamount <= 0 then
     exit;
-  if MessageBox(Self.Handle, 'ȷʵҪ�¼��ļ��ͶԻ��ļ���',  '�����ļ�', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, '确实要事件文件和对话文件吗？',  '保存文件', MB_OKCANCEL) = 1 then
   begin
     try
       if lastevent >=0 then
@@ -829,9 +829,9 @@ begin
       fileclose(Fidx);
       fileclose(Fgrp);
       savetalk;
-      showmessage('�����¼��ļ��ͶԻ��ļ��ɹ���');
+      showmessage('保存事件文件和对话文件成功！');
     except
-      showmessage('����ʧ�ܣ�');
+      showmessage('保存失败！');
       exit;
     end;
   end;
@@ -844,7 +844,7 @@ var
   tempUnicodehead: word;
   tempunicodenextline: cardinal;
 begin
-  SaveDialog1.Filter := '�ı��ļ�(*.txt)|*.txt';
+  SaveDialog1.Filter := '文本文件(*.txt)|*.txt';
   if savedialog1.Execute then
   begin
     filename := SaveDialog1.filename;
@@ -853,7 +853,7 @@ begin
 
     memo1.Clear;
 
-    memo1.Lines.Add('�Ի��ļ�����������' + inttostr(talkstrnum));
+    memo1.Lines.Add('对话文件——总数：' + inttostr(talkstrnum));
     memo1.Lines.Add(' ');
     for I := 0 to TalkStrnum - 1 do
     begin
@@ -884,18 +884,18 @@ var
   tempunicodehead: Word;
   tempunicodenextline: cardinal;
 begin
-  SaveDialog1.Filter := '�ı��ļ�(*.txt)|*.txt';
+  SaveDialog1.Filter := '文本文件(*.txt)|*.txt';
   if savedialog1.Execute then
   begin
     filename := SaveDialog1.filename;
     if not SameText(ExtractFileExt(filename), '.txt') then
       filename := filename + '.txt';
     memo1.Clear;
-    memo1.Lines.Add('�¼��ļ�����������' + inttostr(eventamount));
+    memo1.Lines.Add('事件文件——总数：' + inttostr(eventamount));
     for I := 0 to eventamount - 1 do
     begin
       memo1.Lines.Add(' ');
-      memo1.Lines.Add('�¼�:'+inttostr(I));
+      memo1.Lines.Add('事件:'+inttostr(I));
       try
         savedatatoevent(@temporievent, @kevent[I]);
         //calkdef(@temporievent,@tempevent);
@@ -931,9 +931,9 @@ procedure TForm7.Button8Click(Sender: TObject);
 begin
   try
     savetalk;
-    showmessage('����ɹ���')
+    showmessage('保存成功！')
   except
-    showmessage('����ʧ�ܣ�');
+    showmessage('保存失败！');
     exit;
   end;
 end;
@@ -985,8 +985,6 @@ end;
 procedure TForm7.FormCreate(Sender: TObject);
 var
   ini: Tinifile;
-  initialEventIndex: Integer;
-  initialInstrIndex: Integer;
 begin
   //
   lastevent := -1;
@@ -1004,38 +1002,19 @@ begin
     CalWnamePos(@useW);
   end;
   readname;
-  //���Ի������ļ����¼��ļ�
+  //读对话配置文件和事件文件
   if readkdefini and readkdef and readtalk then
   begin
     arrangekdef;
-    if eventamount > 0 then
-    begin
-      combobox2.ItemIndex := 0;
-      for initialEventIndex := 0 to eventamount - 1 do
-      begin
-        combobox2.ItemIndex := initialEventIndex;
-        ComboBox2Select(Sender);
-        if listbox1.Items.Count > 0 then
-          break;
-      end;
+    combobox2.ItemIndex := 0;
+    //copyevent(@noworievent, @kevent[0]);
+    savedatatoevent(@noworievent, @kevent[0]);
+    //calkdef(@noworievent, @nowevent);
+    calevent(@noworievent, @nowevent);
+    displayevent;
 
-      if listbox1.Items.Count > 0 then
-      begin
-        initialInstrIndex := 0;
-        while (initialInstrIndex < listbox1.Items.Count) and (Trim(listbox1.Items[initialInstrIndex]) = '') do
-          inc(initialInstrIndex);
-        if initialInstrIndex < listbox1.Items.Count then
-        begin
-          listbox1.ItemIndex := initialInstrIndex;
-          ListBox1Click(Sender);
-        end;
-      end
-      else
-        ShowMessage('诊断: 已加载' + IntToStr(eventamount) + '个事件，但所有事件attribamount均为0。');
-    end;
-  end
-  else
-    ShowMessage('诊断: 文件加载失败。gamepath=' + gamepath);
+    lastevent := 0;
+  end;
 
 end;
 
@@ -1136,7 +1115,7 @@ begin
     if listbox2.Items[listbox2.ItemIndex] <> '' then
     begin
       try
-        temp := strtoint(inputbox('�޸�','�޸Ĵ���ֵ', listbox2.Items[listbox2.ItemIndex]));
+        temp := strtoint(inputbox('修改','修改此项值', listbox2.Items[listbox2.ItemIndex]));
         listbox2.Items[listbox2.ItemIndex] := inttostr(temp);
       except
         exit;
@@ -1199,7 +1178,7 @@ end;
 
 procedure TForm7.N4Click(Sender: TObject);
 begin
-  if (eventcopy.copyevent > 0) and (MessageBox(Self.Handle, 'ȷʵҪ��������¼���',  'ճ���¼�', MB_OKCANCEL) = 1) then
+  if (eventcopy.copyevent > 0) and (MessageBox(Self.Handle, '确实要覆盖这个事件吗？',  '粘贴事件', MB_OKCANCEL) = 1) then
   begin
     copyevent(@nowevent,@copyent);
     saveeventtodata(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -1257,7 +1236,7 @@ begin
               tdata[i2] := 0;
           end;
         if talkstr[I].len > 0 then
-          Move(tdata[0], talkstr[I].str[0], talkstr[I].len);
+          copymemory(@talkstr[I].str[0], @tdata[0],talkstr[I].len);
       end;
       fileclose(F);
 
@@ -1267,12 +1246,12 @@ begin
       edit1.Text := displaystr(readTalkstr(@talkstr[0]));
       result := true;
     except
-      showmessage('�Ի���ȡ�����');
+      showmessage('对话读取出错！');
       exit;
     end;
   end
   else
-    showmessage('�Ի��ļ������ڣ�');
+    showmessage('对话文件不存在！');
 end;
 
 procedure readname;
@@ -1309,11 +1288,11 @@ begin
               tdata[i2] := 0;
           end;
         if namestr[I].len > 0 then
-          Move(tdata[0], namestr[I].str[0], namestr[I].len);
+          copymemory(@namestr[I].str[0], @tdata[0], namestr[I].len);
       end;
       fileclose(F);
     except
-      showmessage('��ȡ���ֳ����');
+      showmessage('读取名字出错！');
       exit;
     end;
   end;
@@ -1323,7 +1302,7 @@ procedure TForm7.arrangetalktocombobox;
 var
   I: integer;
 begin
-  //�Ի���ӵ�combobox
+  //对话添加到combobox
   combobox1.Clear;
   for I := 0 to talkstrnum - 1 do
   begin
@@ -1348,7 +1327,7 @@ begin
     inc(len, talkoffset[I]);
     setlength(tdata, talkoffset[I]);
     if talkoffset[I] > 0 then
-      Move(talkstr[I].str[0], tdata[0], talkoffset[I]);
+      copymemory(@tdata[0], @talkstr[I].str[0], talkoffset[I]);
     if talkinvert = 0 then
     begin
       for i2 := 0 to talkoffset[I] - 1 do
@@ -1503,7 +1482,7 @@ begin
     ini.Free;
     result := true;
   except
-    showmessage('��ȡָ�������ļ�ʧ�ܣ�');
+    showmessage('读取指令配置文件失败！');
     exit;
   end;
 end;
@@ -1573,12 +1552,12 @@ begin
       fileclose(Fgrp);
       result := true;
     except
-      showmessage('��ȡ�¼��ļ�ʧ�ܣ�');
+      showmessage('读取事件文件失败！');
       exit;
     end;
   end
   else
-    showmessage('�¼��ļ������ڣ�');
+    showmessage('事件文件不存在！');
 end;
 
 procedure TForm7.arrangekdef;
@@ -1605,7 +1584,7 @@ begin
   setlength(ict.par, 0);
 end;
 
-//(�޸���)��ʾ��num���¼�������num�¼����ݱ��浽noworievent ���Ҵ���label����ӵ�nowevent
+//(修改中)显示第num个事件，并把num事件内容保存到noworievent 并且带有label地添加到nowevent
 procedure TForm7.calevent(noworievent, nowevent: Pevent);
 var
   I1, I2, I3, temp: integer;
@@ -1724,7 +1703,7 @@ begin
 
 end;
 
-//(ԭʼ)��ʾ��num���¼�������num�¼����ݱ��浽noworievent ���Ҵ���label����ӵ�nowevent
+//(原始)显示第num个事件，并把num事件内容保存到noworievent 并且带有label地添加到nowevent
 procedure TForm7.calKdef(noworievent, nowevent: Pevent);
 var
   I1,i2,i3,temp, attribnum, tempamount,bytenum, newattribnum: integer;
@@ -1765,7 +1744,7 @@ begin
         begin
 
 
-          //������ӱ�ǩ��������ת
+          //若需添加标签，是则跳转
           if (nowevent.attrib[i1].par[kdefini.KDEFitem[nowevent.attrib[i1].attribnum].yesjump] <> 0) then
           begin
             nowevent.attrib[i1].labelstatus := nowevent.attrib[i1].par[kdefini.KDEFitem[nowevent.attrib[i1].attribnum].yesjump];
@@ -1920,7 +1899,7 @@ begin
             nowevent.attrib[i1].labelto := labelnum;
             addattrib(nowevent,@tempattrib,i1 + 1);
           end;
-          //����˱�ǩ����
+          //添加了标签重排
           break;
         end;
       end;
@@ -2028,8 +2007,8 @@ begin
       and (InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount < useR.typenumber) then
       begin
         GuideisCombobox[I] := InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType;
-        GuideCombobox[I].Items.Add('-2���ֲ���');
-        GuideCombobox[I].Items.Add('-1��');
+        GuideCombobox[I].Items.Add('-2保持不变');
+        GuideCombobox[I].Items.Add('-1无');
         for I2 := 0 to useR.Rtype[InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount].datanum - 1 do
         begin
           GuideCombobox[I].Items.Add(calrname(InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount, I2));
@@ -2039,8 +2018,8 @@ begin
       else if (InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType = 2) then
       begin
         GuideisCombobox[I] := InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType;
-        GuideCombobox[I].Items.Add('-2���ֲ���');
-        GuideCombobox[I].Items.Add('-1��');
+        GuideCombobox[I].Items.Add('-2保持不变');
+        GuideCombobox[I].Items.Add('-1无');
         for I2 := 0 to useW.Wtype.datanum - 1 do
         begin
           GuideCombobox[I].Items.Add(calWname(I2));
@@ -2177,7 +2156,7 @@ begin
   end;
 end;
 
-function CalInstructGuideParamName(atrb: Pattrib; param: integer): widestring;
+function CalInstructGuideParamName(atrb: Pattrib; param: integer): string;
 var
   I: integer;
 begin
@@ -2223,7 +2202,7 @@ begin
   end;
 end;
 
-function CalInstructGuideName(atrb: Pattrib): widestring;
+function CalInstructGuideName(atrb: Pattrib): string;
 var
   I: integer;
   tempstr, tempstr1, tempstr2: String;
@@ -2244,10 +2223,10 @@ begin
   if atrb.labelway <> 0 then
   begin
     if atrb.labelway > 0 then
-      tempstr := tempstr + ';��������'
+      tempstr := tempstr + ';满足条件'
     else
-      tempstr := tempstr + ';����������';
-    tempstr := tempstr + '����תLabel' + inttostr(atrb.labelstatus);
+      tempstr := tempstr + ';不满足条件';
+    tempstr := tempstr + '则跳转Label' + inttostr(atrb.labelstatus);
   end;
   result := tempstr;
 end;
@@ -2262,10 +2241,10 @@ begin
     result := true;
 end;
 
-function calattribname(atrb: Pattrib): widestring;
+function calattribname(atrb: Pattrib): string;
 var
   I, temp: integer;
-  tempstr: widestring;
+  tempstr: string;
 begin
   if atrb.labelstatus = -1 then
   begin
@@ -2284,7 +2263,7 @@ begin
     case atrb.attribnum of
       -1:
         begin
-          result := result + '�¼�����';
+          result := result + '事件结束';
         end;
       1:
         begin
@@ -2297,256 +2276,256 @@ begin
         end;
       2:
         begin
-          result := result + '�õ���Ʒ['+ calRname(2, atrb.par[1]) + ']' + inttostr(atrb.par[2]) + '��';
+          result := result + '得到物品['+ calRname(2, atrb.par[1]) + ']' + inttostr(atrb.par[2]) + '个';
         end;
       3:
         begin
           if atrb.par[1] = -2 then
-            result := result + widestring('�޸��¼�����:��ǰ����')
+            result := result + string('修改事件定义:当前场景')
           else
-            result := result + widestring('�޸��¼�����:����[') + calRname(3, atrb.par[1]) + widestring(']:');
+            result := result + string('修改事件定义:场景[') + calRname(3, atrb.par[1]) + string(']:');
           if atrb.par[2] = -2 then
-            result := result + widestring('��ǰ�����¼����')
+            result := result + string('当前场景事件编号')
           else
-            result := result + widestring('�����¼����[')+ inttostr(atrb.par[2]) + ']';
+            result := result + string('场景事件编号[')+ inttostr(atrb.par[2]) + ']';
         end;
       4:
         begin
-          result := result + '�Ƿ�ʹ����Ʒ[' + calRname(2, atrb.par[1]) +']��';
+          result := result + '是否使用物品[' + calRname(2, atrb.par[1]) +']？';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       5:
         begin
-          result := result + '�Ƿ�ѡ��ս����';
+          result := result + '是否选择战斗？';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       6:
         begin
-          result := result + 'ս��[' + CalWname(atrb.par[1]) +']';
+          result := result + '战斗[' + CalWname(atrb.par[1]) +']';
           if atrb.labelway > 0 then
-            result := result + ' ʤ'
+            result := result + ' 胜'
           else
-            result := result + ' ��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + ' 负';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
 
         end;
       8:
         begin
-          result := result + '�ı���ͼ����(���ֱ��' + inttostr(atrb.par[1]) + ')';
+          result := result + '改变大地图音乐(音乐编号' + inttostr(atrb.par[1]) + ')';
         end;
       9:
         begin
-          result := result + 'ѯ���Ƿ���룿';
+          result := result + '询问是否加入？';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       10:
         begin
-          result := result + '�����Ա[' + calRname(1,atrb.par[1]) + ']';
+          result := result + '加入队员[' + calRname(1,atrb.par[1]) + ']';
         end;
       11:
         begin
-          result := result + 'ѯ���Ƿ�ס�ޣ�';
+          result := result + '询问是否住宿？';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       16:
         begin
-          result := result + '�ж϶����Ƿ���[' + calRname(1, atrb.par[1]) + ']?';
+          result := result + '判断队伍是否有[' + calRname(1, atrb.par[1]) + ']?';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       17:
         begin
-          result := result + '�޸ĳ�����ͼ:����[' + calRname(3,atrb.par[1]) + ']��:' + inttostr(atrb.par[2]) + '����' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]) + '��ͼ���' + inttostr(atrb.par[5]);
+          result := result + '修改场景贴图:场景[' + calRname(3,atrb.par[1]) + ']层:' + inttostr(atrb.par[2]) + '坐标' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]) + '贴图编号' + inttostr(atrb.par[5]);
         end;
       18:
         begin
-          result := result + '�ж��Ƿ�����Ʒ[' + calRname(2, atrb.par[1]) + ']';
+          result := result + '判断是否有物品[' + calRname(2, atrb.par[1]) + ']';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '有'
           else
-            result := result + 'û��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '没有';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       19:
         begin
-          result := result + '�����ƶ���' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]);
+          result := result + '主角移动至' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]);
         end;
       20:
         begin
-          result := result + '�ж϶����Ƿ�����';
+          result := result + '判断队伍是否已满';
           if atrb.labelway > 0 then
-            result := result + '����'
+            result := result + '已满'
           else
-            result := result + '����';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '不满';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       21:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']���';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']离队';
         end;
       23:
         begin
-          result := result + '��������[' + calRname(1, atrb.par[1])+ ']�ö�����[' + inttostr(atrb.par[2]) + ']';
+          result := result + '设置人物[' + calRname(1, atrb.par[1])+ ']用毒能力[' + inttostr(atrb.par[2]) + ']';
         end;
       25:
         begin
-          result := result + '�����ƶ�' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
+          result := result + '场景移动' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
         end;
       28:
         begin
-          result := result + '�ж�['+calRname(1,atrb.par[1])+']����' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
+          result := result + '判断['+calRname(1,atrb.par[1])+']道德' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
           if atrb.labelway > 0 then
-            result := result + '�ڷ�Χ��'
+            result := result + '在范围内'
           else
-            result := result + '���ڷ�Χ��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '不在范围内';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       29:
         begin
-          result := result + '�ж�['+calRname(1,atrb.par[1])+']����' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
+          result := result + '判断['+calRname(1,atrb.par[1])+']武力' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
           if atrb.labelway > 0 then
-            result := result + '�ڷ�Χ��'
+            result := result + '在范围内'
           else
-            result := result + '���ڷ�Χ��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '不在范围内';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       30:
         begin
-           result :=result + '�����߶�' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
+           result :=result + '主角走动' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
         end;
       31:
         begin
-          result :=result + '�ж������Ƿ�[' + inttostr(atrb.par[1]) + ']';
+          result :=result + '判断银子是否够[' + inttostr(atrb.par[1]) + ']';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       32:
         begin
-          result := result + '[' + calRname(2,atrb.par[1]) + ']����[' + inttostr(atrb.par[2]) + ']��';
+          result := result + '[' + calRname(2,atrb.par[1]) + ']增加[' + inttostr(atrb.par[2]) + ']个';
         end;
       33:
         begin
-          result := result + '[' + calRname(1, atrb.par[1]) +']ѧ��[' + calRname(4, atrb.par[2]) + ']';
+          result := result + '[' + calRname(1, atrb.par[1]) +']学会[' + calRname(4, atrb.par[2]) + ']';
         end;
       34:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']��������[' + inttostr(atrb.par[2]) + ']';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']增加资质[' + inttostr(atrb.par[2]) + ']';
         end;
       35:
         begin
-          result := result + '����[' + calRname(1,atrb.par[1]) + ']�书[' + inttostr(atrb.par[2]) +']Ϊ[' + calRname(4, atrb.par[3]) + ']����Ϊ' + inttostr(atrb.par[4]);
+          result := result + '设置[' + calRname(1,atrb.par[1]) + ']武功[' + inttostr(atrb.par[2]) +']为[' + calRname(4, atrb.par[3]) + ']经验为' + inttostr(atrb.par[4]);
         end;
       36:
         begin
           if atrb.par[1] >= 256 then
           begin
-            result := result + 'JMP�Ƿ�Ϊ0?';
+            result := result + 'JMP是否为0?';
             if atrb.labelway > 0 then
-              result := result + '��'
+              result := result + '是'
             else
-              result := result + '��';
-            result := result + '����תLabel' + inttostr(atrb.labelstatus);
+              result := result + '否';
+            result := result + '则跳转Label' + inttostr(atrb.labelstatus);
           end
           else
           begin
-            result := result + '�����Ա��Ƿ�Ϊ[' + inttostr(atrb.par[1]) +']?';
+            result := result + '主角性别是否为[' + inttostr(atrb.par[1]) +']?';
             if atrb.labelway > 0 then
-              result := result + '��'
+              result := result + '是'
             else
-              result := result + '��';
-            result := result + '����תLabel' + inttostr(atrb.labelstatus);
+              result := result + '否';
+            result := result + '则跳转Label' + inttostr(atrb.labelstatus);
           end;
         end;
       37:
         begin
-          result := result + '���ӵ���' + inttostr(atrb.par[1]);
+          result := result + '增加道德' + inttostr(atrb.par[1]);
         end;
       38:
         begin
-          result := result + '�޸ĳ���[' + calRname(3,atrb.par[1]) + ']��' + inttostr(atrb.par[2]) + 'ԭ��ͼ' + inttostr(atrb.par[3]) + '��Ϊ' + inttostr(atrb.par[4]);
+          result := result + '修改场景[' + calRname(3,atrb.par[1]) + ']层' + inttostr(atrb.par[2]) + '原贴图' + inttostr(atrb.par[3]) + '变为' + inttostr(atrb.par[4]);
         end;
       39:
         begin
-          result := result + '�򿪳���[' + calRname(3,atrb.par[1]) + ']';
+          result := result + '打开场景[' + calRname(3,atrb.par[1]) + ']';
         end;
       40:
         begin
-          result := result + '����վ������' + inttostr(atrb.par[1]);
+          result := result + '主角站立方向' + inttostr(atrb.par[1]);
         end;
       41:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']�õ���Ʒ[' + calRname(2,atrb.par[2])+']����[' + inttostr(atrb.par[3]) + ']';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']得到物品[' + calRname(2,atrb.par[2])+']数量[' + inttostr(atrb.par[3]) + ']';
         end;
       42:
         begin
-          result := result + '�������Ƿ���Ů�ԣ�';
+          result := result + '队伍中是否有女性？';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       43:
         begin
-          result := result + '�Ƿ�����Ʒ[' + calRname(2, atrb.par[1]) +']?';
+          result := result + '是否有物品[' + calRname(2, atrb.par[1]) +']?';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       45:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']�����Ṧ' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']增加轻功' + inttostr(atrb.par[2]);
         end;
       46:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']��������' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']增加内力' + inttostr(atrb.par[2]);
         end;
       47:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']�����书' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']增加武功' + inttostr(atrb.par[2]);
         end;
       48:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']��������' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']增加生命' + inttostr(atrb.par[2]);
         end;
       49:
         begin
-          result :=  result + '['+ CalRname(1,atrb.par[1])+']��������' + inttostr(atrb.par[2]);
+          result :=  result + '['+ CalRname(1,atrb.par[1])+']内力属性' + inttostr(atrb.par[2]);
         end;
       50:
         begin
           case atrb.par[1] of
             0:
               begin
-                result := result + '������ֵ[x' + inttostr(atrb.par[2]) + ']=' + inttostr(atrb.par[3]);
+                result := result + '变量赋值[x' + inttostr(atrb.par[2]) + ']=' + inttostr(atrb.par[3]);
               end;
             1:
               begin
-                result := result + '���������ֵ ����' + inttostr(atrb.par[4]);
+                result := result + '数组变量赋值 数组' + inttostr(atrb.par[4]);
                 if ((atrb.par[2] and 1) = 1) then
                   result := result  + '([X' + inttostr(atrb.par[5])+'])='
                 else
@@ -2562,7 +2541,7 @@ begin
               end;
             2:
               begin
-                result := result + '�������ȡֵ' + '[X' + inttostr(atrb.par[6])+']=����';
+                result := result + '数组变量取值' + '[X' + inttostr(atrb.par[6])+']=数组';
                 result := result  + inttostr(atrb.par[4]);
                 if ((atrb.par[2] and 1) = 1) then
                   result := result  + '([X' + inttostr(atrb.par[5])+'])'
@@ -2575,7 +2554,7 @@ begin
               end;
             3:
               begin
-                result := result + '�������� [X' + inttostr(atrb.par[4]) + ']=[X' + inttostr(atrb.par[5]) + ']';
+                result := result + '四则运算 [X' + inttostr(atrb.par[4]) + ']=[X' + inttostr(atrb.par[5]) + ']';
                 case atrb.par[3] of
                   0: result := result + '+';
                   1: result := result + '-';
@@ -2590,7 +2569,7 @@ begin
               end;
             4:
               begin
-                result := result + '�����ж� ';
+                result := result + '变量判断 ';
                 case atrb.par[3] of
                   0:
                     begin
@@ -2599,7 +2578,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   1:
                     begin
@@ -2608,7 +2587,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   2:
                     begin
@@ -2617,7 +2596,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   3:
                     begin
@@ -2626,7 +2605,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   4:
                     begin
@@ -2635,7 +2614,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   5:
                     begin
@@ -2644,7 +2623,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0��else JMP=1';
+                      result := result + ' then JMP=0，else JMP=1';
                     end;
                   6:
                     begin
@@ -2658,7 +2637,7 @@ begin
               end;
             8:
               begin
-                result := result + '���Ի����ַ��� str([X' + inttostr(atrb.par[4]) + ']=talk(';
+                result := result + '读对话到字符串 str([X' + inttostr(atrb.par[4]) + ']=talk(';
                 if atrb.par[2]=0 then
                   result := result + inttostr(atrb.par[3]) + ')'
                 else
@@ -2666,28 +2645,28 @@ begin
               end;
             10:
               begin
-                result := result + 'ȡ�ַ������� [X' + inttostr(atrb.par[3]) + ']=len(Str[X' + inttostr(atrb.par[2]) + ']';
+                result := result + '取字符串长度 [X' + inttostr(atrb.par[3]) + ']=len(Str[X' + inttostr(atrb.par[2]) + ']';
               end;
             11:
               begin
-                result := result + '�ַ����ϲ� Str[X' + inttostr(atrb.par[2]) + ']=Str[X' + inttostr(atrb.par[3]) + ']+Str[X' + inttostr(atrb.par[4]) + ']';
+                result := result + '字符串合并 Str[X' + inttostr(atrb.par[2]) + ']=Str[X' + inttostr(atrb.par[3]) + ']+Str[X' + inttostr(atrb.par[4]) + ']';
               end;
             12:
               begin
-                result := result + '�ո��ַ��� Str[X' + inttostr(atrb.par[3]) + ']=';
+                result := result + '空格字符串 Str[X' + inttostr(atrb.par[3]) + ']=';
                 if atrb.par[2]=0 then
-                  result := result + inttostr(atrb.par[4]) +'���ո�'
+                  result := result + inttostr(atrb.par[4]) +'个空格'
                 else
-                  result := result + '[X' + inttostr(atrb.par[4]) + ']���ո�';
+                  result := result + '[X' + inttostr(atrb.par[4]) + ']个空格';
               end;
             16:
               begin
-                result := result + '�������� ';
+                result := result + '保存属性 ';
                 case atrb.par[3] of
-                  0: result := result + '����';
-                  1: result := result + '��Ʒ';
-                  2: result := result + '����';
-                  3: result := result + '�书';
+                  0: result := result + '人物';
+                  1: result := result + '物品';
+                  2: result := result + '场景';
+                  3: result := result + '武功';
                 end;
                 if ((atrb.par[2] and 1) = 0) then
                 begin
@@ -2702,10 +2681,10 @@ begin
                 end;
                 if ((atrb.par[2] and 2) = 0) then
                 begin
-                  result := result + '����ƫ��' + inttostr(atrb.par[5]);
+                  result := result + '属性偏移' + inttostr(atrb.par[5]);
                 end
                 else
-                  result := result + '����ƫ��[X' +  inttostr(atrb.par[5]) + ']';
+                  result := result + '属性偏移[X' +  inttostr(atrb.par[5]) + ']';
                 if ((atrb.par[2] and 4) = 0) then
                 begin
                   result := result + '=' + inttostr(atrb.par[6]);
@@ -2715,12 +2694,12 @@ begin
               end;
             17:
               begin
-                result := result + '��ȡ���� ';
+                result := result + '读取属性 ';
                 case atrb.par[3] of
-                  0: result := result + '����';
-                  1: result := result + '��Ʒ';
-                  2: result := result + '����';
-                  3: result := result + '�书';
+                  0: result := result + '人物';
+                  1: result := result + '物品';
+                  2: result := result + '场景';
+                  3: result := result + '武功';
                 end;
                 result := result + '[X' + inttostr(atrb.par[6]) + ']=';
                 if ((atrb.par[2] and 1) = 0) then
@@ -2736,14 +2715,14 @@ begin
                 end;
                 if ((atrb.par[2] and 2) = 0) then
                 begin
-                  result := result + '����ƫ��' + inttostr(atrb.par[5]);
+                  result := result + '属性偏移' + inttostr(atrb.par[5]);
                 end
                 else
-                  result := result + '����ƫ��[X' +  inttostr(atrb.par[5]) + ']';
+                  result := result + '属性偏移[X' +  inttostr(atrb.par[5]) + ']';
               end;
             18:
               begin
-                result := result + '������� ����';
+                result := result + '保存队伍 队友';
                 if ((atrb.par[2] and 1) = 0) then
                   result := result + inttostr(atrb.par[3])
                 else
@@ -2755,35 +2734,35 @@ begin
               end;
             19:
               begin
-                result := result + '��ȡ���� [X' + inttostr(atrb.par[4]) + ']=';
+                result := result + '读取队伍 [X' + inttostr(atrb.par[4]) + ']=';
                 if atrb.par[2] = 0 then
-                  result := result + '����' + inttostr(atrb.par[3])
+                  result := result + '队友' + inttostr(atrb.par[3])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '队友[X' + inttostr(atrb.par[3]) + ']';
               end;
             20:
               begin
-                result := result + '������Ʒ���� [X' + inttostr(atrb.par[4]) + ']';
+                result := result + '主角物品个数 [X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] = 0 then
-                  result := result + '=' + CalRname(2,atrb.par[3]) +'����'
+                  result := result + '=' + CalRname(2,atrb.par[3]) +'数量'
                 else
-                  result := result + '=��Ʒ���[X' + inttostr(atrb.par[3]) + ']����';
+                  result := result + '=物品编号[X' + inttostr(atrb.par[3]) + ']数量';
               end;
             21:
               begin
-                result := result + '����D*���� ';
+                result := result + '保存D*数据 ';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + '����' + inttostr(atrb.par[3])
+                  result := result + '场景' + inttostr(atrb.par[3])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '场景[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + '�����¼�' + inttostr(atrb.par[4])
+                  result := result + '场景事件' + inttostr(atrb.par[4])
                 else
-                  result := result + '�����¼�[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '场景事件[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + '����' + inttostr(atrb.par[5])
+                  result := result + '属性' + inttostr(atrb.par[5])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '属性[X' + inttostr(atrb.par[5]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 8 = 0 then
                   result := result + inttostr(atrb.par[6])
@@ -2792,37 +2771,37 @@ begin
               end;
             22:
               begin
-                result := result + '��ȡD*���� ';
+                result := result + '读取D*数据 ';
                 result := result + '[X' + inttostr(atrb.par[6]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + '����' + inttostr(atrb.par[3])
+                  result := result + '场景' + inttostr(atrb.par[3])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '场景[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + '�����¼�' + inttostr(atrb.par[4])
+                  result := result + '场景事件' + inttostr(atrb.par[4])
                 else
-                  result := result + '�����¼�[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '场景事件[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + '����' + inttostr(atrb.par[5])
+                  result := result + '属性' + inttostr(atrb.par[5])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '属性[X' + inttostr(atrb.par[5]) + ']';
               end;
             23:
               begin
-                result := result + '����S*���� ';
+                result := result + '保存S*数据 ';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + '����' + inttostr(atrb.par[3])
+                  result := result + '场景' + inttostr(atrb.par[3])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '场景[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + '��' + inttostr(atrb.par[4])
+                  result := result + '层' + inttostr(atrb.par[4])
                 else
-                  result := result + '��[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '层[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + '����(' + inttostr(atrb.par[5])
+                  result := result + '坐标(' + inttostr(atrb.par[5])
                 else
-                  result := result + '����([X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '坐标([X' + inttostr(atrb.par[5]) + ']';
                   if atrb.par[2] and 8 = 0 then
                   result := result + ',' + inttostr(atrb.par[6]) + ')'
                 else
@@ -2835,21 +2814,21 @@ begin
               end;
             24:
               begin
-                result := result + '��ȡS*���� ';
+                result := result + '读取S*数据 ';
                 result := result + '[X' + inttostr(atrb.par[7]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + '����' + inttostr(atrb.par[3])
+                  result := result + '场景' + inttostr(atrb.par[3])
                 else
-                  result := result + '����[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '场景[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + '��' + inttostr(atrb.par[4])
+                  result := result + '层' + inttostr(atrb.par[4])
                 else
-                  result := result + '��[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '层[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + '����(' + inttostr(atrb.par[5])
+                  result := result + '坐标(' + inttostr(atrb.par[5])
                 else
-                  result := result + '����([X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '坐标([X' + inttostr(atrb.par[5]) + ']';
                 if atrb.par[2] and 8 = 0 then
                   result := result + ',' + inttostr(atrb.par[6]) + ')'
                 else
@@ -2857,177 +2836,177 @@ begin
               end;
             25:
               begin
-                result := result + '���������ַ����[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
+                result := result + '保存给定地址数据[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
               end;
             26:
               begin
-                result := result + '��ȡ������ַ����[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
+                result := result + '读取给定地址数据[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
               end;
             27:
               begin
-                result := result + '��ȡ���Ƶ��ַ��� Str' + inttostr(atrb.par[5]) + '=';
+                result := result + '读取名称到字符串 Str' + inttostr(atrb.par[5]) + '=';
                 case atrb.par[3] of
-                  0: result := result + '����';
-                  1: result := result + '��Ʒ';
-                  2: result := result + '����';
-                  3: result := result + '�书';
+                  0: result := result + '人物';
+                  1: result := result + '物品';
+                  2: result := result + '场景';
+                  3: result := result + '武功';
                 end;
                 result:= result + e_getstr(0, atrb.par[2],atrb.par[4]);
               end;
             28:
               begin
-                result := result + 'ȡ��ǰ����ս����ŵ�[X' + inttostr(atrb.par[2]) + ']';
+                result := result + '取当前人物战斗编号到[X' + inttostr(atrb.par[2]) + ']';
               end;
             29:
               begin
-                result := result + 'ѡ�񹥻�Ŀ�� ս�����' + e_getstr(0,atrb.par[2],atrb.par[3]) + '����' + e_getstr(1,atrb.par[2],atrb.par[4]) + '����ֵ[X' + inttostr(atrb.par[5]) + ']';
+                result := result + '选择攻击目标 战斗序号' + e_getstr(0,atrb.par[2],atrb.par[3]) + '步数' + e_getstr(1,atrb.par[2],atrb.par[4]) + '返回值[X' + inttostr(atrb.par[5]) + ']';
                 if atrb.par[6] = 0 then
-                  result := result +'(��ʾ)'
+                  result := result +'(显示)'
                 else
-                  result := result +'(����ʾ)';
+                  result := result +'(不显示)';
               end;
             30:
               begin
-                result := result + '��ȡ����ս������[X' + inttostr(atrb.par[5]) + ']=ս�����' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'ƫ��'+e_getstr(1,atrb.par[2],atrb.par[4]);
+                result := result + '读取人物战斗属性[X' + inttostr(atrb.par[5]) + ']=战斗序号' + e_getstr(0,atrb.par[2],atrb.par[3]) + '偏移'+e_getstr(1,atrb.par[2],atrb.par[4]);
               end;
             31:
               begin
-                result := result + '��������ս������ ս�����' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'ƫ��'+e_getstr(1,atrb.par[2],atrb.par[4]) + '=' + e_getstr(2,atrb.par[2],atrb.par[5]);
+                result := result + '保存人物战斗属性 战斗序号' + e_getstr(0,atrb.par[2],atrb.par[3]) + '偏移'+e_getstr(1,atrb.par[2],atrb.par[4]) + '=' + e_getstr(2,atrb.par[2],atrb.par[5]);
               end;
             32:
               begin
-                result := result + '�޸���һ��ָ�� ����' + e_getstr(0, atrb.par[2],atrb.par[4]) + '=' + e_getstr(0,1,atrb.par[3]);
+                result := result + '修改下一条指令 参数' + e_getstr(0, atrb.par[2],atrb.par[4]) + '=' + e_getstr(0,1,atrb.par[3]);
               end;
             33:
               begin
-                result := result + '��ʾ�ַ��� Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
+                result := result + '显示字符串 Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
               end;
             34:
               begin
-                result := result + '������� λ��(' + e_getstr(0,atrb.par[2], atrb.par[3]) + ',' + e_getstr(1,atrb.par[2], atrb.par[4]) + ') ��' + e_getstr(2,atrb.par[2], atrb.par[5]) + ' ��' + e_getstr(3,atrb.par[2], atrb.par[6]) + '(͸����' + e_getstr(4,atrb.par[2], atrb.par[7]) + ')';
+                result := result + '处理背景 位置(' + e_getstr(0,atrb.par[2], atrb.par[3]) + ',' + e_getstr(1,atrb.par[2], atrb.par[4]) + ') 宽' + e_getstr(2,atrb.par[2], atrb.par[5]) + ' 高' + e_getstr(3,atrb.par[2], atrb.par[6]) + '(透明度' + e_getstr(4,atrb.par[2], atrb.par[7]) + ')';
               end;
             35:
               begin
-                result := result + '��ȡ��ֵ ' + e_getstr(0,1,atrb.par[2]) +'=��ֵ ' + e_getstr(0,1,atrb.par[3]) + '=���X '  + e_getstr(0,1,atrb.par[4]) + '=���Y '
+                result := result + '读取键值 ' + e_getstr(0,1,atrb.par[2]) +'=键值 ' + e_getstr(0,1,atrb.par[3]) + '=鼠标X '  + e_getstr(0,1,atrb.par[4]) + '=鼠标Y '
               end;
             36:
               begin
-                result := result + '��ʾ�ַ������ȴ����� Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
+                result := result + '显示字符串并等待击键 Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
               end;
             37:
               begin
-                result := result + '��ʱ' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + '延时' + e_getstr(0,atrb.par[2],atrb.par[3]);
               end;
             38:
               begin
-                result := result + '����� ' + e_getstr(0,1,atrb.par[4]) +'=Random(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ')';
+                result := result + '随机数 ' + e_getstr(0,1,atrb.par[4]) +'=Random(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ')';
               end;
             39:
               begin
-                result := result + '�˵�ѡ�� �˵�����' + e_getstr(0,atrb.par[2],atrb.par[3]) + '�ַ�������' + inttostr(atrb.par[4]) + ' ���ص�'+ e_getstr(0,1,atrb.par[5]) + ' ��ʾλ��(' + e_getstr(1,atrb.par[2],atrb.par[6]) + ',' + e_getstr(2,atrb.par[2],atrb.par[7]) +')';
+                result := result + '菜单选择 菜单个数' + e_getstr(0,atrb.par[2],atrb.par[3]) + '字符串数组' + inttostr(atrb.par[4]) + ' 返回到'+ e_getstr(0,1,atrb.par[5]) + ' 显示位置(' + e_getstr(1,atrb.par[2],atrb.par[6]) + ',' + e_getstr(2,atrb.par[2],atrb.par[7]) +')';
               end;
             40:
               begin
-                result := result + '�˵�ѡ�� �˵�����' + e_getstr(0,atrb.par[2] and $FF,atrb.par[3]) +'�����ʾ����'+ inttostr((atrb.par[2] shr 8) and $FF) + ' �ַ�������' + inttostr(atrb.par[4]) + ' ���ص�'+ e_getstr(0,1,atrb.par[5]) + ' ��ʾλ��(' + e_getstr(1,atrb.par[2]and $FF,atrb.par[6]) + ',' + e_getstr(2,atrb.par[2]and $FF,atrb.par[7]) +')';
+                result := result + '菜单选择 菜单个数' + e_getstr(0,atrb.par[2] and $FF,atrb.par[3]) +'最大显示个数'+ inttostr((atrb.par[2] shr 8) and $FF) + ' 字符串数组' + inttostr(atrb.par[4]) + ' 返回到'+ e_getstr(0,1,atrb.par[5]) + ' 显示位置(' + e_getstr(1,atrb.par[2]and $FF,atrb.par[6]) + ',' + e_getstr(2,atrb.par[2]and $FF,atrb.par[7]) +')';
               end;
             41:
               begin
-                result := result + '��ʾ��ͼ';
+                result := result + '显示贴图';
                 case atrb.par[3] of
-                  0: result := result + '����';
-                  1: result := result + 'ͷ��';
-                  2: result := result + '��Ʒ';
+                  0: result := result + '场景';
+                  1: result := result + '头像';
+                  2: result := result + '物品';
                 end;
-                result:= result + e_getstr(2,atrb.par[2],atrb.par[6]) + ' λ��(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')';
+                result:= result + e_getstr(2,atrb.par[2],atrb.par[6]) + ' 位置(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')';
               end;
             42:
               begin
-                result := result + '�ı�����ͼ����(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' +e_getstr(1,atrb.par[2],atrb.par[4]) + ')';
+                result := result + '改变主地图坐标(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' +e_getstr(1,atrb.par[2],atrb.par[4]) + ')';
               end;
             43:
               begin
-                result := result + '���������¼� Call Sub' + e_getstr(0,atrb.par[2],atrb.par[3]) + '(' + e_getstr(1,atrb.par[2],atrb.par[4]) +',' + e_getstr(2,atrb.par[2],atrb.par[5])+','+e_getstr(3,atrb.par[2],atrb.par[6])+','+ e_getstr(4,atrb.par[2],atrb.par[7]) + ')';
+                result := result + '调用其他事件 Call Sub' + e_getstr(0,atrb.par[2],atrb.par[3]) + '(' + e_getstr(1,atrb.par[2],atrb.par[4]) +',' + e_getstr(2,atrb.par[2],atrb.par[5])+','+e_getstr(3,atrb.par[2],atrb.par[6])+','+ e_getstr(4,atrb.par[2],atrb.par[7]) + ')';
               end;
             44:
               begin
-                result := result + '����Ч�� ���' + e_getstr(0,atrb.par[2],atrb.par[3]) + ' ��������' + e_getstr(1,atrb.par[2],atrb.par[4]) + ' Ч�����' +e_getstr(2,atrb.par[2],atrb.par[5]);
+                result := result + '播放效果 序号' + e_getstr(0,atrb.par[2],atrb.par[3]) + ' 动作类型' + e_getstr(1,atrb.par[2],atrb.par[4]) + ' 效果编号' +e_getstr(2,atrb.par[2],atrb.par[5]);
               end;
             45:
               begin
-                result := result + '��ʾ���� ��ɫ' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + '显示数字 颜色' + e_getstr(0,atrb.par[2],atrb.par[3]);
                 if atrb.par[4]=0 then
-                  result := result + ' ��˸'
+                  result := result + ' 闪烁'
                 else
-                  result := result + ' ����˸';
+                  result := result + ' 不闪烁';
                 result := result + e_getstr(1,atrb.par[2],atrb.par[5]);
               end;
             46:
               begin
-                result := result + '�趨Ч���� ��ʼ��(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' + e_getstr(1,atrb.par[2],atrb.par[4]) + ') ����(' + e_getstr(2,atrb.par[2],atrb.par[5]) + ',' + e_getstr(3,atrb.par[2],atrb.par[6]) + ')';
+                result := result + '设定效果层 起始点(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' + e_getstr(1,atrb.par[2],atrb.par[4]) + ') 长度(' + e_getstr(2,atrb.par[2],atrb.par[5]) + ',' + e_getstr(3,atrb.par[2],atrb.par[6]) + ')';
                 if atrb.par[7] = 0 then
-                  result := result + ' ��Ч��'
+                  result := result + ' 无效果'
                 else
-                  result := result +  ' ��Ч��';
+                  result := result +  ' 有效果';
               end;
             47:
               begin
-                result := result + '����ս����ͼ ���=' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + '重置战场贴图 序号=' + e_getstr(0,atrb.par[2],atrb.par[3]);
               end;
             48:
               begin
-                result := result + '����ָ�� ��ʾ����' + e_getstr(0,1,atrb.par[2]) +'--' + e_getstr(0,1,atrb.par[2] + atrb.par[3]-1);
+                result := result + '调试指令 显示变量' + e_getstr(0,1,atrb.par[2]) +'--' + e_getstr(0,1,atrb.par[2] + atrb.par[3]-1);
 
               end;
             49:
               begin
-                result := result + '���������ӳ�(���̰治����)'
+                result := result + '调用任意子程(复刻版不可用)'
               end
             else
               begin
                 if (atrb.par[1] >= 0) and (atrb.par[1] < Kdef50.num) and (Kdef50.sub[atrb.par[1]] <> '') then
                   result := result + displayname(Kdef50.sub[atrb.par[1]])
                 else
-                  result := result + 'δָ֪��';
+                  result := result + '未知指令';
               end;
           end;
         end;
       55:
         begin
-          result := result + '�ж�D*���' + inttostr(atrb.par[1]) + '�Ƿ�Ϊ' + inttostr(atrb.par[2]);
+          result := result + '判断D*编号' + inttostr(atrb.par[1]) + '是否为' + inttostr(atrb.par[2]);
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       56:
         begin
-          result := result + '���ӵ���' + inttostr(atrb.par[1]);
+          result := result + '增加道德' + inttostr(atrb.par[1]);
         end;
       60:
         begin
-          result := result + '�жϳ���' + inttostr(atrb.par[1]) + '�¼�λ��' + inttostr(atrb.par[2]) + '�Ƿ�����ͼ' + inttostr(atrb.par[3]) + '?';
+          result := result + '判断场景' + inttostr(atrb.par[1]) + '事件位置' + inttostr(atrb.par[2]) + '是否有贴图' + inttostr(atrb.par[3]) + '?';
           if atrb.labelway > 0 then
-            result := result + '��'
+            result := result + '是'
           else
-            result := result + '��';
-          result := result + '����תLabel' + inttostr(atrb.labelstatus);
+            result := result + '否';
+          result := result + '则跳转Label' + inttostr(atrb.labelstatus);
         end;
       63:
         begin
-          result := result + '����[' + CalRname(1, atrb.par[1]) + ']�Ա�' + inttostr(atrb.par[2]);
+          result := result + '设置[' + CalRname(1, atrb.par[1]) + ']性别' + inttostr(atrb.par[2]);
         end;
       66:
         begin
-          result := result + '��������' + inttostr(atrb.par[1]);
+          result := result + '播放音乐' + inttostr(atrb.par[1]);
         end;
       67:
         begin
-          result := result + '��������' + inttostr(atrb.par[1]);
+          result := result + '播放声音' + inttostr(atrb.par[1]);
         end;
       68:
         begin
-          //�¶Ի�
+          //新对话
           if atrb.par[3] = -2 then
             result := result + '[' + calRname(1,atrb.par[1]) + ']'
           else if (atrb.par[3] >=0) and (atrb.par[3]< namestrnum) then
@@ -3042,48 +3021,48 @@ begin
           except
             result := result + ' ';
           end;
-          result := result + ' ����(' + inttostr(atrb.par[7]) +')';
+          result := result + ' 背景(' + inttostr(atrb.par[7]) +')';
         end;
       69:
         begin
-          result := result + '�滻���� ';
+          result := result + '替换名称 ';
           case atrb.par[1] of
-            0: result := result + '����';
-            1: result := result + '��Ʒ';
-            2: result := result + '����';
-            3: result := result + '�书';
+            0: result := result + '人物';
+            1: result := result + '物品';
+            2: result := result + '场景';
+            3: result := result + '武功';
           end;
             result := result + '[' + calRname(atrb.par[1] + 1, atrb.par[2]) + inttostr(atrb.par[2]) +']';
           result := result + '=' + cutstr(displaystr(readtalkstr(@Namestr[atrb.par[3]])));
         end;
       70:
         begin
-          result := result + '��ʾ��Ļ���Ի�'+ inttostr(atrb.par[1]) +' ��ɫ'+inttostr(atrb.par[2]);
+          result := result + '显示字幕，对话'+ inttostr(atrb.par[1]) +' 颜色'+inttostr(atrb.par[2]);
         end;
       71:
         begin
-          result := result +'��ת����'+ CalRname(3,atrb.par[1]) + ' λ��(' + inttostr(atrb.par[2]) + ',' + inttostr(atrb.par[3]) +')';
+          result := result +'跳转场景'+ CalRname(3,atrb.par[1]) + ' 位置(' + inttostr(atrb.par[2]) + ',' + inttostr(atrb.par[3]) +')';
         end;
       72:
         begin
-          result := result + '��������,ָ�����';
+          result := result + '设置人物,指令不可用';
         end;
       73:
         begin
-          result := result + '�ı��������'+inttostr(atrb.par[1]);
+          result := result + '改变进门音乐'+inttostr(atrb.par[1]);
         end
       else
       begin
         if (atrb.attribnum >=0) and (atrb.attribnum < kdefini.KDEFnum) and (kdefini.KDEFitem[atrb.attribnum].note <> '') then
           result := result + displayname(kdefini.KDEFitem[atrb.attribnum].note)
         else
-          result := result + 'δָ֪��';
+          result := result + '未知指令';
       end;
     end;
   end;
 end;
 
-function E_getstr(bit,t,x: smallint): widestring;
+function E_getstr(bit,t,x: smallint): string;
 begin
   if (t and (1 shl bit)) = 0 then
     result := inttostr(x)
@@ -3091,7 +3070,7 @@ begin
     result := '[X' + inttostr(x) + ']';
 end;
 
-function cutstr(str:widestring): widestring;
+function cutstr(str:string): string;
 var
   I : integer;
 begin
@@ -3104,7 +3083,7 @@ begin
     end;
 end;
 
-function calRname(datatype, index: integer): widestring;
+function calRname(datatype, index: integer): string;
 var
   I: integer;
 begin
@@ -3120,7 +3099,7 @@ begin
     end;
 end;
 
-function calWname(index: integer): widestring;
+function calWname(index: integer): string;
 var
   I: integer;
 begin
@@ -3149,7 +3128,7 @@ begin
   if source.parcount > 0 then
   begin
     setlength(dest.par, dest.parcount);
-    Move(source.par[0], dest.par[0], dest.parcount * 2);
+    copymemory(@dest.par[0], @source.par[0], dest.parcount * 2);
   end;
 end;
 
@@ -3326,10 +3305,10 @@ begin
 
   copyattrib(@ent.attrib[num], atrb);
 
-  if atrb.labelstatus = -1 then//�����ӵ��Ǳ�ǩ���Ͳ���Ҫ���������ֱ�ӷ���
+  if atrb.labelstatus = -1 then//如果添加的是标签，就不需要后续处理，直接返回
     exit;
 
-  //����������ǩָ��ı�ǩ����������¼���
+  //对其它带标签指令的标签距离进行重新计算
   for I1 := 0 to num - 1 do
   begin
     if ent.attrib[I1].labelstatus >= 0 then
@@ -3370,7 +3349,7 @@ begin
     end;
   end;
 
-  //������ӱ�ǩ���������ӣ��ݹ飩
+  //如需添加标签，则进行添加（递归）
   if atrb.labelstatus >= 0 then
   begin
     if atrb.par[kdefini.KDEFitem[atrb.attribnum].yesjump] <> 0 then
@@ -3581,7 +3560,7 @@ begin
   temp := 0;
   for i1 := 0 to sourceent.attribamount - 1 do
   begin
-    {-1��ʾ�Ǳ�ǩ��-2��ʾû�б�ǩ��ָ�>=0��ʾ�б�ǩ��ָ��}
+    {-1表示是标签，-2表示没有标签的指令，>=0表示有标签的指令}
     if sourceent.attrib[i1].labelstatus <> -1 then
       inc(temp, max(sourceent.attrib[i1].parcount, 0) * 2);
   end;
@@ -3601,7 +3580,7 @@ begin
       else
         sourceent.attrib[i1].par[kdefini.KDEFitem[sourceent.attrib[i1].attribnum].yesjump] := 0;
     end;
-    Move(sourceent.attrib[I1].par[0], destent.data[I2], sourceent.attrib[I1].parcount * 2);
+    copymemory(@destent.data[I2], @sourceent.attrib[I1].par[0], sourceent.attrib[I1].parcount * 2);
     inc(I2, sourceent.attrib[I1].parcount * 2);
   end;
     
@@ -3645,10 +3624,10 @@ begin
 
       if temp < destent.attribamount then
       begin
-        Move(sourceent.data[I1], destent.attrib[temp].par[0], destent.attrib[temp].parcount * 2);
+        copymemory(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), destent.attrib[temp].parcount * 2);
       end
       else
-        Move(sourceent.data[I1], destent.attrib[temp].par[0], sourceent.datalen - I1);
+        copymemory(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), sourceent.datalen - I1);
       inc(temp);
       inc(I1, Kdefini.KDEFitem[temp2].paramount * 2);
     end
@@ -3657,7 +3636,7 @@ begin
       destent.attrib[temp].attribnum := temp2;
       destent.attrib[temp].parcount := 1;
       setlength(destent.attrib[temp].par, destent.attrib[temp].parcount);
-      Move(sourceent.data[I1], destent.attrib[temp].par[0], 2);
+      copymemory(@(destent.attrib[temp].par[0]), @(sourceent.data[I1]), 2);
       inc(I1, 2);
       inc(temp);
     end;
@@ -3671,7 +3650,7 @@ var
   I: integer;
   tempadr: cardinal;
 begin
-  //�༭�¼�
+  //编辑事件
   //
   if GetInstructNeedGuide(atrb) then
   begin
@@ -3723,7 +3702,7 @@ begin
     3:
       begin
         Form16.ComboBox1.Clear;
-        Form16.ComboBox1.Items.Add('��ǰ����');
+        Form16.ComboBox1.Items.Add('当前场景');
         for I := 0 to useR.Rtype[3].datanum - 1 do
         begin
           Form16.ComboBox1.Items.Add(CalRname(3,I));
@@ -4108,8 +4087,8 @@ begin
     26:
       begin
         Form27.ComboBox1.Clear;
-        Form27.ComboBox1.Items.Add('-2��ǰ����');
-        Form27.ComboBox1.Items.Add('-1��');
+        Form27.ComboBox1.Items.Add('-2当前场景');
+        Form27.ComboBox1.Items.Add('-1无');
         for I := 0 to useR.Rtype[3].datanum - 1 do
           Form27.ComboBox1.Items.Add(CalRname(3,I));
         Form27.ComboBox1.ItemIndex := atrb.par[1] + 2;
@@ -4403,10 +4382,10 @@ begin
     40:
       begin
         Form21.ComboBox1.Clear;
-        Form21.ComboBox1.Items.Add(widestring('0-����'));
-        Form21.ComboBox1.Items.Add(widestring('1-����'));
-        Form21.ComboBox1.Items.Add(widestring('2-����'));
-        Form21.ComboBox1.Items.Add(widestring('3-����'));
+        Form21.ComboBox1.Items.Add(string('0-向上'));
+        Form21.ComboBox1.Items.Add(string('1-向右'));
+        Form21.ComboBox1.Items.Add(string('2-向左'));
+        Form21.ComboBox1.Items.Add(string('3-向下'));
         Form21.ComboBox1.ItemIndex := max(atrb.par[1],0);
         if Form21.ShowModal = mrOK then
         begin
@@ -5875,8 +5854,3 @@ end;
 
 
 end.
-
-
-
-
-

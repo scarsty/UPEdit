@@ -1,4 +1,4 @@
-object UPeditMainForm: TUPeditMainForm
+﻿object UPeditMainForm: TUPeditMainForm
   Left = 194
   Top = 111
   Margins.Left = 2

@@ -56,7 +56,7 @@ type
     { Public declarations }
   end;
 
-function calRname(datatype, index: integer): widestring;
+function calRname(datatype, index: integer): string;
 
 var
   {leavelist: array of Tlist;
@@ -254,7 +254,7 @@ begin
   edit3.Text := inttostr(explist[scrollbar4.Position]);
 end;
 
-function calRname(datatype, index: integer): widestring;
+function calRname(datatype, index: integer): string;
 var
   I: integer;
 begin

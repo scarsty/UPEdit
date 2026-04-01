@@ -1,4 +1,4 @@
-program UPEdit;
+﻿program UPEdit;
 
 {$codepage utf8}
 

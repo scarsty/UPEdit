@@ -1,4 +1,4 @@
-object Form16: TForm16
+﻿object Form16: TForm16
   Left = 0
   Top = 0
   Caption = #22330#26223#20107#20214#25351#20196#20462#25913

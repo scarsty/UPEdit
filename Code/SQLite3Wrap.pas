@@ -1,4 +1,4 @@
-{*
+﻿{*
  * SQLite for Delphi and FreePascal/Lazarus
  *
  * This unit contains easy-to-use object wrapper over SQLite3 API functions.

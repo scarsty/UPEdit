@@ -314,7 +314,7 @@ var
 begin
   if picnum > 0 then
   begin
-    if SelectFolderDialog(self.Handle,'ѡ�񱣴��ļ���', dir, dir) then
+    if SelectFolderDialog(self.Handle,'选择保存文件夹', dir, dir) then
     begin
       if dir[length(dir)] <> '\' then
         dir := dir + '\';
@@ -1016,7 +1016,7 @@ begin
         picgif.Canvas.Brush.Color := bufgif.BackgroundColor;
         if (bufgif.Images.Count <= 10) or
           ((bufgif.Images.Count > 10) and (MessageBox(Self.Handle,
-              'GIF����ͼƬ����10�ţ�����Ứһ�κܳ�ʱ�䡣ȷʵҪ������', '����ͼƬ', MB_OKCANCEL) = 1)) then
+              'GIF包含图片大于10张，导入会花一段很长时间。确实要导入吗？', '插入图片', MB_OKCANCEL) = 1)) then
         begin
           //Image3.Canvas.Pixels[0, 0] := clblue;
           progressbar1.Min := 0;
@@ -1138,7 +1138,7 @@ begin
         picgif.Canvas.Brush.Color := bufgif.BackgroundColor;
         if (bufgif.Images.Count <= 10) or
           ((bufgif.Images.Count > 10) and (MessageBox(Self.Handle,
-              'GIF����ͼƬ����10�ţ�����Ứһ�κܳ�ʱ�䡣ȷʵҪ������', '����ͼƬ', MB_OKCANCEL) = 1)) then
+              'GIF包含图片大于10张，导入会花一段很长时间。确实要导入吗？', '插入图片', MB_OKCANCEL) = 1)) then
         begin
           progressbar1.Min := 0;
           progressbar1.Max := bufgif.Images.Count;
