@@ -1,4 +1,4 @@
-﻿object AboutBox: TAboutBox
+object AboutBox: TAboutBox
   Left = 445
   Top = 127
   ActiveControl = OKButton

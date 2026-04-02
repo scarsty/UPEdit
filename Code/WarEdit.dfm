@@ -1,4 +1,4 @@
-﻿object Form10: TForm10
+object Form10: TForm10
   Left = 0
   Top = 0
   Width = 721

@@ -1,26 +1,11 @@
 unit head;
 
-{$modeswitch autoderef}
-
 interface
 
 uses
-  windows, Graphics, sysutils, inifiles, classes, SyncObjs, ShlObj, math, Dialogs
-  {$IFDEF FPC}, md5{$ENDIF}
-  ;
+  windows, Graphics, sysutils, inifiles, classes, IdHashMessageDigest, SyncObjs, ShlObj, PNGimage, math, Dialogs;
 
 type
-
-  TPNGObject = class(TBitmap)
-  private
-    FAlpha: array of array of Byte;
-    function GetAlphaScanline(Index: Integer): PByteArray;
-  public
-    procedure CreateAlpha;
-    procedure Draw(ACanvas: TCanvas; const ARect: TRect);
-    procedure LoadFromStream(Stream: TStream); override;
-    property AlphaScanline[Index: Integer]: PByteArray read GetAlphaScanline;
-  end;
 
   Tbmpdata = record
     pixelperbit: Tpixelformat;
@@ -42,7 +27,7 @@ type
     data: array of byte;
   end;
 
-  // R æ–‡ä»¶ç»“æ„ record
+  // RÎÄ¼ş½á¹¹record
   TRdatasingle = record
     datatype: smallint;
     datalen: integer;
@@ -53,17 +38,17 @@ type
 
   TRarray = record
     incnum: smallint;
-    dataarray: array of TRdatasingle; // æˆå‘˜
+    dataarray: array of TRdatasingle; // ³ÉÔ±
   end;
 
   TRdataline = record
     len: smallint;
-    Rarray: array of TRarray; // æ•°ç»„
+    Rarray: array of TRarray; // ¸öÊı
   end;
 
   TRdata = record
     num: smallint;
-    Rdataline: array of TRdataline; // æ¯è¡Œæ•°æ®åŒ…å«å¤šä¸ªæ•°ç»„æˆå‘˜
+    Rdataline: array of TRdataline; // Ã¿¸öÈËÎï»òÎïÆ·¡¢³¡¾°µÈ°üÀ¨µÄ³ÉÔ±
   end;
 
   PRdata = ^TRdata;
@@ -72,7 +57,7 @@ type
     datanum: integer;
     namepos: integer;
     mappos: integer;
-    Rdata: array of TRdata; // æ¯ç§ç±»å‹çš„æ•°æ®é›†åˆ
+    Rdata: array of TRdata; // Ã¿ÖÖÀàĞÍÊı¾İµÄ¶àÉÙ¸ö
   end;
 
   PRtype = ^TRtype;
@@ -84,7 +69,7 @@ type
 
   PRFile = ^TRFile;
 
-  // R æ–‡ä»¶é…ç½®ç»“æ„ record
+  // RÎÄ¼şÅäÖÃÎÄ¼şrecord
   TRtermini = record
     datanum: smallint;
     incnum: smallint;
@@ -124,7 +109,7 @@ type
     Wterm: array of TWtermini;
   end;
 
-  // äº‹ä»¶é…ç½®ç»“æ„ record
+  // ÊÂ¼şÅäÖÃÎÄ¼şrecord
   TKDEFitem = record
     index: smallint;
     paramount: smallint;
@@ -140,18 +125,18 @@ type
     talkarrange: integer;
   end;
 
-  // æŒ‡ä»¤ record
+  // Ö¸Áîrecord
   Tattrib = record
-    attribnum: smallint; // æŒ‡ä»¤ç¼–å·
-    parcount: smallint; // æŒ‡ä»¤å‚æ•°ä¸ªæ•°
-    labelstatus: smallint; // -2:ç›¸å¯¹è·³è½¬ -1:label æº >=0:è·³è½¬ç›®æ ‡
-    labelway: smallint; // 1:å‘åï¼Œ-1:å‘å‰
+    attribnum: smallint; // Ö¸ÁîĞòºÅ
+    parcount: smallint; // Ö¸Áî²ÎÊı¸öÊı
+    labelstatus: smallint; // -2:ÎŞÌø×ª£¬-1:label£¬>=0:Ìø×ªÔ´
+    labelway: smallint; // 1ÏòÏÂ£¬-1ÏòÇ°
     labelfrom: smallint;
     labelto: smallint;
     par: array of smallint;
   end;
 
-  // äº‹ä»¶ record
+  // ÊÂ¼şrecord
   Tevent = record
     attribamount: smallint;
     attrib: array of Tattrib;
@@ -181,7 +166,7 @@ type
 
   Teventcopy = record
     copyevent: integer;
-    copyattrib: integer; // -1 ä¸å¯å¤åˆ¶ï¼Œ1 å¯å¤åˆ¶
+    copyattrib: integer; // -1Ã»¸´ÖÆ£¬1¿É¸´ÖÆ
   end;
 
   TInstructGuideComboboxList = record
@@ -359,7 +344,7 @@ type
 
   PScenePNGbuf = ^TScenePNGbuf;
 
-  TMapEditMode = (RLEMode, PNGZipMode, PNGPathMode);
+  TMapEditMode = (RLEMode, IMZMode, PNGMode);
 
   TPNGAlpha = record
     width: integer;
@@ -393,7 +378,7 @@ var
   Ridxfilename: array of string;
   datacode: integer = 1; // 0gbk,1big5,2utf16le,3utf8
   talkcode: integer = 1;
-  talkinvert: integer = 0; // é 0 è¡¨ç¤ºéœ€è¦å–å
+  talkinvert: integer = 0; // µÈÓÚ0ÔòĞèÒªÈ¡·´
   language: integer;
 
   inicode: integer;
@@ -402,7 +387,7 @@ var
   useR: TRFile;
   kdefidx, kdefgrp: string;
   nameidx, namegrp: string;
-  // æˆ˜æ–—ç›¸å…³æ•°æ®æ–‡ä»¶
+  // Õ½¶·Êı¾İÅäÖÃÎÄ¼ş
   useW: TWfile;
   Wini: TWini;
   Wtypedataitem: integer;
@@ -431,10 +416,10 @@ var
   CForm12: boolean = true;
   CForm13: boolean = true;
   CForm86: boolean = true;
-  CForm89: boolean = true; // æµ‹è¯•å¤´åƒ
-  CForm91: boolean = true; // è„šæœ¬æµè§ˆ
-  CForm94: boolean = true; // PNG æ‰¹é‡å¯¼å…¥
-  CFormImz: boolean = true; // IMZ ç¼–è¾‘
+  CForm89: boolean = true; // ²ÔÑ×Í·Ïñ
+  CForm91: boolean = true; // ¾ç±¾µ¼Èë
+  CForm94: boolean = true; // PNGÅúÁ¿µ¼Èë
+  CFormImz: boolean = true; // IMZ±à¼­
 
   DownloadUpdate: boolean = false;
 
@@ -463,7 +448,7 @@ var
 
   fmcursor: integer = 1;
 
-  GameVersion: integer = 0; // 0, åŸç‰ˆï¼› 1ï¼Œæ°´æµ’
+  GameVersion: integer = 0; // 0, Ô­°æ£» 1£¬Ë®ä°
 
   StartPath: string;
 
@@ -471,7 +456,6 @@ var
 
 function MultiToUnicode(str: PAnsiChar; codepage: integer): widestring;
 function UnicodeToMulti(str: PWideChar; codepage: integer): Ansistring;
-function UnicodeToMulti(const str: string; codepage: integer): Ansistring; overload;
 function MultiToUtf8(str: PAnsiChar; codepagein, codepageout: integer): utf8string;
 function readOutstr(str: Pointer; len: integer): widestring;
 function writeinstr(str: widestring; data: Pointer; len: integer): Pointer;
@@ -499,41 +483,6 @@ procedure WriteFile(const filename: string; const data: Ansistring);
 
 implementation
 
-procedure TPNGObject.CreateAlpha;
-var
-  y: Integer;
-begin
-  SetLength(FAlpha, Height);
-  for y := 0 to Height - 1 do
-    SetLength(FAlpha[y], Width);
-end;
-
-function TPNGObject.GetAlphaScanline(Index: Integer): PByteArray;
-begin
-  if (Index < 0) or (Index >= Length(FAlpha)) or (Length(FAlpha[Index]) = 0) then
-    Result := nil
-  else
-    Result := @FAlpha[Index][0];
-end;
-
-procedure TPNGObject.Draw(ACanvas: TCanvas; const ARect: TRect);
-begin
-  ACanvas.StretchDraw(ARect, Self);
-end;
-
-procedure TPNGObject.LoadFromStream(Stream: TStream);
-var
-  PNG: TPortableNetworkGraphic;
-begin
-  PNG := TPortableNetworkGraphic.Create;
-  try
-    PNG.LoadFromStream(Stream);
-    Self.Assign(PNG);
-  finally
-    PNG.Free;
-  end;
-end;
-
 function calPNG(Pdata: Pbyte): integer;
 begin
   result := 0;
@@ -546,14 +495,14 @@ function MultiToUnicode(str: PAnsiChar; codepage: integer): widestring;
 var
   len: integer;
 begin
-  // codepage: 936 ç®€ä½“ï¼Œ950 ç¹ä½“
+  // codepage£º936¼òÌå£¬950·±Ìå
   len := MultiByteToWideChar(codepage, 0, PAnsiChar(str), -1, nil, 0);
   setlength(result, len - 1);
   MultiByteToWideChar(codepage, 0, PAnsiChar(str), length(str), PWideChar(result), len + 1);
   // result := ' ' + result;
 end;
 
-// Unicode è½¬ä¸ºå¤šå­—èŠ‚ï¼Œé¢„ç•™æ‰©å±•
+// unicode×ªÎª¶à×Ö½Ú, À©Õ¹
 function UnicodeToMulti(str: PWideChar; codepage: integer): Ansistring;
 var
   len: integer;
@@ -561,11 +510,6 @@ begin
   len := WideCharToMultiByte(codepage, 0, PWideChar(str), -1, nil, 0, nil, nil);
   setlength(result, len);
   WideCharToMultiByte(codepage, 0, PWideChar(str), -1, PAnsiChar(result), len, nil, nil);
-end;
-
-function UnicodeToMulti(const str: string; codepage: integer): Ansistring; overload;
-begin
-  result := UnicodeToMulti(PWideChar(UnicodeString(str)), codepage);
 end;
 
 function MultiToUtf8(str: PAnsiChar; codepagein, codepageout: integer): utf8string;
@@ -588,7 +532,7 @@ begin
         begin
           setlength(tempAnsiString, len + 1);
           tempAnsiString[len + 1] := #0;
-          Move(str^, tempAnsiString[1], len);
+          copymemory(@tempAnsiString[1], str, len);
           result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 936);
         end
         else
@@ -600,7 +544,7 @@ begin
         begin
           setlength(tempAnsiString, len + 1);
           tempAnsiString[len + 1] := #0;
-          Move(str^, tempAnsiString[1], len);
+          copymemory(@tempAnsiString[1], str, len);
           result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 950);
         end
         else
@@ -612,7 +556,7 @@ begin
         begin
           setlength(tempAnsiString, len + 1);
           tempAnsiString[len + 1] := #0;
-          Move(str^, tempAnsiString[1], len);
+          copymemory(@tempAnsiString[1], str, len);
           result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 65001);
         end
         else
@@ -623,7 +567,7 @@ begin
       if len >= sizeof(widechar) then
       begin
         setlength(result, len div sizeof(widechar)); // + 1);
-        Move(str^, result[1], (len div sizeof(widechar)) * sizeof(widechar));
+        copymemory(@result[1], str, (len div sizeof(widechar)) * sizeof(widechar));
         // result[Len div 2 + 1] := #0;
         for i := 1 to len div sizeof(widechar) do
         begin
@@ -655,11 +599,7 @@ var
   begin
     len := length(GB);
     setlength(result, len);
-    {$IFDEF DELPHI}
-    LCMapString(GetUserDefaultLCID, $08000000, PChar(GB), len, PChar(result), len);
-    {$ELSE}
-    result := GB;
-    {$ENDIF}
+    LCMapString(GetUserDefaultLCID, LCMAP_TRADITIONAL_CHINESE, PChar(GB), len, PChar(result), len);
   end;
 
 begin
@@ -667,33 +607,29 @@ begin
     0:
       begin
         tempAnsiString := UnicodeToMulti(PWideChar(str), 936);
-        if len > 0 then
-          FillChar(data^, len, 0);
+        Zeromemory(data, len);
         if length(tempAnsiString) > 0 then
-          Move(tempAnsiString[1], data^, min(length(tempAnsiString), len));
+          copymemory(data, @tempAnsiString[1], min(length(tempAnsiString), len));
       end;
     1:
       begin
-        tempAnsiString := UnicodeToMulti(PWideChar(str), 950);
-        if len > 0 then
-          FillChar(data^, len, 0);
+        tempAnsiString := UnicodeToMulti(PWideChar(GB2Big(PWideChar(str))), 950);
+        Zeromemory(data, len);
         if length(tempAnsiString) > 0 then
-          Move(tempAnsiString[1], data^, min(length(tempAnsiString), len));
+          copymemory(data, @tempAnsiString[1], min(length(tempAnsiString), len));
       end;
     3:
       begin
         tempAnsiString := UnicodeToMulti(PWideChar(str), 65001);
-        if len > 0 then
-          FillChar(data^, len, 0);
+        Zeromemory(data, len);
         if length(tempAnsiString) > 0 then
-          Move(tempAnsiString[1], data^, min(length(tempAnsiString), len));
+          copymemory(data, @tempAnsiString[1], min(length(tempAnsiString), len));
       end;
   else
     begin
-      if len > 0 then
-        FillChar(data^, len, 0);
+      Zeromemory(data, len);
       if length(str) > 0 then
-        Move(str[1], data^, min(length(str) * sizeof(widechar), len));
+        copymemory(data, @str[1], min(length(str) * sizeof(widechar), len));
     end;
   end;
   tempAnsiString := '';
@@ -706,11 +642,7 @@ var
 begin
   L := length(mTraditional);
   setlength(result, L);
-  {$IFDEF DELPHI}
-  LCMapString(GetUserDefaultLCID, $04000000, PChar(mTraditional), L, @result[1], L);
-  {$ELSE}
-  result := mTraditional;
-  {$ENDIF}
+  LCMapString(GetUserDefaultLCID, LCMAP_SIMPLIFIED_CHINESE, PChar(mTraditional), L, @result[1], L);
 end;
 
 function SToT(mSimplified: string): string;
@@ -719,14 +651,10 @@ var
 begin
   L := length(mSimplified);
   setlength(result, L);
-  {$IFDEF DELPHI}
-  LCMapString(GetUserDefaultLCID, $08000000, PChar(mSimplified), L, @result[1], L);
-  {$ELSE}
-  result := mSimplified;
-  {$ENDIF}
+  LCMapString(GetUserDefaultLCID, LCMAP_TRADITIONAL_CHINESE, PChar(mSimplified), L, @result[1], L);
 end;
 
-// ç»Ÿä¸€å­—ç¬¦ä¸²æ˜¾ç¤ºå¤„ç†
+// ¼òÌå²Ù×÷£¬ÏÔÊ¾ÔòÅĞ¶ÏÓïÑÔÀàĞÍ
 function displaystr(str: string): string;
 begin
   // if (inicode <> 0) and (language = 1)  then
@@ -809,7 +737,7 @@ begin
   begin
     strlist := Tstringlist.Create;
     tempstr := ini.ReadString('50memory', 'mem' + inttostr(i), '');
-    strnum := ExtractStrings([' '], [], PChar(AnsiString(tempstr)), strlist);
+    strnum := ExtractStrings([' '], [], PWideChar(tempstr), strlist);
     if strnum = 2 then
     begin
       K50memorylist.addr[i] := strtoint('$' + strlist.Strings[0]);
@@ -826,32 +754,62 @@ end;
 
 function hashMySelf: string;
 var
-  Digest: TMD5Digest;
+  MyMD5: TIdHashMessageDigest5;
+  FileStream: TFileStream;
 begin
-  {$IFDEF FPC}
-  Digest := MD5File(Paramstr(0));
-  result := MD5Print(Digest);
-  {$ELSE}
-  result := '';
-  {$ENDIF}
+  MyMD5 := TIdHashMessageDigest5.Create;
+  FileStream := TFileStream.Create(Paramstr(0), fmopenread or fmSharedenyNone);
+  result := MyMD5.HashStreamAsHex(FileStream);
+  FileStream.Free;
+  MyMD5.Free;
 end;
 
 function hashFile(Filename: string): string;
 var
-  Digest: TMD5Digest;
+  MyMD5: TIdHashMessageDigest5;
+  FileStream: TFileStream;
 begin
-  {$IFDEF FPC}
-  Digest := MD5File(Filename);
-  result := MD5Print(Digest);
-  {$ELSE}
-  result := '';
-  {$ENDIF}
+  MyMD5 := TIdHashMessageDigest5.Create;
+  FileStream := TFileStream.Create(Filename, fmopenread or fmSharedenyNone);
+  result := MyMD5.HashStreamAsHex(FileStream);
+  FileStream.Free;
+  MyMD5.Free;
 end;
 
 function SelectFolderDialog(const Handle: integer; const Caption: string; const InitFolder: string; var SelectedFolder: string): boolean;
+var
+  BInfo: _browseinfoW;
+  Buffer: array [0 .. MAX_PATH] of Char;
+  ID: IShellFolder;
+  Eaten, Attribute: cardinal;
+  ItemID: PItemidlist;
 begin
-  SelectedFolder := InitFolder;
-  Result := False;
+  with BInfo do
+  begin
+    HwndOwner := Handle;
+    lpfn := nil;
+    lpszTitle := PChar(Caption);
+    ulFlags := BIF_RETURNONLYFSDIRS + BIF_NEWDIALOGSTYLE;
+    SHGetDesktopFolder(ID);
+    ID.ParseDisplayName(0, nil, '\', Eaten, ItemID, Attribute);
+    pidlRoot := ItemID;
+    GetMem(pszDisplayName, MAX_PATH);
+  end;
+
+  FreeMem(BInfo.pszDisplayName);
+  if SHGetPathFromIDList(SHBrowseForFolder(BInfo), Buffer) then
+  begin
+    SelectedFolder := Buffer;
+    if length(SelectedFolder) <> 3 then
+      SelectedFolder := SelectedFolder;
+    result := true;
+  end
+  else
+  begin
+    SelectedFolder := '';
+    result := false;
+  end;
+
 end;
 
 procedure WriteRDataStr(RDataSingle: PRdatasingle; data: widestring);
@@ -859,12 +817,12 @@ var
   tempint: int64;
 begin
   //
-  if RDataSingle.datatype = 0 then
+  if RDataSingle^.datatype = 0 then
   begin
     tempint := strtoint(data);
     WriteRDataInt(RDataSingle, tempint);
   end
-  else if RDataSingle.datatype = 1 then
+  else if RDataSingle^.datatype = 1 then
   begin
     if RDataSingle.datalen > 0 then
       writeinstr(data, @RDataSingle.data[0], RDataSingle.datalen);
@@ -875,39 +833,39 @@ procedure WriteRDataInt(RDataSingle: PRdatasingle; data: int64);
 var
   i: integer;
 begin
-  if RDataSingle.datalen = 1 then
+  if RDataSingle^.datalen = 1 then
   begin
     RDataSingle.data[0] := shortint(data);
   end
-  else if RDataSingle.datalen = 2 then
+  else if RDataSingle^.datalen = 2 then
   begin
     PSmallint(@RDataSingle.data[0])^ := smallint(data);
   end
-  else if RDataSingle.datalen = 4 then
+  else if RDataSingle^.datalen = 4 then
   begin
     PInteger(@RDataSingle.data[0])^ := integer(data);
   end
-  else if RDataSingle.datalen = 8 then
+  else if RDataSingle^.datalen = 8 then
   begin
     PInt64(@RDataSingle.data[0])^ := data;
   end
-  else if RDataSingle.datalen = 3 then
+  else if RDataSingle^.datalen = 3 then
   begin
     PSmallint(@RDataSingle.data[0])^ := smallint(data);
     RDataSingle.data[2] := 0;
   end
-  else if (RDataSingle.datalen = 5) or (RDataSingle.datalen = 6) or (RDataSingle.datalen = 7) then
+  else if (RDataSingle^.datalen = 5) or (RDataSingle^.datalen = 6) or (RDataSingle^.datalen = 7) then
   begin
     PInteger(@RDataSingle.data[0])^ := integer(data);
-    for i := 5 to RDataSingle.datalen do
+    for i := 5 to RDataSingle^.datalen do
     begin
       RDataSingle.data[i - 1] := 0;
     end;
   end
-  else if RDataSingle.datalen > 8 then
+  else if RDataSingle^.datalen > 8 then
   begin
     PInt64(@RDataSingle.data[0])^ := data;
-    for i := 9 to RDataSingle.datalen do
+    for i := 9 to RDataSingle^.datalen do
     begin
       RDataSingle.data[i - 1] := 0;
     end;
@@ -917,19 +875,19 @@ end;
 function ReadRDataInt(RDataSingle: PRdatasingle): int64;
 begin
   result := 0;
-  if RDataSingle.datalen = 1 then
+  if RDataSingle^.datalen = 1 then
   begin
     result := shortint(RDataSingle.data[0]);
   end
-  else if (RDataSingle.datalen >= 2) and (RDataSingle.datalen < 4) then
+  else if (RDataSingle^.datalen >= 2) and (RDataSingle^.datalen < 4) then
   begin
     result := PSmallint(@RDataSingle.data[0])^
   end
-  else if (RDataSingle.datalen >= 4) and (RDataSingle.datalen < 8) then
+  else if (RDataSingle^.datalen >= 4) and (RDataSingle^.datalen < 8) then
   begin
     result := PInteger(@RDataSingle.data[0])^;
   end
-  else if RDataSingle.datalen >= 8 then
+  else if RDataSingle^.datalen >= 8 then
   begin
     result := PInt64(@RDataSingle.data[0])^;
   end
@@ -965,7 +923,7 @@ begin
         begin
           setlength(tempAnsiString, ATalkStr.len + 1);
           tempAnsiString[ATalkStr.len + 1] := #0;
-          Move(ATalkStr.str[0], tempAnsiString[1], ATalkStr.len);
+          copymemory(@tempAnsiString[1], @ATalkStr.str[0], ATalkStr.len);
           result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 936);
         end
         else
@@ -977,7 +935,7 @@ begin
         begin
           setlength(tempAnsiString, ATalkStr.len + 1);
           tempAnsiString[ATalkStr.len + 1] := #0;
-          Move(ATalkStr.str[0], tempAnsiString[1], ATalkStr.len);
+          copymemory(@tempAnsiString[1], @ATalkStr.str[0], ATalkStr.len);
           result := MultiToUnicode(PAnsiChar(@tempAnsiString[1]), 950);
         end
         else
@@ -989,7 +947,7 @@ begin
       begin
         setlength(result, ATalkStr.len div sizeof(widechar)); // + 1);
         // result[ATalkStr.Len div 2 + 1] := #0;
-        Move(ATalkStr.str[0], result[1], (ATalkStr.len div sizeof(widechar)) * sizeof(widechar));
+        copymemory(@result[1], @ATalkStr.str[0], (ATalkStr.len div sizeof(widechar)) * sizeof(widechar));
         for i := 1 to ATalkStr.len div sizeof(widechar) do
         begin
           if result[i] = #0 then
@@ -1023,7 +981,7 @@ begin
         ATalkStr.len := max(length(tempAnsiString), 0);
         setlength(ATalkStr.str, ATalkStr.len);
         if ATalkStr.len > 0 then
-          Move(tempAnsiString[1], ATalkStr.str[0], ATalkStr.len);
+          copymemory(@ATalkStr.str[0], @tempAnsiString[1], ATalkStr.len);
       end;
     1:
       begin
@@ -1031,14 +989,14 @@ begin
         ATalkStr.len := max(length(tempAnsiString), 0);
         setlength(ATalkStr.str, ATalkStr.len);
         if ATalkStr.len > 0 then
-          Move(tempAnsiString[1], ATalkStr.str[0], ATalkStr.len);
+          copymemory(@ATalkStr.str[0], @tempAnsiString[1], ATalkStr.len);
       end;
   else
     begin
       ATalkStr.len := max(length(str) * sizeof(widechar), 0);
       setlength(ATalkStr.str, ATalkStr.len);
       if ATalkStr.len > 0 then
-        Move(str[1], ATalkStr.str[0], ATalkStr.len);
+        copymemory(@ATalkStr.str[0], @str[1], ATalkStr.len);
     end;
   end;
   tempAnsiString := '';
@@ -1081,12 +1039,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-

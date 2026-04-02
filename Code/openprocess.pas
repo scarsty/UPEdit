@@ -1,6 +1,4 @@
-﻿unit openprocess;
-
-{$modeswitch autoderef}
+unit openprocess;
 
 interface
 
@@ -14,7 +12,7 @@ type
     Label2: TLabel;
     Label1: TLabel;
     procedure FormCreate(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
   private
     { Private declarations }
   public
@@ -27,11 +25,11 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
-procedure TprocessForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TprocessForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  CloseAction := cafree;
+  Action := cafree;
 end;
 
 procedure TprocessForm.FormCreate(Sender: TObject);
@@ -46,7 +44,3 @@ begin
 end;
 
 end.
-
-
-
-

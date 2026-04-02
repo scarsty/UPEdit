@@ -1,6 +1,4 @@
-﻿unit Ict_50_21;
-
-{$modeswitch autoderef}
+unit Ict_50_21;
 
 interface
 
@@ -39,7 +37,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm59.ComboBox1Select(Sender: TObject);
 begin
@@ -55,6 +53,3 @@ begin
 end;
 
 end.
-
-
-

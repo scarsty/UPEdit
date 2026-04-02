@@ -1,11 +1,9 @@
-﻿unit about;
-
-{$modeswitch autoderef}
+unit about;
 
 interface
 
 uses Windows, Classes, Graphics, Forms, Controls, StdCtrls,
-  Buttons, ExtCtrls, opendisplay;
+  Buttons, ExtCtrls, jpeg, shellapi, head, pngimage, opendisplay;
 
 type
   TAboutBox = class(TForm)
@@ -38,13 +36,13 @@ implementation
 
 uses main;
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TAboutBox.FormCreate(Sender: TObject);
 begin
   version.Caption := titlestr;
-  self.Cursor := crDefault;
-  self.Panel1.Cursor := crDefault;
+  self.Cursor := fmcursor;
+  self.Panel1.Cursor := fmcursor;
 end;
 
 procedure TAboutBox.Label1Click(Sender: TObject);
@@ -76,10 +74,3 @@ end;
 
 end.
  
-
-
-
-
-
-
-

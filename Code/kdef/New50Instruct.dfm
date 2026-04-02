@@ -1,0 +1,62 @@
+object Form44: TForm44
+  Left = 0
+  Top = 0
+  Caption = #36873#25321'50'#25351#20196
+  ClientHeight = 350
+  ClientWidth = 359
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -12
+  Font.Name = 'Tahoma'
+  Font.Style = []
+  OldCreateOrder = False
+  Position = poDesktopCenter
+  PixelsPerInch = 96
+  TextHeight = 14
+  object ListBox1: TListBox
+    Left = 16
+    Top = 24
+    Width = 321
+    Height = 233
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Tahoma'
+    Font.Style = []
+    ImeName = #20013#25991' ('#31616#20307') - '#25628#29399#25340#38899#36755#20837#27861
+    ItemHeight = 14
+    ParentFont = False
+    TabOrder = 0
+    OnDblClick = ListBox1DblClick
+  end
+  object button1: TButton
+    Left = 40
+    Top = 280
+    Width = 113
+    Height = 41
+    Caption = #30830#23450
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Tahoma'
+    Font.Style = []
+    ModalResult = 1
+    ParentFont = False
+    TabOrder = 1
+  end
+  object button2: TButton
+    Left = 192
+    Top = 280
+    Width = 121
+    Height = 41
+    Caption = #21462#28040
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clWindowText
+    Font.Height = -12
+    Font.Name = 'Tahoma'
+    Font.Style = []
+    ModalResult = 2
+    ParentFont = False
+    TabOrder = 2
+  end
+end

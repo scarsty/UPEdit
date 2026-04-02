@@ -1,4 +1,4 @@
-﻿object Form11: TForm11
+object Form11: TForm11
   Left = 0
   Top = 0
   Margins.Left = 2

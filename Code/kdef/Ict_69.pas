@@ -1,6 +1,4 @@
-﻿unit Ict_69;
-
-{$modeswitch autoderef}
+unit Ict_69;
 
 interface
 
@@ -34,7 +32,7 @@ implementation
 uses
   kdefedit,Redit;
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm40.ComboBox1Select(Sender: TObject);
 var
@@ -63,6 +61,3 @@ begin
 end;
 
 end.
-
-
-

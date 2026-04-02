@@ -1,4 +1,4 @@
-﻿object FightFrameForm: TFightFrameForm
+object FightFrameForm: TFightFrameForm
   Left = 0
   Top = 0
   Caption = 'FightFrame'

@@ -1,6 +1,4 @@
-ï»¿unit Ict_50_17;
-
-{$modeswitch autoderef}
+unit Ict_50_17;
 
 interface
 
@@ -43,7 +41,7 @@ implementation
 uses
   Redit, kdefedit;
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm55.ComboBox1Select(Sender: TObject);
 var
@@ -64,9 +62,9 @@ begin
         for i3 := 0 to Rini[combobox1.ItemIndex + 1].Rterm[I].incnum - 1 do
         begin
           if Rini[combobox1.ItemIndex + 1].Rterm[I].datanum > 1 then
-            combobox3.Items.Add('åç§»:'+inttostr(offset)+ ' '+displayname(Rini[1 +combobox1.ItemIndex].Rterm[i + i3].name) + inttostr(i2 + 1))
+            combobox3.Items.Add('Æ«ÒÆ:'+inttostr(offset)+ ' '+displayname(Rini[1 +combobox1.ItemIndex].Rterm[i + i3].name) + inttostr(i2 + 1))
           else
-            combobox3.Items.Add('åç§»:'+inttostr(offset)+ ' '+displayname(Rini[1 +combobox1.ItemIndex].Rterm[i + i3].name));
+            combobox3.Items.Add('Æ«ÒÆ:'+inttostr(offset)+ ' '+displayname(Rini[1 +combobox1.ItemIndex].Rterm[i + i3].name));
           inc(offset, Rini[1+combobox1.ItemIndex].Rterm[i+i3].datalen);
         end;
     combobox3.ItemIndex := 0;
@@ -147,9 +145,9 @@ begin
         for i3 := 0 to Rini[combobox1.ItemIndex + 1].Rterm[I].incnum - 1 do
         begin
           if Rini[combobox1.ItemIndex + 1].Rterm[I].datanum > 1 then
-            combobox3.Items.Add('åç§»:'+inttostr(offset)+ displayname(Rini[1 + combobox1.ItemIndex].Rterm[i + i3].name) + inttostr(i2 + 1))
+            combobox3.Items.Add('Æ«ÒÆ:'+inttostr(offset)+ displayname(Rini[1 +combobox1.ItemIndex].Rterm[i + i3].name) + inttostr(i2 + 1))
           else
-            combobox3.Items.Add('åç§»:'+inttostr(offset)+ displayname(Rini[1 + combobox1.ItemIndex].Rterm[i + i3].name));
+            combobox3.Items.Add('Æ«ÒÆ:'+inttostr(offset)+ displayname(Rini[1 + combobox1.ItemIndex].Rterm[i + i3].name));
           inc(offset, Rini[1+combobox1.ItemIndex].Rterm[i+i3].datalen);
         end;
   end;
@@ -198,6 +196,3 @@ begin
 end;
 
 end.
-
-
-

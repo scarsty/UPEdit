@@ -1,4 +1,4 @@
-﻿object Form91: TForm91
+object Form91: TForm91
   Left = 0
   Top = 0
   Width = 692

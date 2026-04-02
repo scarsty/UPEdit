@@ -1,4 +1,4 @@
-﻿object Form6: TForm6
+object Form6: TForm6
   Left = 0
   Top = 0
   Caption = #20462#25913#24341#29992#39033#25968#20540

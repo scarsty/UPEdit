@@ -1,6 +1,4 @@
-﻿unit Ict_70;
-
-{$modeswitch autoderef}
+unit Ict_70;
 
 interface
 
@@ -41,7 +39,7 @@ implementation
 uses
   kdefedit;
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm41.Drawpallet;
 var
@@ -130,6 +128,3 @@ begin
 end;
 
 end.
-
-
-

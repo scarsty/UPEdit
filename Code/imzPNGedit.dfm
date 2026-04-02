@@ -1,4 +1,4 @@
-﻿object ImzPNGeditForm: TImzPNGeditForm
+object ImzPNGeditForm: TImzPNGeditForm
   Left = 0
   Top = 0
   Margins.Left = 2

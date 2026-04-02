@@ -1,14 +1,10 @@
-Ôªøunit imagez;
-
-{$modeswitch autoderef}
-
-{$H+}
+unit imagez;
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, fileCtrl, math, Menus, Types, StrUtils, head, inifiles, imzObject, libzip, FightFrameForm;
+  Dialogs, ExtCtrls, PNGimage, StdCtrls, fileCtrl, math, Menus, head, inifiles, imzObject, libzip, FightFrameForm;
 
 type
 
@@ -78,7 +74,7 @@ type
     procedure Drawsquare(x, y: integer);
     procedure Timer1Timer(Sender: TObject);
     procedure CheckBox1Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Image1MouseLeave(Sender: TObject);
     procedure Image1MouseUp(Sender: TObject; Button: TMouseButton; Shift: TShiftState; x, y: integer);
     procedure Button4Click(Sender: TObject);
@@ -114,14 +110,14 @@ type
     procedure SetEditMode(EMode: TIMZEditMode);
   private
     { Private declarations }
-    linepicnum: integer; // ÊØèË°åÂõæÁâáÊï∞
-    backcol: cardinal; // ËÉåÊôØÈ¢úËâ≤
-    squarecol: cardinal; // ÈÄâ‰∏≠Ê°ÜÈ¢úËâ≤
-    squareW: integer; // ÈÄâ‰∏≠Ê°ÜÂÆΩ
-    squareH: integer; // ÈÄâ‰∏≠Ê°ÜÈ´ò
-    firstpicnum: integer; // ÂΩìÂâçÁ¨¨‰∏ÄÂº†ÂõæÁâáÂ∫èÂè∑
-    nowpic: integer; // ÂΩìÂâçÈÄâ‰∏≠ÂõæÁâáÂ∫èÂè∑
-    linenum: integer; // ÂΩìÂâçÊòæÁ§∫ÂõæÁâáË°åÊï∞
+    linepicnum: integer; // √ø––Õº∆¨ ˝
+    backcol: cardinal; // ±≥æ∞—’…´
+    squarecol: cardinal; // —°øÚ—’…´
+    squareW: integer; // —°øÚøÌ∂»
+    squareH: integer; // —°øÚ∏ﬂ∂»
+    firstpicnum: integer; // µ±«∞µ⁄“ª∏±Õºµƒ–Ú∫≈
+    nowpic: integer; // œ÷‘⁄ Û±Í÷∏œÚµƒÕº∆¨–Ú∫≈
+    linenum: integer; // ¥∞ÃÂœ‘ æÕº∆¨µƒ–– ˝
     titleh: integer;
     popmenupic: integer;
     Timercount: integer;
@@ -129,7 +125,6 @@ type
     bufBmpInitial: Boolean;
     timerdraw: Boolean;
     PNGEditPath: string;
-    ZipEntryBasePath: string;
   end;
 
 var
@@ -140,63 +135,8 @@ implementation
 
 uses
   imzPNGedit, main;
-{$R *.lfm}
 
-function NormalizeZipEntry(const AName: string): string;
-begin
-  Result := StringReplace(AName, '\', '/', [rfReplaceAll]);
-  while (Length(Result) > 0) and (Result[1] = '/') do
-    Delete(Result, 1, 1);
-end;
-
-function BuildZipEntry(const ABasePath, AName: string): string;
-begin
-  if ABasePath = '' then
-    Result := NormalizeZipEntry(AName)
-  else
-    Result := NormalizeZipEntry(IncludeTrailingPathDelimiter(NormalizeZipEntry(ABasePath)) + NormalizeZipEntry(AName));
-end;
-
-function ZipTryReadAny(zip: pzip_t; const ABasePath, AName: string): ansistring;
-var
-  candidate: string;
-  ext: string;
-begin
-  Result := '';
-  if zip = nil then
-    exit;
-
-  candidate := BuildZipEntry(ABasePath, AName);
-  if candidate <> '' then
-    Result := zip_express(zip, candidate);
-  if Length(Result) > 0 then
-    exit;
-
-  candidate := NormalizeZipEntry(AName);
-  if candidate <> '' then
-    Result := zip_express(zip, candidate);
-  if Length(Result) > 0 then
-    exit;
-
-  candidate := NormalizeZipEntry(ExtractFileName(AName));
-  if candidate <> '' then
-    Result := zip_express(zip, candidate);
-  if Length(Result) > 0 then
-    exit;
-
-  ext := ExtractFileExt(candidate);
-  if SameText(ext, '.png') then
-  begin
-    candidate := ChangeFileExt(candidate, '.PNG');
-    if candidate <> '' then
-      Result := zip_express(zip, candidate);
-    if Length(Result) > 0 then
-      exit;
-    candidate := BuildZipEntry(ABasePath, ChangeFileExt(ExtractFileName(AName), '.PNG'));
-    if candidate <> '' then
-      Result := zip_express(zip, candidate);
-  end;
-end;
+{$R *.dfm}
 
 function TImzForm.GetEditMode: TIMZEditMode;
 begin
@@ -275,7 +215,7 @@ begin
   begin
     if pos('.zip', Edit2.Text) <> 0 then
     begin
-      zip := zip_open(@utf8string(Edit2.Text)[1], 0, nil);
+      zip := zip_open(@utf8string(Edit2.Text)[1], 0, 0);
       if zip <> nil then
         zip_compress(zip, 'fightframe.txt', @str[1], length(str));
       zip_close(zip);
@@ -296,7 +236,7 @@ begin
     Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
-  if SelectDirectory('ÈÄâÊã©ÂØºÂá∫ÁõÆÂΩï', '', Path) then
+  if SelectDirectory('…Ë÷√¥Ú∞¸ƒø¬º', dir, Path) then
   begin
     if Path[length(Path)] <> '\' then
       Path := Path + '\';
@@ -315,7 +255,7 @@ var
   txtPath: string;
   sl: TStringList;
   line: string;
-  parts: TStringDynArray;
+  parts: TArray<string>;
   idx, dx, dy: integer;
 begin
   indexfile := imzindexfilename;
@@ -333,10 +273,10 @@ begin
   if not DirectoryExists(Path) then
   begin
     // ForceDirectories(path);
-    showmessage('ÁõÆÂΩï‰∏çÂ≠òÂú®ÔºÅ');
+    showmessage('ƒø¬º≤ª¥Ê‘⁄£°');
     exit;
   end;
-  SaveDialog1.Title := '‰øùÂ≠ò imz Êñá‰ª∂‰∏∫';
+  SaveDialog1.Title := '±£¥ÊimzŒƒº˛√˚';
   SaveDialog1.Filter := '*.imz|*.imz';
   if SaveDialog1.Execute then
   begin
@@ -358,12 +298,12 @@ begin
           line := Trim(sl[I]);
           if line = '' then Continue;
           
-          parts := SplitString(line, ':');
+          parts := line.Split([':']);
           if Length(parts) >= 2 then
           begin
             try
               idx := StrToInt(parts[0]);
-              parts := SplitString(parts[1], ',');
+              parts := parts[1].Split([',']);
               if Length(parts) >= 2 then
               begin
                 dx := StrToInt(Trim(parts[0]));
@@ -404,7 +344,7 @@ begin
     end
     else
     begin
-      showmessage('ÂÅèÁßªÊñá‰ª∂‰∏çÂ≠òÂú®ÔºÅ');
+      showmessage('∆´“∆Œƒº˛≤ª¥Ê‘⁄£°');
       exit;
     end;
 
@@ -445,7 +385,7 @@ begin
     end;
 
     SaveImzToFile(@pakimz, Fname);
-    showmessage('IMZ Êñá‰ª∂‰øùÂ≠òÊàêÂäüÔºÅ');
+    showmessage('IMZŒƒº˛¥Ú∞¸≥…π¶£°');
   end;
 
 end;
@@ -465,7 +405,7 @@ begin
     Edit1.Text := ExtractFilePath(OpenDialog1.filename);
     Button5Click(Sender);
   end;
-  SetCurrentDirectory(PChar(AnsiString(StartPath)));
+  SetCurrentDirectory(Pchar(StartPath));
 end;
 
 procedure TImzForm.Button4Click(Sender: TObject);
@@ -524,7 +464,7 @@ begin
   end
   else if IMZeditMode = zZIPmode then
   begin
-    zip := zip_open(Edit2.Text, ZIP_CREATE);
+    zip := zip_open(UnicodeToMulti(Pwidechar(Edit2.Text), 65001), ZIP_CREATE);
     
     // Save index.ka (binary)
     setlength(buf, imz.PNGnum * 4);
@@ -571,7 +511,7 @@ begin
   begin
     if Edit2.Text = '' then
     begin
-    showmessage('ÁõÆÂΩï‰∏çÂ≠òÂú®ÔºÅ');
+      showmessage('±£¥ÊµƒŒƒº˛√˚Œﬁ–ß£°');
       exit;
     end;
     Path := ExtractFilePath(Edit2.Text);
@@ -591,6 +531,7 @@ begin
     begin
       Edit2.Text := StartPath + Edit2.Text;
     end;
+
     SaveImzToFile(@imz, Edit2.Text);
   end;
 end;
@@ -609,10 +550,7 @@ begin
     ReadImzFromZIPFile(@imz, Edit2.Text)
   else
   begin
-    if FileExists(Edit2.Text) and SameText(ExtractFileExt(Edit2.Text), '.zip') then
-      ReadImzFromZIPFile(@imz, Edit2.Text)
-    else
-      InitialImzFromPath(@imz, Edit2.Text);
+    InitialImzFromPath(@imz, Edit2.Text);
   end;
   if imz.PNGnum mod linepicnum = 0 then
     ScrollBar1.Max := Max(imz.PNGnum div linepicnum - 1, 0)
@@ -623,12 +561,9 @@ begin
   DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  try
-    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  finally
-    imzBufbmp.Canvas.UnLock;
-    Image1.Canvas.UnLock;
-  end;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.UnLock;
+  imzBufbmp.Canvas.UnLock;
 end;
 
 procedure TImzForm.InitialImzFromPath(tempimz: Pimz; Path: string);
@@ -638,7 +573,7 @@ var
   tpath: string;
   txtPath: string;
   line: string;
-  parts: TStringDynArray;
+  parts: TArray<string>;
   idx, dx, dy: integer;
   sl: TStringList;
 begin
@@ -656,6 +591,7 @@ begin
     tpath := tpath + '\';
   try
     txtPath := ChangeFileExt(indexfile, '.txt');
+    
     if fileexists(tpath + txtPath) then
     begin
       // Read from index.txt (higher priority)
@@ -667,20 +603,24 @@ begin
         begin
           line := Trim(sl[I]);
           if line = '' then Continue;
-          parts := SplitString(line, ':');
+          
+          parts := line.Split([':']);
           if Length(parts) >= 2 then
           begin
             try
               idx := StrToInt(parts[0]);
-              parts := SplitString(parts[1], ',');
+              parts := parts[1].Split([',']);
               if Length(parts) >= 2 then
               begin
                 dx := StrToInt(Trim(parts[0]));
                 dy := StrToInt(Trim(parts[1]));
+                
                 if idx >= tempimz.PNGnum then
                   tempimz.PNGnum := idx + 1;
+                
                 if tempimz.PNGnum > Length(tempimz.imzPNG) then
                   setlength(tempimz.imzPNG, tempimz.PNGnum);
+                
                 tempimz.imzPNG[idx].x := dx;
                 tempimz.imzPNG[idx].y := dy;
               end;
@@ -713,28 +653,30 @@ begin
     begin
       SetEditMode(zIMZmode);
       tempimz.PNGnum := 0;
-      showmessage('Á¥¢ÂºïÊñá‰ª∂:' + tpath + indexfile + '‰∏çÂ≠òÂú®ÔºÅ');
+      showmessage('À˜“˝Œƒº˛:' + tpath + indexfile + '≤ª¥Ê‘⁄£°');
       exit;
     end;
   except
     fileclose(FH);
   end;
+
   PNGEditPath := Path;
+
 end;
 
 procedure TImzForm.Button6Click(Sender: TObject);
 var
   Path, dir: string;
-  outdir: string;
+  outdir: TArray<string>;
 begin
   Path := ExtractFilePath(Edit2.Text);
   if Path = '' then
     Path := StartPath;
   if Path[length(Path)] <> '\' then
     Path := Path + '\';
-  if SelectDirectory('ÈÄâÊã©ÂØºÂá∫ÁõÆÂΩï', Path, outdir) then
+  if SelectDirectory(Path, outdir) then
   begin
-    Path := outdir;
+    Path := outdir[0];
     // ImzEditMode := PNGMode;
     SetEditMode(zPNGmode);
     if Path[length(Path)] <> '\' then
@@ -759,7 +701,7 @@ begin
 
   if IMZeditMode = zPNGmode then
   begin
-    showmessage('ÂΩìÂâç‰∏çÊîØÊåÅÊñá‰ª∂ÂàóË°®ÁºñËæëÊ®°ÂºèÔºå‰ªÖÂèØÂú® IMZ Êñá‰ª∂ÁºñËæëÊ®°Âºè‰∏ã‰ΩøÁî®„ÄÇ');
+    showmessage('Ω‚∞¸≤ª÷ß≥÷Œƒº˛º–±‡º≠ƒ£ Ω£¨÷ªø…“‘‘⁄IMZŒƒº˛±‡º≠ƒ£ Ω÷– π”√£°');
     exit;
   end;
 
@@ -850,7 +792,7 @@ begin
         end;
     end;
   end;
-  showmessage('ÂØºÂá∫ÊàêÂäüÔºÅ');
+  showmessage('Ω‚∞¸≥…π¶£°');
 end;
 
 procedure TImzForm.Button8Click(Sender: TObject);
@@ -902,7 +844,6 @@ var
   ix, iy, I, I2, h, w, count, FH: integer;
   zip: pzip_t;
   buf: ansistring;
-  entryName: string;
 begin
   //
   imzBufbmp.Canvas.Lock;
@@ -922,9 +863,8 @@ begin
   iy := 0;
   h := 0;
 
-  zip := nil;
   if IMZeditMode = zZIPmode then
-    zip := zip_open(Edit2.Text);
+    zip := zip_open(UnicodeToMulti(Pwidechar(Edit2.Text), 65001));
 
   for I := firstpicnum to imz.PNGnum - 1 do
   begin
@@ -983,44 +923,34 @@ begin
     if IMZeditMode = zZIPmode then
     begin
       imz.imzPNG[I].frame := 0;
-      entryName := inttostr(I) + '.png';
-      buf := ZipTryReadAny(zip, ZipEntryBasePath, entryName);
-      if Length(buf) > 0 then
+      if zip_has_file(zip, inttostr(I) + '.png') then
       begin
         imz.imzPNG[I].frame := 1;
         setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
         setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
         try
+          buf := zip_express(zip, inttostr(I) + '.png');
           imz.imzPNG[I].framelen[0] := length(buf);
           setlength(imz.imzPNG[I].framedata[0].data, imz.imzPNG[I].framelen[0]);
-          Move(buf[1], imz.imzPNG[I].framedata[0].data[0], imz.imzPNG[I].framelen[0]);
+          copymemory(@(imz.imzPNG[I].framedata[0].data[0]), @buf[1], imz.imzPNG[I].framelen[0]);
         finally
         end;
       end
       else
       begin
         I2 := 0;
-        while True do
-        begin
-          entryName := inttostr(I) + '_' + inttostr(I2) + '.png';
-          buf := ZipTryReadAny(zip, ZipEntryBasePath, entryName);
-          if Length(buf) <= 0 then
-            break;
+        while (zip_has_file(zip, inttostr(I) + '_' + inttostr(I2) + '.png')) do
           inc(I2);
-        end;
         imz.imzPNG[I].frame := I2;
         setlength(imz.imzPNG[I].framelen, imz.imzPNG[I].frame);
         setlength(imz.imzPNG[I].framedata, imz.imzPNG[I].frame);
         for I2 := 0 to imz.imzPNG[I].frame - 1 do
         begin
           try
-            entryName := inttostr(I) + '_' + inttostr(I2) + '.png';
-            buf := ZipTryReadAny(zip, ZipEntryBasePath, entryName);
-            if Length(buf) <= 0 then
-              continue;
+            buf := zip_express(zip, inttostr(I) + '_' + inttostr(I2) + '.png');
             imz.imzPNG[I].framelen[I2] := length(buf);
             setlength(imz.imzPNG[I].framedata[I2].data, imz.imzPNG[I].framelen[I2]);
-            Move(buf[1], imz.imzPNG[I].framedata[I2].data[0], imz.imzPNG[I].framelen[I2]);
+            copymemory(@imz.imzPNG[I].framedata[I2].data[0], @buf[1], imz.imzPNG[I].framelen[I2]);
           finally
           end;
         end;
@@ -1040,7 +970,7 @@ begin
     // image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     inc(ix);
   end;
-  if (IMZeditMode = zZIPmode) and (zip <> nil) then
+  if IMZeditMode = zZIPmode then
     zip_close(zip);
 
   ScrollBar1.LargeChange := Max(1, linenum - 1);
@@ -1114,7 +1044,7 @@ begin
   begin
     dest.framelen[I] := ori.framelen[I];
     setlength(dest.framedata[I].data, dest.framelen[I]);
-    Move(ori.framedata[I].data[0], dest.framedata[I].data[0], dest.framelen[I]);
+    copymemory(@dest.framedata[I].data[0], @ori.framedata[I].data[0], dest.framelen[I]);
   end;
 end;
 
@@ -1208,7 +1138,7 @@ begin
       fileclose(FH);
       tempimz.PNGnum := 0;
       setlength(tempimz.imzPNG, tempimz.PNGnum);
-      showmessage('ËØªÂèñÂ§±Ë¥•ÔºÅ');
+      showmessage('∂¡»° ß∞‹£°');
     end;
   end
   else
@@ -1223,18 +1153,16 @@ var
   ini: Tinifile;
   I, FH: integer;
   tpath: string;
-  zipName, buf: ansistring;
+  name, buf: ansistring;
   zip: pzip_t;
   p: psmallint;
   txtPath: string;
   txtBuf: ansistring;
   sl: TStringList;
   line: string;
-  parts: TStringDynArray;
+  parts: TArray<string>;
   idx, dx, dy: integer;
 begin
-  zip := nil;
-  ZipEntryBasePath := '';
   indexfile := imzindexfilename;
   try
     ini := Tinifile.Create(StartPath + iniFileName);
@@ -1243,14 +1171,14 @@ begin
     ini.Free;
   end;
   try
-    zipName := Fname;
-    zip := zip_open(zipName);
+    name := UnicodeToMulti(Pwidechar(Fname), 65001);
+    zip := zip_open(name);
     if zip <> nil then
     begin
-      ZipEntryBasePath := NormalizeZipEntry(ExtractFilePath(indexfile));
       txtPath := ChangeFileExt(indexfile, '.txt');
+      
       // Try reading index.txt first (higher priority)
-      txtBuf := ZipTryReadAny(zip, ZipEntryBasePath, txtPath);
+      txtBuf := zip_express(zip, txtPath);
       if Length(txtBuf) > 0 then
       begin
         tempimz.PNGnum := 0;
@@ -1261,20 +1189,24 @@ begin
           begin
             line := Trim(sl[I]);
             if line = '' then Continue;
-            parts := SplitString(line, ':');
+            
+            parts := line.Split([':']);
             if Length(parts) >= 2 then
             begin
               try
                 idx := StrToInt(parts[0]);
-                parts := SplitString(parts[1], ',');
+                parts := parts[1].Split([',']);
                 if Length(parts) >= 2 then
                 begin
                   dx := StrToInt(Trim(parts[0]));
                   dy := StrToInt(Trim(parts[1]));
+                  
                   if idx >= tempimz.PNGnum then
                     tempimz.PNGnum := idx + 1;
+                  
                   if tempimz.PNGnum > Length(tempimz.imzPNG) then
                     setlength(tempimz.imzPNG, tempimz.PNGnum);
+                  
                   tempimz.imzPNG[idx].x := dx;
                   tempimz.imzPNG[idx].y := dy;
                 end;
@@ -1291,25 +1223,21 @@ begin
       else
       begin
         // Fall back to index.ka
-        buf := ZipTryReadAny(zip, ZipEntryBasePath, indexfile);
+        buf := zip_express(zip, indexfile);
         tempimz.PNGnum := length(buf) div 4;
         setlength(tempimz.imzPNG, tempimz.PNGnum);
-        if tempimz.PNGnum > 0 then
+        p := @buf[1];
+        for I := 0 to tempimz.PNGnum - 1 do
         begin
-          p := @buf[1];
-          for I := 0 to tempimz.PNGnum - 1 do
-          begin
-            tempimz.imzPNG[I].x := p^;
-            inc(p);
-            tempimz.imzPNG[I].y := p^;
-            inc(p);
-          end;
+          tempimz.imzPNG[I].x := p^;
+          inc(p);
+          tempimz.imzPNG[I].y := p^;
+          inc(p);
         end;
       end;
     end;
   finally
-    if zip <> nil then
-      zip_close(zip);
+    zip_close(zip);
   end;
 end;
 
@@ -1376,12 +1304,9 @@ begin
   DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  try
-    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  finally
-    imzBufbmp.Canvas.UnLock;
-    Image1.Canvas.UnLock;
-  end;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.UnLock;
+  imzBufbmp.Canvas.UnLock;
   Timer1.Enabled := tempbool;
 end;
 
@@ -1409,7 +1334,6 @@ begin
       // if h >= image1.Height then
       break;
     imzBufbmp.Canvas.Lock;
-    try
     if imz.imzPNG[I].frame > 1 then
     begin
       imzBufbmp.Canvas.Brush.Color := backcol;
@@ -1423,28 +1347,23 @@ begin
       DrawimzPNGtoImage(@imz.imzPNG[I], count, ix * squareW, iy * squareH + titleh);
       imzBufbmp.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     end;
-    finally
-      imzBufbmp.Canvas.UnLock;
-    end;
 
     // image1.Canvas.TextOut(ix * squareW, iy * squareH, inttostr(I));
     inc(ix);
   end;
 
   Image1.Canvas.Lock;
-  try
-    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-    if nowpic >= 0 then
-      Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
-  finally
-    Image1.Canvas.UnLock;
-  end;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  imzBufbmp.Canvas.UnLock;
+  if nowpic >= 0 then
+    Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
+  Image1.Canvas.UnLock;
   timerdraw := false;
 end;
 
-procedure TImzForm.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TImzForm.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
-  CloseAction := cafree;
+  Action := cafree;
   IMZCopyPNG.frame := 0;
   setlength(IMZCopyPNG.framelen, 0);
   setlength(IMZCopyPNG.framedata, 0);
@@ -1462,7 +1381,6 @@ begin
   timerdraw := false;
   imzBufbmp := Tbitmap.Create;
   IMZeditMode := zIMZmode;
-  ZipEntryBasePath := '';
   PNGEditPath := '';
   bufBmpInitial := true;
   Timercount := 0;
@@ -1485,7 +1403,6 @@ begin
   timerdraw := false;
 
   CheckBox1.Checked := Timer1.Enabled;
-  DoubleBuffered := True;
 
   // self.Width := self.Constraints.MinWidth;
   // self.Height := self.Constraints.MinHeight;
@@ -1512,12 +1429,9 @@ begin
     DrawImz;
     Image1.Canvas.Lock;
     imzBufbmp.Canvas.Lock;
-    try
-      Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-    finally
-      imzBufbmp.Canvas.UnLock;
-      Image1.Canvas.UnLock;
-    end;
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    Image1.Canvas.UnLock;
+    imzBufbmp.Canvas.UnLock;
   except
 
   end;
@@ -1541,12 +1455,9 @@ begin
   nowpic := -1;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  try
-    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  finally
-    imzBufbmp.Canvas.UnLock;
-    Image1.Canvas.UnLock;
-  end;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.UnLock;
+  imzBufbmp.Canvas.UnLock;
 end;
 
 procedure TImzForm.Image1MouseMove(Sender: TObject; Shift: TShiftState; x, y: integer);
@@ -1563,14 +1474,10 @@ begin
     // DrawImz;
     imzBufbmp.Canvas.Lock;
     Image1.Canvas.Lock;
-    try
-      Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-      if (nowpic >= 0) and (nowpic + firstpicnum < imz.PNGnum) then
-        Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
-    finally
-      Image1.Canvas.UnLock;
-      imzBufbmp.Canvas.UnLock;
-    end;
+    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+    imzBufbmp.Canvas.UnLock;
+    Drawsquare(nowpic mod linepicnum * squareW, nowpic div linepicnum * squareH);
+    Image1.Canvas.UnLock;
   end;
 end;
 
@@ -1728,12 +1635,9 @@ begin
   DrawImz;
   Image1.Canvas.Lock;
   imzBufbmp.Canvas.Lock;
-  try
-    Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
-  finally
-    imzBufbmp.Canvas.UnLock;
-    Image1.Canvas.UnLock;
-  end;
+  Image1.Canvas.CopyRect(Image1.Canvas.ClipRect, imzBufbmp.Canvas, imzBufbmp.Canvas.ClipRect);
+  Image1.Canvas.UnLock;
+  imzBufbmp.Canvas.UnLock;
   nowpic := -1;
 end;
 
@@ -1834,7 +1738,7 @@ begin
   CopyImzPNG(@IMZCopyPNG, @imz.imzPNG[popmenupic]);
   IMZcanCopyPNG := true;
 
-  // Â§çÂà∂Âà∞Á≥ªÁªüÂâ™Ë¥¥Êùø‰∏≠ÁöÑ UPedit
+  // ∏¥÷∆µΩ∆‰À˚’˝‘⁄‘À––µƒUPedit
   temphandle := 0;
   tempquit := true;
 
@@ -1865,7 +1769,7 @@ begin
     inc(I2, 4);
     if IMZCopyPNG.framelen[I] > 0 then
     begin
-      Move(IMZCopyPNG.framedata[I].data[0], tempdata[I2], IMZCopyPNG.framelen[I]);
+      copymemory(@tempdata[I2], @IMZCopyPNG.framedata[I].data[0], IMZCopyPNG.framelen[I]);
       inc(I2, IMZCopyPNG.framelen[I]);
     end;
   end;
@@ -1875,7 +1779,7 @@ begin
   tempbuf.dwData := tempsize + 4;
   tempbuf.cbData := tempsize + 4;
   tempbuf.lpData := tempchar;
-  Move(tempdata[0], tempchar^, tempsize + 4);
+  copymemory(tempchar, @tempdata[0], tempsize + 4);
 
   while (tempquit) do
   begin
@@ -1919,7 +1823,7 @@ var
   imzPNGnum, I: integer;
 begin
   try
-    imzPNGnum := strtoint(inputbox('ËÆæÁΩÆÊÄªË¥¥ÂõæÊï∞', 'ËÆæÁΩÆÊÄªË¥¥ÂõæÊï∞', inttostr(imz.PNGnum)));
+    imzPNGnum := strtoint(inputbox('…Ë÷√◊‹Ã˘Õº ˝', '…Ë÷√◊‹Ã˘Õº ˝', inttostr(imz.PNGnum)));
   except
     exit;
   end;
@@ -1962,11 +1866,6 @@ var
   ix, iy: integer;
 begin
   //
-  if (x < 0) or (y < 0) then
-    exit;
-  if (x + squareW >= Image1.Width) or (y + squareH >= Image1.Height) then
-    exit;
-
   iy := y;
   for ix := x to x + squareW - 1 do
   begin
@@ -1982,16 +1881,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-
-
-
-
-

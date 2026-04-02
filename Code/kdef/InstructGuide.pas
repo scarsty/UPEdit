@@ -1,6 +1,4 @@
-﻿unit InstructGuide;
-
-{$modeswitch autoderef}
+unit InstructGuide;
 
 interface
 
@@ -37,7 +35,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TinctGuide.RadioGroup1Click(Sender: TObject);
 var
@@ -60,6 +58,3 @@ begin
 end;
 
 end.
-
-
-

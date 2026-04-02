@@ -1,4 +1,4 @@
-﻿object Form88: TForm88
+object Form88: TForm88
   Left = 0
   Top = 0
   BorderStyle = bsNone

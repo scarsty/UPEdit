@@ -1,14 +1,10 @@
-ï»¿unit CYheadOutput;
-
-{$modeswitch autoderef}
-
-{$H+}
+unit CYheadOutput;
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ComCtrls, StdCtrls,FileCtrl, head;
+  Dialogs, ComCtrls, StdCtrls,FileCtrl, head, PNGimage;
 
 type
 
@@ -57,14 +53,12 @@ implementation
 
 uses
   CYhead;
-{$R *.lfm}
-type
-  PByteLine = ^TByteLine;
-  TByteLine = array[0..65535] of Byte;
+
+{$R *.dfm}
 
 procedure TForm90.Button1Click(Sender: TObject);
 begin
-  if SelectDirectory('é€‰æ‹©ä¿å­˜æ–‡ä»¶å¤¹', '', CYheadDir) then
+  if SelectDirectory('Ñ¡Ôñ±£´æÎÄ¼ş¼Ğ','',CYheadDir) then
   begin
     if CYheaddir[length(CYheaddir)] <> '\' then
       CYheaddir :=CYheaddir + '\';
@@ -75,7 +69,7 @@ end;
 procedure updateprocess;
 begin
   Form90.ProgressBar1.Position := nowoutputnum;
-  Form90.Label1.Caption := 'è¾“å‡º' + inttostr(nowoutputnum) + '/' + inttostr(CYheadnum);
+  Form90.Label1.Caption := '½ø¶È'+ inttostr(nowoutputnum) + '/' + inttostr(CYheadnum);
 end;
 
 procedure TForm90.Button2Click(Sender: TObject);
@@ -94,7 +88,7 @@ begin
     CYheadthread := TCYheadThread.Create(false);
   end
   else
-    showmessage('æ­£åœ¨å¯¼å‡º PNG å›¾ç‰‡ä¸­ï¼Œè¯·è€å¿ƒç­‰å¾…åå†è¿›è¡Œæ“ä½œã€‚');
+    showmessage('ÕıÔÚµ¼³öPNGÍ¼Æ¬ÖĞ£¡ÇëÄÍĞÄµÈ´ı£¬ÉÔºóÔÙ½øĞĞ²Ù×÷£¡');
 end;
 
 procedure TForm90.Button4Click(Sender: TObject);
@@ -105,7 +99,7 @@ begin
     showmsg := true;
     CYheadoutputing := false;
     except
-      showmessage('åœæ­¢è¾“å‡ºå¤±è´¥ã€‚');
+      showmessage('³ö´íÁË£¡£¡');
     end;
   end;
 end;
@@ -120,14 +114,14 @@ end;
 procedure mustexit;
 begin
   Form90.ProgressBar1.Position := 0;
-  Form90.Label1.Caption := 'è¾“å‡º';
+  Form90.Label1.Caption := '½ø¶È';
   if showmsg then
-    showmessage('å·²åœæ­¢è¾“å‡ºã€‚');
+    showmessage('ÖÕÖ¹µ¼³ö£¡');
 end;
 
 procedure outputPNGshowerror;
 begin
-  showmessage('è¾“å‡ºå¤±è´¥ï¼');
+  showmessage('µ¼³ö´íÎó£¡');
 end;
 
 procedure initialCYheadthread;
@@ -135,7 +129,7 @@ begin
   Form90.progressbar1.max := CYheadnum;
   Form90.ProgressBar1.Min := 0;
   Form90.ProgressBar1.Position := 0;
-  Form90.Label1.Caption := 'è¾“å‡º0/' + inttostr(CYheadnum);
+  Form90.Label1.Caption := '½ø¶È0/' + inttostr(CYheadnum);
   nowoutputnum := 0;
 end;
 
@@ -146,14 +140,14 @@ var
   Savebufbmp: Tbitmap;
   PNGrs: TPNGObject;
   ix,iy: integer;
-  Pdat:PByteLine;
+  Pdat:Pbytearray;
   PD: array of byte;
 begin
   freeonterminate := true;
   savebufbmp := Tbitmap.Create;
   PNGrs := TPNGObject.create;
   savebufbmp.PixelFormat := pf24bit;
-  initialCYheadthread;
+  Synchronize(initialCYheadthread);
 
     for I := 0 to CYheadnum - 1 do
     begin
@@ -175,19 +169,19 @@ begin
         PNGrs.CreateAlpha;
         for iy := 0 to savebufbmp.Height - 1 do
         begin
-          Pdat := PByteLine(PNGrs.AlphaScanline[iy]);
-          Move(savebufbmp.ScanLine[iy]^, PD[0], savebufbmp.Width * 3);
+          Pdat := PNGrs.AlphaScanline[iy];
+          copymemory(@PD[0],savebufbmp.ScanLine[iy],savebufbmp.Width * 3);
           for ix := 0 to savebufbmp.Width - 1 do
             if {savebufbmp.Canvas.Pixels[ix, iy] =} PD[ix * 3] shl 16 + PD[ix * 3+1] shl 8 + PD[ix * 3+2] = usualtrans then
-              Pdat^[ix] := 0;
+              Pdat[ix] := 0;
         end;
-        filename := CYheaddir + 'æµ‹è¯•å¤´åƒ' + inttostr(I + 1) + '.png';
+        filename := CYheaddir + '²ÔÑ×Í·Ïñ'+ inttostr(I + 1) +'.png';
         PNGrs.SaveToFile(filename);
 
         end
         else
         begin
-          filename := CYheaddir + 'æµ‹è¯•å¤´åƒ' + inttostr(I + 1) + '.png';
+          filename := CYheaddir + '²ÔÑ×Í·Ïñ'+ inttostr(I + 1) +'.png';
           PF := filecreate(filename);
           filewrite(PF, CYheadgrp[I].data[0],CYheadgrp[I].size);
           fileclose(PF);
@@ -197,11 +191,11 @@ begin
 
       end;
       Nowoutputnum := I + 1;
-      updateprocess;
+      Synchronize(updateprocess);
       savebufbmp.Canvas.Unlock;
       if not CYheadoutputing then
       begin
-        mustexit;
+        synchronize(mustexit);
         CYheadoutputing := false;
         savebufbmp.Free;
         PNGrs.Free;
@@ -210,7 +204,7 @@ begin
       end;
     end;
   CYheadoutputing := false;
-  endPNGprocess;
+  Synchronize(endPNGprocess);
   PNGrs.Free;
   savebufbmp.Free;
   setlength(PD,0);
@@ -218,18 +212,9 @@ end;
 
 procedure endPNGprocess;
 begin
-  showmessage('è¾“å‡ºå®Œæˆï¼');
+  showmessage('µ¼³öÍê³É£¡');
   Form90.ProgressBar1.Position := 0;
-  Form90.Label1.Caption := 'è¾“å‡º';
+  Form90.Label1.Caption := '½ø¶È';
 end;
 
 end.
-
-
-
-
-
-
-
-
-

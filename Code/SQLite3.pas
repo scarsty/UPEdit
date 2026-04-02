@@ -1,4 +1,4 @@
-﻿{*
+{*
  * SQLite for Delphi and FreePascal/Lazarus
  *
  * This unit contains complete SQLite3 API translation.

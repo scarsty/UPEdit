@@ -1,4 +1,4 @@
-﻿object processForm: TprocessForm
+object processForm: TprocessForm
   Left = 500
   Top = 500
   AlphaBlend = True

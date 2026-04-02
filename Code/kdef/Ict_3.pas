@@ -1,6 +1,4 @@
-﻿unit Ict_3;
-
-{$modeswitch autoderef}
+unit Ict_3;
 
 interface
 
@@ -52,9 +50,6 @@ implementation
 uses
   kdefedit;
 
-{$R *.lfm}
+{$R *.dfm}
 
 end.
-
-
-

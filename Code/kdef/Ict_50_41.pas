@@ -1,6 +1,4 @@
-﻿unit Ict_50_41;
-
-{$modeswitch autoderef}
+unit Ict_50_41;
 
 interface
 
@@ -34,9 +32,6 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 end.
-
-
-

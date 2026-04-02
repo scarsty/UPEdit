@@ -1,4 +1,4 @@
-﻿object Form94: TForm94
+object Form94: TForm94
   Left = 0
   Top = 0
   Caption = 'PNG'#25209#37327#23548#20837

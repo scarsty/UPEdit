@@ -1,12 +1,10 @@
-ï»¿unit outputPNG;
-
-{$modeswitch autoderef}
+unit outputPNG;
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ComCtrls, head, FileCtrl, inifiles;
+  Dialogs, StdCtrls, ComCtrls, head, PNGimage, FileCtrl, inifiles;
 
 type
   TPNGThread = class(TThread)
@@ -63,7 +61,9 @@ implementation
 
 uses
   grplist;
-{$R *.lfm}
+
+{$R *.dfm}
+
 procedure TPNGThread.Execute;
 var
   I, PF, FH : integer;
@@ -80,7 +80,7 @@ begin
   savebufbmp.PixelFormat := pf24bit;
   PNGrs := TPNGObject.create;
   NowPNGpos := 0;
-  initialPNGthread;
+  Synchronize(initialPNGthread);
   FH := filecreate(dir + outputPNGindexName, fmopenreadwrite);
   for I := 0 to filenum - 1 do
   begin
@@ -91,7 +91,7 @@ begin
       if grppic[I].size > 8 then
       begin
 
-        if calPNG(@grppic[I].data[0]) = 1 then
+        if calPNG(@(grppic[I].data[0])) = 1 then
         begin
           filename := dir + inttostr(I) +'.png';
           PF := filecreate(filename);
@@ -108,7 +108,7 @@ begin
           begin
             savebufbmp.Canvas.Brush.Color := usualtrans;
             savebufbmp.Canvas.FillRect(savebufbmp.Canvas.ClipRect);
-            drawRLE8(@grppic[I].data[0],grppic[I].size,@savebufbmp,0,0,false);
+            drawRLE8(@(grppic[I].data[0]),grppic[I].size,@savebufbmp,0,0,false);
 
             setlength(Pd, savebufbmp.Width * 3);
 
@@ -116,11 +116,11 @@ begin
             PNGrs.CreateAlpha;
             for iy := 0 to savebufbmp.Height - 1 do
             begin
-              Move(savebufbmp.ScanLine[iy]^, PD[0], savebufbmp.Width * 3);
+              copymemory(@PD[0],savebufbmp.ScanLine[iy],savebufbmp.Width * 3);
               Pdat := PNGrs.AlphaScanline[iy];
               for ix := 0 to savebufbmp.Width - 1 do
                 if {savebufbmp.Canvas.Pixels[ix, iy] =} usualtrans = PD[ix * 3] shl 16 + PD[ix * 3+1] shl 8 + PD[ix * 3+2] then
-                  Pdat^[ix] := 0;
+                  Pdat[ix] := 0;
             end;
            filename := dir + inttostr(I) +'.png';
            PNGrs.SaveToFile(filename);
@@ -132,13 +132,13 @@ begin
 
     end;
     NowPNGpos := I + 1;
-    updateprocess;
+    Synchronize(updateprocess);
     savebufbmp.Canvas.Unlock;
     filewrite(FH, tx, 2);
     filewrite(FH, ty, 2);
     if not outputing then
     begin
-      mustexit;
+      synchronize(mustexit);
       outputing := false;
       savebufbmp.Free;
       PNGrs.Free;
@@ -148,7 +148,7 @@ begin
     end;
   end;
   outputing := false;
-  endPNGprocess;
+  Synchronize(endPNGprocess);
   PNGrs.Free;
   savebufbmp.Free;
   setlength(PD, 0);
@@ -160,21 +160,21 @@ begin
   Form88.progressbar1.max := filenum;
   Form88.ProgressBar1.Min := 0;
   Form88.ProgressBar1.Position := 0;
-  Form88.Label1.Caption := 'è¿›åº¦0/' + inttostr(filenum);
+  Form88.Label1.Caption := '½ø¶È0/' + inttostr(filenum);
   nowPNGpos := 0;
 end;
 
 procedure mustexit;
 begin
   Form88.ProgressBar1.Position := 0;
-  Form88.Label1.Caption := 'è¿›åº¦';
+  Form88.Label1.Caption := '½ø¶È';
   if showmsg then
-    showmessage('ç»ˆæ­¢å¯¼å‡ºï¼');
+    showmessage('ÖÕÖ¹µ¼³ö£¡');
 end;
 
 procedure outputPNGshowerror;
 begin
-  showmessage('å¯¼å‡ºé”™è¯¯ï¼');
+  showmessage('µ¼³ö´íÎó£¡');
 end;
 
 procedure check;
@@ -185,20 +185,20 @@ end;
 procedure updateprocess;
 begin
   Form88.ProgressBar1.Position := nowPNGpos;
-  Form88.Label1.Caption := 'è¿›åº¦'+ inttostr(nowPNGpos) + '/' + inttostr(filenum);
+  Form88.Label1.Caption := '½ø¶È'+ inttostr(nowPNGpos) + '/' + inttostr(filenum);
 end;
 
 procedure endPNGprocess;
 begin
   Form88.ProgressBar1.Position := 0;
-  showmessage('å¯¼å‡ºå®Œæˆï¼');
-  Form88.Label1.Caption := 'è¿›åº¦';
+  showmessage('µ¼³öÍê³É£¡');
+  Form88.Label1.Caption := '½ø¶È';
 end;
 
 procedure TForm88.Button1Click(Sender: TObject);
 begin
   Dir := Edit1.Text;
-  if SelectFolderDialog(self.handle, 'é€‰æ‹©ä¿å­˜æ–‡ä»¶å¤¹','',Dir) then
+  if SelectFolderDialog(self.handle, 'Ñ¡Ôñ±£´æÎÄ¼ş¼Ğ','',Dir) then
   begin
     if dir[length(dir)] <> '\' then
       dir :=dir + '\';
@@ -232,7 +232,7 @@ begin
     outputPNGthread := TPNGThread.Create(false);
   end
   else
-    showmessage('æ­£åœ¨å¯¼å‡ºPNGå›¾ç‰‡ä¸­ï¼è¯·è€å¿ƒç­‰å¾…ï¼Œç¨åå†è¿›è¡Œæ“ä½œï¼');
+    showmessage('ÕıÔÚµ¼³öPNGÍ¼Æ¬ÖĞ£¡ÇëÄÍĞÄµÈ´ı£¬ÉÔºóÔÙ½øĞĞ²Ù×÷£¡');
 end;
 
 procedure TForm88.Button4Click(Sender: TObject);
@@ -246,9 +246,9 @@ begin
     showmsg := true;
     outputing := false;
    // Form88.ProgressBar1.Position := 0;
-   // Form88.Label1.Caption := 'è¿›åº¦';
+   // Form88.Label1.Caption := '½ø¶È';
     except
-      showmessage('å‡ºé”™äº†ï¼ï¼');
+      showmessage('³ö´íÁË£¡£¡');
     end;
   end;
 
@@ -266,12 +266,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-

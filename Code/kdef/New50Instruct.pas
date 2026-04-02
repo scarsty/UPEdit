@@ -1,6 +1,4 @@
-﻿unit New50Instruct;
-
-{$modeswitch autoderef}
+unit New50Instruct;
 
 interface
 
@@ -25,7 +23,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm44.ListBox1DblClick(Sender: TObject);
 begin
@@ -37,6 +35,3 @@ begin
 end;
 
 end.
-
-
-

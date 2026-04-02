@@ -1,10 +1,9 @@
-ï»¿unit TAKEIN;
-
-{$modeswitch autoderef}
+unit TAKEIN;
 
 interface
 
-uses Windows, Classes, SysUtils, Graphics, Forms, Controls, StdCtrls, ExtCtrls, Dialogs, Buttons, ComCtrls, head, Gifimg, math, jpeg;
+uses Windows, Classes, SysUtils, Graphics, Forms, Controls, StdCtrls, ExtCtrls, Dialogs,
+  PNGimage, JPEG, Buttons, ComCtrls, head, Gifimg, math;
 
 type
 
@@ -54,7 +53,7 @@ type
     Label10: TLabel;
     Label12: TLabel;
     ProgressBar1: TProgressBar;
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Button1Click(Sender: TObject);
     procedure Button2Click(Sender: TObject);
     procedure Button3Click(Sender: TObject);
@@ -108,7 +107,7 @@ function findwidth24pf(Pdata: Pbyte; width: integer; trancol: cardinal): integer
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 uses
   main, grpedit, grplist;
@@ -158,7 +157,7 @@ end;
 
 procedure TForm1.Button4Click(Sender: TObject);
 begin
-  opendialog1.Filter := 'JPG,PNG,BMP,GIF|*.{$IFDEF DELPHI}jpeg{$ENDIF};*.Jpg;*.bmp;*.PNG;*.gif|All files (*.*)|*.*';
+  opendialog1.Filter := 'JPG,PNG,BMP,GIF|*.Jpeg;*.Jpg;*.bmp;*.PNG;*.gif|All files (*.*)|*.*';
   if opendialog1.Execute then
   begin
     picname := opendialog1.FileName;
@@ -169,7 +168,7 @@ end;
 procedure TForm1.picdisplay;
 var
   PNG: TPNGObject;
-  JpgImg: TJpegImage;
+  JPEG: Tjpegimage;
   bmp: Tbitmap;
   i, i2,ix,iy:integer;
   cancol: boolean;
@@ -186,13 +185,13 @@ begin
       BMP.Assign(PNG);
       BMP.PixelFormat := pf24bit;
       setlength(PD, bmp.Width * 3);
-      //showmessage('ï¿½ò¿ª³É¹ï¿½');
+      //showmessage('´ò¿ª³É¹¦');
       for I := 0 to $FFFFFF do
       begin
         cancol := true;
         for iy := 0 to bmp.Height - 1 do
         begin
-          Move(bmp.ScanLine[Iy]^, PD[0], bmp.Width * 3);
+          copymemory(@PD[0],bmp.ScanLine[Iy],bmp.Width * 3);
           for ix := 0 to bmp.Width - 1 do
           begin
             if PD[ix * 3] shl 16 + PD[ix * 3 + 1] shl 8 + PD[ix * 3 + 2] = $ffffff - I then
@@ -224,11 +223,11 @@ begin
     end
     else if SameText(ExtractFileExt(picName), '.jpg') or SameText(ExtractFileExt(picName), '.jpeg') then
     begin
-      JpgImg := TJpegImage.Create;
-      JpgImg.LoadFromFile(picname);
-      can.Assign(JpgImg);
+      JPEG := Tjpegimage.Create;
+      JPEG.LoadFromFile(picname);
+      can.Assign(jpeg);
       transcol := can.Canvas.Pixels[0,0];
-      JpgImg.Free;
+      jpeg.Free;
       if isgif then
         gif.Free;
       isGif := false;
@@ -315,7 +314,7 @@ begin
     updown1.Position := 0;
     updown2.Position := 0;
     if isgif and (gif.Images.Count > 1) then
-      showmessage('GIFå›¾ç‰‡åªæ˜¾ç¤ºç¬¬ä¸€å¸§ï¼Œæ‰€æœ‰å¸§è®¾ç½®åŒç¬¬ä¸€å¸§ï¼Œéƒ½å¯å¯¼å…¥ï¼');
+      showmessage('GIFÍ¼Æ¬Ö»ÏÔÊ¾µÚÒ»Ö¡£¬ËùÓĞÖ¡ÉèÖÃÍ¬µÚÒ»Ö¡£¬¶¼¿Éµ¼Èë£¡');
 end;
 
 procedure TForm1.Button5Click(Sender: TObject);
@@ -329,7 +328,7 @@ begin
   try
   if not (fileexists(edit2.Text) and fileexists(edit3.Text)) then
   begin
-      showmessage('GIFå›¾ç‰‡åªæ˜¾ç¤ºç¬¬ä¸€å¸§ï¼Œæ‰€æœ‰å¸§è®¾ç½®åŒç¬¬ä¸€å¸§ï¼Œéƒ½å¯å¯¼å…¥ï¼');
+    showmessage('GRP»òIDXÎÄ¼ş²»´æÔÚ£¡');
     exit;
   end;
   if ISGIF then
@@ -412,11 +411,11 @@ begin
   end;
     setlength(data, 0);
     setlength(grpdata, 0);
-    messagebox(0, 'å¯¼å…¥æˆåŠŸï¼', 'æˆåŠŸï¼', MB_OK or MB_iconasterisk);
+    messagebox(0, 'µ¼Èë³É¹¦£¡', '³É¹¦£¡', MB_OK or MB_iconasterisk);
     progressbar1.Position := 0;
   except
     progressbar1.Position := 0;
-    messagebox(0, 'å¯¼å…¥å¤±è´¥ï¼', 'æç¤ºï¼', MB_OK or MB_ICONHAND);
+    messagebox(0, 'µ¼ÈëÊ§°Ü£¡', 'ÌáÊ¾£¡', MB_OK or MB_ICONHAND);
     setlength(data, 0);
     setlength(grpdata, 0);
     exit;
@@ -505,10 +504,10 @@ begin
   end;
 end;
 
-procedure TForm1.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm1.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   CForm1 := true;
-  CloseAction := caFree;
+  Action := caFree;
 end;
 
 procedure TForm1.FormCreate(Sender: TObject);
@@ -761,7 +760,7 @@ begin
 
   setlength(tempcolor, pictempbmp.Height, pictempbmp.Width * 3);
   for I := 0 to pictempbmp.Height - 1 do
-    Move(pictempbmp.ScanLine[I]^, tempcolor[I][0], pictempbmp.Width * 3);
+    copymemory(@tempcolor[I][0], pictempbmp.ScanLine[I], pictempbmp.Width * 3);
 
   if not cantrans then
   begin
@@ -788,12 +787,12 @@ begin
   begin
     for Iy := Arect.Top to Arect.Bottom - 1 do
     begin
-      transcount := 0;//é€æ˜åƒç´ ä¸ªæ•°
-      transcount := 0;//é€æ˜åƒç´ ä¸ªæ•°
+      trans := 0;//¼¸´ÎÍ¸Ã÷ÏñËØ
+      transcount := 0;//Í¸Ã÷ÏñËØ¸öÊı
       //state
-      //ä¸º1æ˜¯é€æ˜åƒç´ çŠ¶æ€
-      //ä¸º2æ˜¯æ™®é€šé¢œè‰²åƒç´ çŠ¶æ€
-      //Îª2ï¿½ï¿½ï¿½ï¿½Í¨ï¿½ï¿½É«ï¿½ï¿½ï¿½ï¿½×´Ì¬
+      //Îª0ÊÇ³õÊ¼×´Ì¬
+      //Îª1ÊÇÍ¸Ã÷ÏñËØ×´Ì¬
+      //Îª2ÊÇÆÕÍ¨ÑÕÉ«ÏñËØ×´Ì¬
       state := 0;
       linebyte := 0;
       colnum := 0;
@@ -857,7 +856,7 @@ begin
             inc(transcount);
           end;
         end
-        else//å¦‚æœä¸æ˜¯é€æ˜åƒç´ 
+        else//Èç¹û²»ÊÇÍ¸Ã÷ÏñËØ
         begin
           if state <> 2 then
           begin
@@ -1037,14 +1036,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-
-
-

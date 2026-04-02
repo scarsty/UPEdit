@@ -1,4 +1,4 @@
-﻿object Form87: TForm87
+object Form87: TForm87
   Left = 0
   Top = 0
   BorderIcons = [biSystemMenu]

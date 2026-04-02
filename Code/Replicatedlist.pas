@@ -1,6 +1,4 @@
-﻿unit Replicatedlist;
-
-{$modeswitch autoderef}
+unit Replicatedlist;
 
 interface
 
@@ -49,14 +47,14 @@ type
     procedure Edit2Change(Sender: TObject);
     procedure Edit3Change(Sender: TObject);
     procedure Button1Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
   private
     { Private declarations }
   public
     { Public declarations }
   end;
 
-function calRname(datatype, index: integer): string;
+function calRname(datatype, index: integer): widestring;
 
 var
   {leavelist: array of Tlist;
@@ -71,7 +69,9 @@ implementation
 
 uses
   main, Redit;
-{$R *.lfm}
+
+{$R *.dfm}
+
 procedure TForm86.Button1Click(Sender: TObject);
 var
   F, Flen,I: integer;
@@ -157,10 +157,10 @@ begin
   end;
 end;
 
-procedure TForm86.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm86.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   CForm86 := true;
-  CloseAction := cafree;
+  action := cafree;
 end;
 
 procedure TForm86.FormCreate(Sender: TObject);
@@ -254,7 +254,7 @@ begin
   edit3.Text := inttostr(explist[scrollbar4.Position]);
 end;
 
-function calRname(datatype, index: integer): string;
+function calRname(datatype, index: integer): widestring;
 var
   I: integer;
 begin
@@ -271,8 +271,3 @@ begin
 end;
 
 end.
-
-
-
-
-

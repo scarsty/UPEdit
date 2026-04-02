@@ -1,0 +1,102 @@
+object inctGuide: TinctGuide
+  Left = 0
+  Top = 0
+  Margins.Left = 2
+  Margins.Top = 2
+  Margins.Right = 2
+  Margins.Bottom = 2
+  Caption = #36890#29992#25351#20196#25351#23548
+  ClientHeight = 160
+  ClientWidth = 640
+  Color = clBtnFace
+  ParentFont = True
+  Position = poDesktopCenter
+  TextHeight = 15
+  object Panel1: TPanel
+    Left = 0
+    Top = 120
+    Width = 640
+    Height = 40
+    Margins.Left = 2
+    Margins.Top = 2
+    Margins.Right = 2
+    Margins.Bottom = 2
+    Align = alBottom
+    TabOrder = 0
+    ExplicitTop = 112
+    ExplicitWidth = 638
+    object Button1: TButton
+      Left = 160
+      Top = 5
+      Width = 80
+      Height = 28
+      Margins.Left = 2
+      Margins.Top = 2
+      Margins.Right = 2
+      Margins.Bottom = 2
+      Caption = #30830#23450
+      ModalResult = 1
+      TabOrder = 0
+    end
+    object Button2: TButton
+      Left = 400
+      Top = 5
+      Width = 80
+      Height = 28
+      Margins.Left = 2
+      Margins.Top = 2
+      Margins.Right = 2
+      Margins.Bottom = 2
+      Caption = #21462#28040
+      ModalResult = 2
+      TabOrder = 1
+    end
+  end
+  object Panel2: TPanel
+    Left = 0
+    Top = 0
+    Width = 640
+    Height = 80
+    Margins.Left = 2
+    Margins.Top = 2
+    Margins.Right = 2
+    Margins.Bottom = 2
+    Align = alClient
+    BevelOuter = bvNone
+    TabOrder = 1
+    ExplicitWidth = 638
+    ExplicitHeight = 72
+  end
+  object Panel3: TPanel
+    Left = 0
+    Top = 80
+    Width = 640
+    Height = 40
+    Margins.Left = 2
+    Margins.Top = 2
+    Margins.Right = 2
+    Margins.Bottom = 2
+    Align = alBottom
+    TabOrder = 2
+    ExplicitTop = 72
+    ExplicitWidth = 638
+    object RadioGroup1: TRadioGroup
+      Left = 160
+      Top = 2
+      Width = 320
+      Height = 36
+      Margins.Left = 2
+      Margins.Top = 2
+      Margins.Right = 2
+      Margins.Bottom = 2
+      Caption = #36339#36716#26465#20214
+      Columns = 2
+      ItemIndex = 0
+      Items.Strings = (
+        #28385#36275#26465#20214#36339#36716
+        #19981#28385#36275#26465#20214#36339#36716)
+      TabOrder = 0
+      OnClick = RadioGroup1Click
+    end
+  end
+end

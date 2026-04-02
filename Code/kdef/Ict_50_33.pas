@@ -1,6 +1,4 @@
-﻿unit Ict_50_33;
-
-{$modeswitch autoderef}
+unit Ict_50_33;
 
 interface
 
@@ -44,7 +42,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm71.Drawpallet;
 var
@@ -145,6 +143,3 @@ begin
 end;
 
 end.
-
-
-

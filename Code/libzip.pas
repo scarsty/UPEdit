@@ -1,6 +1,4 @@
-﻿unit libzip;
-
-{$modeswitch autoderef}
+unit libzip;
 
 {$ifdef fpc}
 {$packrecords c}
@@ -164,5 +162,3 @@ begin
 end;
 
 end.
-
-

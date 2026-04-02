@@ -1,12 +1,10 @@
-ï»¿unit PNGimport;
-
-{$modeswitch autoderef}
+unit PNGimport;
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, head, ExtCtrls, StdCtrls, Grids, ComCtrls, Menus;
+  Dialogs, head, ExtCtrls, StdCtrls, Grids, ComCtrls, Menus, PNGimage;
 
 type
   TPNGimportThread = class(TThread)
@@ -44,7 +42,7 @@ type
     N1: TMenuItem;
     N2: TMenuItem;
     N3: TMenuItem;
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure Button7Click(Sender: TObject);
     procedure ComboBox1Change(Sender: TObject);
@@ -98,7 +96,8 @@ implementation
 
 uses
   PNGimportModify;
-{$R *.lfm}
+{$R *.dfm}
+
 procedure TPNGimportThread.Execute;
 var
   PNGpic: TPngObject;
@@ -110,10 +109,10 @@ var
   idx, grp, orilen, param, len, fh: Integer;
 begin
   freeonterminate := true;
-  DisablePNGimportForm;
+  Synchronize(DisablePNGimportForm);
 
   PNGimportProgress := 0;
-  setPNGimportprogress;
+  Synchronize(setPNGimportprogress);
 
   PNGpic := TPngObject.Create;
   bufbmp := Tbitmap.Create;
@@ -155,7 +154,7 @@ begin
           for i2 := 0 to bufbmp.Height - 1 do
           begin
             if PNGpic.AlphaScanline[i2] <> nil then
-              Move(PNGpic.AlphaScanline[i2]^, alpha[i2 * bufbmp.Width], bufbmp.Width)
+              CopyMemory(@alpha[i2 * bufbmp.Width], PNGpic.AlphaScanline[i2], bufbmp.Width)
             else
               fillchar(alpha[i2 * bufbmp.Width], bufbmp.Width, $FF);
           end;
@@ -176,13 +175,13 @@ begin
         end;
 
         PNGimportProgress := round((i + 1) / ImportPNGFileNum) * 100;
-        setPNGimportprogress;
+        Synchronize(setPNGimportprogress);
 
       except
-        PNGimportError;
+        Synchronize(PNGimportError);
         // PNGpic.Destroy;
         // bufbmp.Free;
-        enablePNGimportForm;
+        Synchronize(enablePNGimportForm);
         exit;
       end;
 
@@ -220,8 +219,8 @@ begin
         fileclose(idx);
         fileclose(grp);
         PNGimportProgress := 0;
-        setPNGimportprogress;
-        enablePNGimportForm;
+        Synchronize(setPNGimportprogress);
+        Synchronize(enablePNGimportForm);
         exit;
       end;
     finally
@@ -231,10 +230,10 @@ begin
   end
   else
   begin
-    PNGimportNoIDXGRPfile;
+    Synchronize(PNGimportNoIDXGRPfile);
     PNGimportProgress := 0;
-    setPNGimportprogress;
-    enablePNGimportForm;
+    Synchronize(setPNGimportprogress);
+    Synchronize(enablePNGimportForm);
     exit;
   end;
 
@@ -259,25 +258,25 @@ begin
   fileclose(idx);
   fileclose(grp);
 
-  PNGimportSuccess;
+  Synchronize(PNGimportSuccess);
   PNGimportProgress := 0;
-  setPNGimportprogress;
-  enablePNGimportForm;
+  Synchronize(setPNGimportprogress);
+  Synchronize(enablePNGimportForm);
 end;
 
 procedure PNGimportNoIDXGRPfile;
 begin
-  ShowMessage('åŸIDXæˆ–GRPæ–‡ä»¶ä¸å­˜åœ¨ï¼æ— æ³•ä¿å­˜ï¼');
+  ShowMessage('Ô­IDX»òGRPÎÄ¼ş²»´æÔÚ£¡ÎŞ·¨±£´æ£¡');
 end;
 
 procedure PNGimportSuccess;
 begin
-  ShowMessage('åŸIDXæˆ–GRPæ–‡ä»¶ä¸å­˜åœ¨ï¼æ— æ³•ä¿å­˜ï¼');
+  ShowMessage('³É¹¦£¡');
 end;
 
 procedure PNGimportError;
 begin
-  ShowMessage('åŸIDXæˆ–GRPæ–‡ä»¶ä¸å­˜åœ¨ï¼æ— æ³•ä¿å­˜ï¼');
+  ShowMessage('³öÏÖ´íÎó£¡');
 end;
 
 procedure DisablePNGimportForm;
@@ -315,7 +314,7 @@ begin
   bufbmp.PixelFormat := pf24bit;
   SetLength(bufcolor, ph, pw * 3);
   for i := 0 to ph - 1 do
-    Move(bufbmp.ScanLine[i]^, bufcolor[i][0], pw * 3);
+    CopyMemory(@bufcolor[i][0], bufbmp.ScanLine[i], pw * 3);
 
   (Psmallint(Pdata))^ := pw;
   (Psmallint(Pdata + 2))^ := ph;
@@ -325,12 +324,12 @@ begin
 
   for iy := 0 to ph - 1 do
   begin
-    transcount := 0; // é€æ˜åƒç´ ä¸ªæ•°
-    transcount := 0; // é€æ˜åƒç´ ä¸ªæ•°
+    trans := 0; // ¼¸´ÎÍ¸Ã÷ÏñËØ
+    transcount := 0; // Í¸Ã÷ÏñËØ¸öÊı
     // state
-    // ä¸º1æ˜¯é€æ˜åƒç´ çŠ¶æ€
-    // ä¸º2æ˜¯æ™®é€šé¢œè‰²åƒç´ çŠ¶æ€
-    // ä¸º2æ˜¯æ™®é€šé¢œè‰²åƒç´ çŠ¶æ€
+    // Îª0ÊÇ³õÊ¼×´Ì¬
+    // Îª1ÊÇÍ¸Ã÷ÏñËØ×´Ì¬
+    // Îª2ÊÇÆÕÍ¨ÑÕÉ«ÏñËØ×´Ì¬
     state := 0;
     linebyte := 0;
     colnum := 0;
@@ -382,7 +381,7 @@ begin
         else
           inc(transcount);
       end
-      else // å¦‚æœä¸æ˜¯é€æ˜åƒç´ 
+      else // Èç¹û²»ÊÇÍ¸Ã÷ÏñËØ
       begin
         // ShowMessage('2');
         if state <> 2 then
@@ -613,12 +612,12 @@ begin
       if PNGFormat[ListBox1.Items.Count] then
       begin
         PNGFormatStr :=  displayname('PNG');
-         // + '  Xåç§»ï¼š' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Yåç§»ï¼š' + inttostr(PNGYs[ListBox1.Items.Count]));
+         // + '  XÆ«ÒÆ£º' + inttostr(PNGXs[ListBox1.Items.Count]) + ' YÆ«ÒÆ£º' + inttostr(PNGYs[ListBox1.Items.Count]));
       end
       else
       begin
-        PNGFormatStr := displayname('RLE8' + '  Xåç§»ï¼š' + inttostr
-        (PNGXs[ListBox1.Items.Count]) + ' Yåç§»ï¼š' + inttostr(PNGYs[ListBox1.Items.Count]));
+        PNGFormatStr := displayname('RLE8' + '  XÆ«ÒÆ£º' + inttostr
+        (PNGXs[ListBox1.Items.Count]) + ' YÆ«ÒÆ£º' + inttostr(PNGYs[ListBox1.Items.Count]));
       end;
       ListBox1.Items.Add(OpenDialog2.Files.Strings[i] + '  ' + PNGFormatStr);
 
@@ -687,13 +686,13 @@ begin
       if PNGFormat[ListBox1.ItemIndex] then
       begin
         PNGFormatStr := displayname('PNG');
-         // + '  Xåç§»ï¼š' + inttostr(PNGXs[ListBox1.Items.Count]) + ' Yåç§»ï¼š' + inttostr(PNGYs[ListBox1.Items.Count]));
+         // + '  XÆ«ÒÆ£º' + inttostr(PNGXs[ListBox1.Items.Count]) + ' YÆ«ÒÆ£º' + inttostr(PNGYs[ListBox1.Items.Count]));
       end
       else
       begin
         Form95Active := false;
-        PNGFormatStr := displayname('RLE8' + '  Xåç§»ï¼š' + inttostr
-        (PNGXs[ListBox1.Items.Count]) + ' Yåç§»ï¼š' + inttostr(PNGYs[ListBox1.Items.Count]));
+        PNGFormatStr := displayname('RLE8' + '  XÆ«ÒÆ£º' + inttostr
+        (PNGXs[ListBox1.Items.Count]) + ' YÆ«ÒÆ£º' + inttostr(PNGYs[ListBox1.Items.Count]));
       end;
       ListBox1.Items.Add(OpenDialog2.Files.Strings[ListBox1.ItemIndex] + '  ' + PNGFormatStr);
         
@@ -742,7 +741,7 @@ begin
   end
   else
   begin
-  ShowMessage('åŸIDXæˆ–GRPæ–‡ä»¶ä¸å­˜åœ¨ï¼æ— æ³•ä¿å­˜ï¼');
+    ShowMessage('Ã»ÓĞ¿ÉÒÔµ¼ÈëµÄPNGÎÄ¼ş£¡');
   end;
 end;
 
@@ -780,14 +779,14 @@ begin
   end;
 end;
 
-procedure TForm94.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm94.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   ImportPNGFileNum := 0;
   SetLength(PNGFormat, 0);
   SetLength(PNGXs, 0);
   SetLength(PNGYs, 0);
   CForm94 := true;
-  CloseAction := cafree;
+  Action := cafree;
 end;
 
 procedure TForm94.FormCreate(Sender: TObject);
@@ -866,14 +865,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-
-
-

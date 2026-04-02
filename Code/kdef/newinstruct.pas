@@ -1,6 +1,4 @@
-﻿unit newinstruct;
-
-{$modeswitch autoderef}
+unit newinstruct;
 
 interface
 
@@ -31,7 +29,7 @@ implementation
 uses
   KDEFedit;
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure TForm9.ListBox1Click(Sender: TObject);
 begin
@@ -67,6 +65,3 @@ begin
 end;
 
 end.
-
-
-

@@ -1,6 +1,4 @@
-﻿unit Reditform;
-
-{$modeswitch autoderef}
+unit Reditform;
 
 interface
 
@@ -28,14 +26,14 @@ implementation
 
 uses
   Redit;
-{$R *.lfm}
+
+{$R *.dfm}
+
+
+
 procedure TForm6.FormCreate(Sender: TObject);
 begin
   self.Cursor := fmcursor;
 end;
 
 end.
-
-
-
-

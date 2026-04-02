@@ -1,16 +1,12 @@
 unit WarEdit;
 
-{$modeswitch autoderef}
-
-{$H+}
-
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, head, inifiles, ExtCtrls, StdCtrls, math, ComCtrls, Spin, IMZObject,
   comobj,
-  // VCL.FlexCel.Core, FlexCel.XlsAdapter;
+  System.IOUtils,
   // VCL.FlexCel.Core, FlexCel.XlsAdapter{, XLSFonts4, XLSReadWriteII4, SheetData4};
   xlsxio;
 
@@ -42,7 +38,7 @@ type
     Button12: TButton;
     OpenDialog1: TOpenDialog;
     SaveDialog1: TSaveDialog;
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Button1Click(Sender: TObject);
     procedure displayW;
     procedure FormResize(Sender: TObject);
@@ -55,7 +51,7 @@ type
     procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: integer);
     procedure CheckBox1Click(Sender: TObject);
     procedure countwarpos;
-    procedure drawwarpoint(posx, posy: integer; AColor: cardinal);
+    procedure drawwarpoint(posx, posy: integer; color: cardinal);
     procedure drawwarpos;
     procedure Image1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: integer);
     procedure ListBox1Click(Sender: TObject);
@@ -94,14 +90,14 @@ var
   warmappersonnum: integer;
   warselectcontinue: integer;
   warsmallmapsize: integer;
-  warexcelopname: string = 'æˆ˜æ–—æ•°æ®';
+  warexcelopname: string = 'Õ½¶·Êı¾İ';
 
   strings: array [0 .. 9999] of array [0 .. 9999] of ansistring;
 
 procedure readWini;
 function readW(grp: string; PWF: PWFile): boolean;
 procedure CalWnamePos(PWF: PWFile);
-function calWname(index: integer): string;
+function calWname(index: integer): widestring;
 procedure readWareditgrp;
 procedure addnewWdata(PWF: PWFile; PWD: PRData);
 
@@ -109,7 +105,9 @@ implementation
 
 uses
   main, Redit, ReditForm, warmapedit;
-{$R *.lfm}
+
+{$R *.dfm}
+
 procedure addnewWdata(PWF: PWFile; PWD: PRData);
 var
   i3, i4, i5, temp: integer;
@@ -151,8 +149,8 @@ begin
             Setlength(PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].data, PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen);
           end;
           if PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].datalen > 0 then
-            FillByte(PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray
-              [i5].datalen, 0);
+            zeromemory(@PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray[i5].data[0], PWF.Wtype.Rdata[PWF.Wtype.datanum - 1].Rdataline[temp].Rarray[i4].dataarray
+              [i5].datalen);
         end;
       end;
     end;
@@ -209,7 +207,7 @@ begin
         tempstr := iniF.ReadString('W_Modify', 'data(' + inttostr(i1) + ')', '');
         if tempstr <> '' then
         begin
-          strnum := ExtractStrings([' '], [], PChar(tempstr), strlist);
+          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), strlist);
           if strnum = 11 then
           begin
             with Wini.Wterm[i1] do
@@ -236,7 +234,7 @@ begin
 
     iniF.Free;
   except
-    // showmessage('è¯»å–iniæ–‡ä»¶é”™è¯¯');
+    // showmessage('¶ÁÈ¡iniÎÄ¼ş´íÎó£¡');
     exit;
   end;
 end;
@@ -318,7 +316,7 @@ begin
 
       result := true;
     except
-      // showmessage('è¯»å–æ–‡ä»¶é”™è¯¯');
+      // showmessage('¶ÁÈ¡ÎÄ¼ş´íÎó£¡');
       fileclose(F);
       exit;
     end;
@@ -341,7 +339,7 @@ begin
     tempwar := 7
   else
     tempwar := 5;
-  // è®¡ç®—æˆ‘æ–¹æ•°é‡
+  // ¶ÓÓÑÊı¾İ
   warmax := 0;
   for I := 0 to ListBox1.Items.Count - 1 do
   begin
@@ -370,7 +368,7 @@ begin
       warfriend[wselect[I].labelcount - 1].Y := ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[I].pos1].Rarray[wselect[I].pos2].dataarray[wselect[I].pos3]);
   end;
 
-  // è®¡ç®—æ•Œæ–¹æ•°é‡
+  // µĞÈËÊı¾İ
   warmax := 0;
   tempwar := 6;
   for I := 0 to ListBox1.Items.Count - 1 do
@@ -412,14 +410,14 @@ var
   xls: plxw_workbook;
   sheet: plxw_worksheet;
 begin
-  SaveDialog1.Filter := 'excelæ–‡ä»¶|*.xlsx';
+  SaveDialog1.Filter := 'excelÎÄ¼ş|*.xlsx';
   if SaveDialog1.Execute then
   begin
     try
       filename := SaveDialog1.filename;
       if not SameText(ExtractFileExt(filename), '.xlsx') then
         filename := filename + '.xlsx';
-      xls := workbook_new(pansichar(UnicodeToMulti(filename, 65001)));
+      xls := workbook_new(pansichar(UnicodeToMulti(Pwidechar(filename), 65001)));
       sheet := workbook_add_worksheet(xls, 'Sheet1');
       temp := 1;
       for i2 := 0 to Wtypedataitem - 1 do
@@ -429,12 +427,12 @@ begin
           begin
             if i3 > 0 then
             begin
-              worksheet_write_string(sheet, 0, temp - 1, PAnsiChar(UTF8Encode(displaystr(Wini.Wterm[i2 + i4].name + inttostr(i3)))), nil)
+              worksheet_write_string(sheet, 0, temp - 1, pansichar(UnicodeToMulti(Pwidechar(displaystr(Wini.Wterm[i2 + i4].name + inttostr(i3))), 65001)), nil)
               // xls.SetCellValue(1, temp, displaystr(Wini.Wterm[i2 + i4].name + inttostr(i3)));
               // XLSReadWriteII41.Sheets[0].AsString[temp, 0] := displaystr(Wini.Wterm[i2 + i4].name + inttostr(i3));
             end
             else
-              worksheet_write_string(sheet, 0, temp - 1, PAnsiChar(UTF8Encode(displaystr(Wini.Wterm[i2 + i4].name))), nil);
+              worksheet_write_string(sheet, 0, temp - 1, pansichar(UnicodeToMulti(Pwidechar(displaystr(Wini.Wterm[i2 + i4].name)), 65001)), nil);
             // xls.SetCellValue(1, temp, displaystr(Wini.Wterm[i2 + i4].name));
             // XLSReadWriteII41.Sheets[0].AsString[temp, 0] := displaystr(Wini.Wterm[i2 + i4].name);
             inc(temp);
@@ -449,7 +447,8 @@ begin
             for i5 := 0 to warFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].incnum - 1 do
             begin
               if warFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5].datatype = 1 then
-                worksheet_write_string(sheet, i2 + 1, temp - 1, PAnsiChar(UTF8Encode(displaystr(readRDataStr(@warFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])))), nil)
+                worksheet_write_string(sheet, i2 + 1, temp - 1, pansichar(UnicodeToMulti(Pwidechar(displaystr(readRDataStr(@warFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]))),
+                  65001)), nil)
                 // xls.SetCellValue(i2+2, temp, displaystr(readRDataStr(@WarFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5])))
                 // XLSReadWriteII41.Sheets[0].AsString[temp, i2 + 1]:= displaystr(readRDataStr(@WarFile.Wtype.Rdata[i2].Rdataline[i3].Rarray[i4].dataarray[i5]))
               else
@@ -465,9 +464,9 @@ begin
       // ExcelApp:=Unassigned;
       // xls.Save(FileName);
       workbook_close(xls);
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+      showmessage('µ¼³öExcel³É¹¦£¡');
     except
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+      showmessage('µ¼³öExcel´íÎó£¡');
       exit;
     end;
   end;
@@ -488,7 +487,7 @@ var
   i1: integer;
 begin
 
-  OpenDialog1.Filter := 'excelè¡¨æ ¼æ–‡ä»¶|*.xlsx';
+  OpenDialog1.Filter := 'excel±í¸ñÎÄ¼ş|*.xlsx';
   if OpenDialog1.Execute then
   begin
     try
@@ -498,7 +497,7 @@ begin
       // XLSReadWriteII41.Read;
       // xls := TXlsFile.Create (opendialog1.Filename);
       // xls.ActiveSheetByName := 'Sheet1';
-      xls := xlsxioread_open(pansichar(UnicodeToMulti(OpenDialog1.filename, 936)));
+      xls := xlsxioread_open(pansichar(UnicodeToMulti(Pwidechar(OpenDialog1.filename), 936)));
       sheet := xlsxioread_sheet_open(xls, 'Sheet1', XLSXIOREAD_SKIP_EMPTY_ROWS);
       i2 := 0;
       // while True do
@@ -569,9 +568,9 @@ begin
 
       ComboBox1Select(Sender);
 
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+      showmessage('µ¼ÈëExcel³É¹¦£¡');
     except
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+      showmessage('µ¼ÈëExcel´íÎó£¡');
       exit;
     end;
   end;
@@ -642,7 +641,7 @@ end;
 
 procedure TForm10.Button3Click(Sender: TObject);
 begin
-  if MessageBox(Self.Handle, 'æ˜¯å¦æ·»åŠ é¡¹åˆ°æœ€åï¼Œä»¥å½“å‰å€¼ä¸ºç¼ºçœå€¼ï¼Ÿ', 'æ·»åŠ é¡¹åˆ°æœ€å', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'ÊÇ·ñÌí¼ÓÏîµ½×îºó£¬ÒÔµ±Ç°ÖµÎªÈ±Ê¡Öµ£¿', 'Ìí¼ÓÏîµ½×îºó', MB_OKCANCEL) = 1 then
   begin
     if warFile.Wtype.datanum < 0 then
     begin
@@ -665,10 +664,10 @@ var
   arrg: boolean;
 begin
   if warFile.Wtype.datanum = 1 then
-    showmessage('åªå‰©æœ€åä¸€é¡¹ï¼Œè¯·ä¸è¦åˆ é™¤ï¼')
+    showmessage('Ö»Ê£×îºóÒ»Ïî£¬Çë²»ÒªÉ¾³ı£¡')
   else
   begin
-  if MessageBox(Self.Handle, 'æ˜¯å¦æ·»åŠ é¡¹åˆ°æœ€åï¼Œä»¥å½“å‰å€¼ä¸ºç¼ºçœå€¼ï¼Ÿ', 'æ·»åŠ é¡¹åˆ°æœ€å', MB_OKCANCEL) = 1 then
+    if MessageBox(Self.Handle, 'ÊÇ·ñÉ¾³ı×îºóÒ»Ïî£¿', 'É¾³ı×îºóÒ»Ïî', MB_OKCANCEL) = 1 then
     begin
       temp := ComboBox1.ItemIndex;
       arrg := false;
@@ -692,15 +691,15 @@ var
   i2, i3, i4, i5: integer;
   temp: integer;
 begin
-  if MessageBox(Self.Handle, 'æ˜¯å¦æ·»åŠ é¡¹åˆ°æœ€åï¼Œä»¥å½“å‰å€¼ä¸ºç¼ºçœå€¼ï¼Ÿ', 'æ·»åŠ é¡¹åˆ°æœ€å', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'µ¼³öExcelĞèÒª±¾»úÒÑ¾­°²×°Excel£¬²¢ÇÒµ¼³öÊ±¼ä½Ï³¤£¬¹ı³ÌÖĞÇë²»Òª½øĞĞ²Ù×÷¡£È·ÊµÒªµ¼³öÂğ£¿', 'µ¼³öExcel', MB_OKCANCEL) = 1 then
   begin
 
     ExcelApp := CreateOleObject('Excel.Application');
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œ';
+    ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷';
     ExcelApp.visible := true;
     ExcelApp.WorkBooks.Add;
-    // ExcelApp.Cells[1,4].Value := 'ç¬¬ä¸€è¡Œç¬¬å››åˆ—';
-    // ExcelApp.Cells[1,4].Value := 'ç¬¬ä¸€è¡Œç¬¬å››åˆ—';
+    // ExcelApp.WorkSheets[2].name := 'ÎïÆ·';
+    // ExcelApp.Cells[1,4].Value := 'µÚÒ»ĞĞµÚËÄÁĞ';
 
     if integer(ExcelApp.workSheets.Count) < 1 then
       ExcelApp.workSheets.Add;
@@ -709,7 +708,7 @@ begin
     // ExcelApp.WorkSheets[1].name := warExcelopname;
 
     temp := 1;
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œä¸­(' + warexcelopname + ')';
+    ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + warexcelopname + ')';
 
     for i2 := 0 to Wtypedataitem - 1 do
       if Wini.Wterm[i2].datanum > 0 then
@@ -726,7 +725,7 @@ begin
           end;
     for i2 := 0 to warFile.Wtype.datanum - 1 do
     begin
-      ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œä¸­(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
+      ExcelApp.Caption := 'UPeditµ¼³öExcel²Ù×÷ÖĞ(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
       temp := 1;
       for i3 := 0 to warFile.Wtype.Rdata[i2].num - 1 do
         for i4 := 0 to warFile.Wtype.Rdata[i2].Rdataline[i3].len - 1 do
@@ -737,10 +736,10 @@ begin
           end;
     end;
 
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œ';
+    ExcelApp.Caption := 'UPeditµ¼³öExcelÍê³É£¡';
     ExcelApp := Unassigned;
     SetForegroundWindow(application.Handle);
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+    showmessage('µ¼³öExcelÍê³É£¡Çëµ½Excel³ÌĞòÖĞ±£´æÎÄ¼ş£¡');
   end;
 end;
 
@@ -750,18 +749,18 @@ var
   i2, i3, i4, i5: integer;
   temp, temp2: integer;
 begin
-  if MessageBox(Self.Handle, 'æ˜¯å¦æ·»åŠ é¡¹åˆ°æœ€åï¼Œä»¥å½“å‰å€¼ä¸ºç¼ºçœå€¼ï¼Ÿ', 'æ·»åŠ é¡¹åˆ°æœ€å', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'µ¼ÈëExcelĞèÒª±¾»úÒÑ¾­°²×°Excel£¬²¢ÇÒµ¼ÈëÊ±¼ä½Ï³¤£¬¹ı³ÌÖĞÇë²»Òª½øĞĞ²Ù×÷¡£È·ÊµÒªµ¼ÈëÂğ£¿', 'µ¼ÈëExcel', MB_OKCANCEL) = 1 then
   begin
-  OpenDialog1.Filter := 'excelè¡¨æ ¼æ–‡ä»¶|*.xlsx';
+    OpenDialog1.Filter := 'excel±í¸ñÎÄ¼ş|*.xls;*.xlsx';
     if OpenDialog1.Execute then
     begin
       ExcelApp := CreateOleObject('Excel.Application');
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œ';
+      ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷';
       ExcelApp.visible := true;
       ExcelApp.WorkBooks.Open(OpenDialog1.filename);
 
       // ExcelApp.workSheets[1].activate;
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œä¸­(' + warexcelopname + ')';
+      ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷ÖĞ(' + warexcelopname + ')';
 
       i2 := 2;
       while true do
@@ -783,7 +782,7 @@ begin
 
       for i2 := 0 to warFile.Wtype.datanum - 1 do
       begin
-      ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œä¸­(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
+        ExcelApp.Caption := 'UPeditµ¼ÈëExcel²Ù×÷ÖĞ(' + warexcelopname + ':' + inttostr(i2 + 1) + '/' + inttostr(warFile.Wtype.datanum) + ')';
         temp := 0;
         for i3 := 0 to warFile.Wtype.Rdata[i2].num - 1 do
         begin
@@ -803,7 +802,7 @@ begin
 
       end;
 
-    ExcelApp.Caption := 'UPeditå¯¼å‡ºExcelæ“ä½œ';
+      ExcelApp.Caption := 'UPeditµ¼ÈëExcelÍê³É£¡';
       ExcelApp := Unassigned;
       CalWnamePos(@warFile);
       ComboBox1.Clear;
@@ -814,7 +813,7 @@ begin
       ComboBox1Select(Sender);
       ExcelApp.Quit;
       SetForegroundWindow(application.Handle);
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+      showmessage('µ¼ÈëExcelÍê³É£¡');
     end;
   end;
 end;
@@ -994,7 +993,7 @@ begin
   end;
 end;
 
-procedure TForm10.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm10.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   Setlength(wareditgrp, 0);
   Setlength(warFile.Wtype.Rdata, 0);
@@ -1005,7 +1004,7 @@ begin
   ImzFile.ReleaseAllPNG;
   ImzFile.Free;
   CForm10 := true;
-  CloseAction := cafree;
+  Action := cafree;
 
 end;
 
@@ -1061,14 +1060,14 @@ begin
         begin
           readWareditgrp;
         end;
-      PNGZipMode:
+      IMZMode:
         begin
           if ImzFile.ReadImzFromFile(gamepath + WMAPIMZ) then
           begin
             ImzFile.ReadAllPNG;
           end;
         end;
-      PNGPathMode:
+      PNGMode:
         begin
           if ImzFile.ReadImzFromFolder(gamepath + WMAPPNGpath) then
             ImzFile.ReadAllPNG;
@@ -1081,16 +1080,18 @@ begin
     RLEMode:
       begin
         poseditmap := tbitmap.Create;
-        poseditmap.PixelFormat := pf24bit;
         poseditmap.Width := 2304;
         poseditmap.Height := 1152;
+        poseditmap.PixelFormat := pf8bit;
+        poseditmap.Palette := Palle;
       end;
-    PNGZipMode, PNGPathMode:
+    IMZMode, PNGMode:
       begin
         poseditmap := tbitmap.Create;
         poseditmap.Width := 2304;
         poseditmap.Height := 1152;
         poseditmap.PixelFormat := pf32bit;
+        // poseditmap.Palette := palle;
       end;
   end;
 
@@ -1102,7 +1103,7 @@ begin
     ComboBox1.ItemIndex := 0;
     displayW;
   except
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+    showmessage('´ò¿ªÕ½¶·Êı¾İ³ö´í£¡');
     exit;
   end;
   try
@@ -1132,7 +1133,7 @@ begin
     if warselectcontinue = 1 then
       CheckBox2.Checked := true;
   except
-      showmessage('å¯¼å‡ºExcelæˆåŠŸï¼');
+    showmessage('ÏÔÊ¾Õ½¶·ËõÂÔÍ¼³ö´í£¡');
   end;
   countwarpos;
 end;
@@ -1188,7 +1189,7 @@ begin
   end;
 end;
 
-procedure TForm10.drawwarpoint(posx, posy: integer; AColor: cardinal);
+procedure TForm10.drawwarpoint(posx, posy: integer; color: cardinal);
 var
   I, i2: integer;
 begin
@@ -1213,14 +1214,14 @@ begin
     image1.Canvas.Pixels[posx + 1,posy - 5] := color; }
   for I := 0 to warsmallmapsize do
   begin
-    Image1.Canvas.Pixels[posx, posy - I] := AColor;
-    Image1.Canvas.Pixels[posx, posy + I - 2 * warsmallmapsize] := AColor;
+    Image1.Canvas.Pixels[posx, posy - I] := color;
+    Image1.Canvas.Pixels[posx, posy + I - 2 * warsmallmapsize] := color;
     for i2 := I downto 1 do
     begin
-      Image1.Canvas.Pixels[posx + i2, posy - I] := AColor;
-      Image1.Canvas.Pixels[posx - i2, posy - I] := AColor;
-      Image1.Canvas.Pixels[posx + i2, posy + I - 2 * warsmallmapsize] := AColor;
-      Image1.Canvas.Pixels[posx - i2, posy + I - 2 * warsmallmapsize] := AColor;
+      Image1.Canvas.Pixels[posx + i2, posy - I] := color;
+      Image1.Canvas.Pixels[posx - i2, posy - I] := color;
+      Image1.Canvas.Pixels[posx + i2, posy + I - 2 * warsmallmapsize] := color;
+      Image1.Canvas.Pixels[posx - i2, posy + I - 2 * warsmallmapsize] := color;
     end;
   end;
 end;
@@ -1271,7 +1272,7 @@ begin
             end;
         if not(iswarmapperson) then
         begin
-          if warmappersontype = 1 then // å‹å†›
+          if warmappersontype = 1 then // ÓÑ¾ü
           begin
             for I := 0 to ListBox1.Count - 1 do
               if (warmappersonnum = wselect[I].labelcount - 1) and (wselect[I].labeltype = 1) then
@@ -1368,7 +1369,7 @@ begin
   begin
     if (warfriend[I].X = axp) and (warfriend[I].Y = ayp) and (not(autowarfriend) or (warfriend[I].personnum >= 0)) then
     begin
-      tempstr := ' å‹å†›' + inttostr(I + 1);
+      tempstr := ' ÓÑ¾ü' + inttostr(I + 1);
       break;
     end;
   end;
@@ -1377,7 +1378,7 @@ begin
     begin
       if (warenemy[I].X = axp) and (warenemy[I].Y = ayp) and (warenemy[I].personnum >= 0) then
       begin
-      tempstr := ' å‹å†›' + inttostr(I + 1);
+        tempstr := ' µĞ¾ü' + inttostr(I + 1);
         break;
       end;
     end;
@@ -1440,11 +1441,11 @@ begin
     begin
       if warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3].datatype = 0 then
         WriteRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3],
-          strtoint64(InputBox('ä¿®æ”¹', 'ä¿®æ”¹æ­¤é¡¹æ•°å€¼', inttostr(ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2]
+          strtoint64(InputBox('ĞŞ¸Ä', 'ĞŞ¸Ä´ËÏîÊıÖµ', inttostr(ReadRDataInt(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2]
           .dataarray[wselect[ListBox1.ItemIndex].pos3])))))
       else
         WriteRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex].pos2].dataarray[wselect[ListBox1.ItemIndex].pos3],
-          displaybackstr(InputBox('ä¿®æ”¹', 'ä¿®æ”¹æ­¤é¡¹å­—ç¬¦ä¸²', displaystr(readRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex]
+          displaybackstr(InputBox('ĞŞ¸Ä', 'ĞŞ¸Ä´ËÏî×Ö·û´®', displaystr(readRDataStr(@warFile.Wtype.Rdata[ComboBox1.ItemIndex].Rdataline[wselect[ListBox1.ItemIndex].pos1].Rarray[wselect[ListBox1.ItemIndex]
           .pos2].dataarray[wselect[ListBox1.ItemIndex].pos3])))));
     end
     else
@@ -1523,12 +1524,12 @@ begin
   end;
 end;
 
-function calWname(index: integer): string;
+function calWname(index: integer): widestring;
 var
   I: integer;
 begin
   if (index >= 0) and (index < warFile.Wtype.datanum) and (warFile.Wtype.namepos >= 0) then
-    result := inttostr(index) + string(displaystr(readRDataStr(@warFile.Wtype.Rdata[index].Rdataline[warFile.Wtype.namepos].Rarray[0].dataarray[0])))
+    result := inttostr(index) + widestring(displaystr(readRDataStr(@warFile.Wtype.Rdata[index].Rdataline[warFile.Wtype.namepos].Rarray[0].dataarray[0])))
   else
     result := inttostr(index);
   for I := 1 to length(result) - 1 do
@@ -1574,7 +1575,7 @@ begin
     fileclose(grp);
 
   except
-    // showmessage('ä¿å­˜é”™è¯¯');
+    // showmessage('´íÎó');
     try
       fileclose(idx);
     except
@@ -1596,24 +1597,11 @@ procedure TForm10.displaywareditmap(waropMap: Pmap; waropbmp2: PNTbitmap);
 VAR
   ix, iy, I, i2, posx, posy: integer;
   pointx, pointy: integer;
-  ClearY, BytesPerLine: integer;
-  ClearLine: PByte;
 begin
   pointx := waropbmp2.Width DIV 2;
   pointy := waropbmp2.Height div 2 - 31 * 18;
-
-  { ScanLine clear + BeginUpdate to avoid Canvas/ScanLine desync }
-  waropbmp2.BeginUpdate(false);
-  if waropbmp2.PixelFormat = pf32bit then
-    BytesPerLine := waropbmp2.Width * 4
-  else
-    BytesPerLine := waropbmp2.Width * 3;
-  for ClearY := 0 to waropbmp2.Height - 1 do
-  begin
-    ClearLine := PByte(waropbmp2.ScanLine[ClearY]);
-    FillChar(ClearLine^, BytesPerLine, 0);
-  end;
-
+  waropbmp2.Canvas.Brush.color := clBlack;
+  waropbmp2.Canvas.FillRect(waropbmp2.Canvas.ClipRect);
   for I := 0 to min(waropMap.X, waropMap.Y) - 1 do
   begin
     for ix := I to waropMap.X - 1 do
@@ -1628,7 +1616,7 @@ begin
               begin
                 McoldrawRLE8(@wareditgrp[waropMap.maplayer[i2].pic[I][ix] div 2].data[0], wareditgrp[waropMap.maplayer[i2].pic[I][ix] div 2].size, waropbmp2, posx, posy, true);
               end;
-            PNGZipMode, PNGPathMode:
+            IMZMode, PNGMode:
               begin
                 ImzFile.SceneQuickDraw(waropbmp2, waropMap.maplayer[i2].pic[I][ix] div 2, posx, posy);
               end;
@@ -1647,7 +1635,7 @@ begin
               begin
                 McoldrawRLE8(@wareditgrp[waropMap.maplayer[i2].pic[iy][I] div 2].data[0], wareditgrp[waropMap.maplayer[i2].pic[iy][I] div 2].size, waropbmp2, posx, posy, true);
               end;
-            PNGZipMode, PNGPathMode:
+            IMZMode, PNGMode:
               begin
                 ImzFile.SceneQuickDraw(waropbmp2, waropMap.maplayer[i2].pic[iy][I] div 2, posx, posy);
               end;
@@ -1655,16 +1643,6 @@ begin
         end;
     end;
   end;
-  waropbmp2.EndUpdate(false);
 end;
 
 end.
-
-
-
-
-
-
-
-
-

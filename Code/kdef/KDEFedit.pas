@@ -1,7 +1,4 @@
-ï»¿unit KDEFedit;
-
-{$modeswitch autoderef}
-{$H+}
+unit KDEFedit;
 
 interface
 
@@ -51,7 +48,7 @@ type
     Button7: TButton;
     N6: TMenuItem;
     N7: TMenuItem;
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Button9Click(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure Button1Click(Sender: TObject);
@@ -110,7 +107,7 @@ var
   eventamount, noweventnum: integer;
   talkstr: array of Ttalkstr;
   talkstrnum: integer;
-  InstructGuideini: TInstructGuide; //é€šç”¨æŒ‡ä»¤åˆ¶å¯¼é…ç½®
+  InstructGuideini: TInstructGuide; //Í¨ÓÃÖ¸ÁîÖÆµ¼ÅäÖÃ
   InstructGuideComboboxini: TInstructGuideComboboxes;
   KDEFini : TKDEFini;
   KDEF50: Tkdef50;
@@ -125,23 +122,23 @@ procedure Copyevent(dest,source:Pevent);
 procedure clearIct(Ict: Pattrib);
 procedure Addattrib(ent: Pevent; atrb: Pattrib; num: integer);
 procedure AddIct(ent: Pevent; atrb: Pattrib; num: integer);
-function calRname(datatype, index: integer): string;
-function calattribname(atrb: Pattrib):string;
-function CalInstructGuideName(atrb: Pattrib): string;
+function calRname(datatype, index: integer): widestring;
+function calattribname(atrb: Pattrib):widestring;
+function CalInstructGuideName(atrb: Pattrib): widestring;
 function GetInstructNeedGuide(atrb: Pattrib): Boolean;
-function CalInstructGuideParamName(atrb: Pattrib; param: integer): string;
+function CalInstructGuideParamName(atrb: Pattrib; param: integer): widestring;
 procedure deleteatrb(ent: Pevent; num: integer);
 procedure saveevent(destent,sourceent:Pevent);
 procedure SaveEventtoData(destent: Peventdata; sourceent:Pevent);
 procedure SaveDataToEvent(destent: Pevent; sourceent:Peventdata);
-function calWname(index: integer): string;
+function calWname(index: integer): widestring;
 procedure readname;
-function cutstr(str:string): string;
-function E_getstr(bit,t,x: smallint): string;
+function cutstr(str:widestring): widestring;
+function E_getstr(bit,t,x: smallint): widestring;
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 uses
   Redit, newinstruct,waredit, Main, Ict_1,Ict_2, Ict_3,Ict_4,ict_5, ict_6,ict_8, ict_10,
@@ -158,7 +155,7 @@ procedure TForm7.Button10Click(Sender: TObject);
 var
   tempattrib: Tattrib;
   tempatrbnum, I, temp, temppos: integer;
-  tempstr: string;
+  tempstr: widestring;
 begin
   temppos := 0;
   FOrm9.RadioGroup1.Visible := false;
@@ -166,13 +163,13 @@ begin
   Form9.RadioGroup1.ItemIndex := 0;
   Form9.RadioGroup2.ItemIndex := 0;
   Form9.ListBox1.Clear;
-  Form9.ListBox1.Items.Add('-1(FFFF):äº‹ä»¶ç»“æŸ');
+  Form9.ListBox1.Items.Add('-1(FFFF):ÊÂ¼ş½áÊø');
   for I := 0 to kdefini.KDEFnum - 1 do
   begin
     temp := kdefini.KDEFitem[I].index;
     tempstr := inttostr(I) + '(' + Format('%x', [temp and $FFFF])+ '):';
     if kdefini.KDEFitem[I].note = '' then
-      tempstr := tempstr + 'æœªçŸ¥æŒ‡ä»¤'
+      tempstr := tempstr + 'Î´ÖªÖ¸Áî'
     else
       tempstr := tempstr + displayname(kdefini.KDEFitem[I].note);
     FOrm9.ListBox1.Items.Add(tempstr);
@@ -249,8 +246,8 @@ var
   I: integer;
 begin
   if nowevent.attribamount = 1 then
-    showmessage('åªå‰©ä¸€ä¸ªæŒ‡ä»¤ï¼Œæ— æ³•åˆ é™¤ï¼')
-  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, PChar(string('ç¡®å®è¦åˆ é™¤æŒ‡ä»¤:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' å—ï¼Ÿ')),  'åˆ é™¤æŒ‡ä»¤', MB_OKCANCEL) = 1) then
+    showmessage('Ö»Ê£Ò»¸öÖ¸Áî£¬ÎŞ·¨É¾³ı£¡')
+  else if (listbox1.ItemIndex >= 0) and (nowevent.attrib[listbox1.ItemIndex].labelstatus <> -1) and (MessageBox(Self.Handle, Pwidechar(widestring('È·ÊµÒªÉ¾³ıÖ¸Áî:' + listbox1.Items.Strings[listbox1.ItemIndex] + ' Âğ£¿')),  'É¾³ıÖ¸Áî', MB_OKCANCEL) = 1) then
   begin
     deleteatrb(@nowevent,listbox1.ItemIndex);
     saveeventtoData(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -265,7 +262,7 @@ begin
     for I := 0 to nowevent.attribamount - 1 do
       if nowevent.attrib[listbox1.ItemIndex].labelfrom = nowevent.attrib[I].labelstatus then
         break;
-    if (MessageBox(Self.Handle, PChar(string('ç¡®å®è¦åˆ é™¤æŒ‡ä»¤:' + listbox1.Items.Strings[I] + ' å—ï¼Ÿ')),  'åˆ é™¤æŒ‡ä»¤', MB_OKCANCEL) = 1) then
+    if (MessageBox(Self.Handle, Pwidechar(widestring('È·ÊµÒªÉ¾³ıÖ¸Áî:' + listbox1.Items.Strings[I] + ' Âğ£¿')),  'É¾³ıÖ¸Áî', MB_OKCANCEL) = 1) then
     begin
       deleteatrb(@nowevent,I);
       //saveevent(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -300,17 +297,17 @@ begin
   setlength(Kevent[eventamount - 1].attrib[1].par, 1);
   Kevent[eventamount - 1].attrib[1].par[0] := -1;}
   combobox2.Items.Add(inttostr(eventamount - 1));
-  showmessage('æ·»åŠ äº‹ä»¶å®Œæˆï¼Œç¼–å·' + inttostr(eventamount - 1));
+  showmessage('Ìí¼ÓÊÂ¼şÍê³É£¬±àºÅ' + inttostr(eventamount - 1));
 end;
 
 procedure TForm7.Button13Click(Sender: TObject);
 begin
   if eventamount = 1 then
   begin
-    showmessage('åªå‰©ä¸€ä¸ªäº‹ä»¶ï¼Œæ— æ³•åˆ é™¤ï¼');
+    showmessage('Ö»Ê£Ò»¸öÊÂ¼ş£¬ÎŞ·¨É¾³ı£¡');
     exit;
   end
-  else if MessageBox(Self.Handle, 'ç¡®å®è¦åˆ é™¤æœ€åä¸€ä¸ªäº‹ä»¶å—ï¼Ÿ',  'åˆ é™¤äº‹ä»¶', MB_OKCANCEL) = 1 then
+  else if MessageBox(Self.Handle, 'È·ÊµÒªÉ¾³ı×îºóÒ»¸öÊÂ¼şÂğ£¿',  'É¾³ıÊÂ¼ş', MB_OKCANCEL) = 1 then
   begin
     dec(eventamount);
     setlength(Kevent, eventamount);
@@ -634,7 +631,7 @@ var
   I,I2,I3,len,strnum,atrbnum: integer;
   strlist: TStringlist;
   tempstr: string;
-  handlestr: string;
+  handlestr: widestring;
 begin
   try
     saveeventtodata(@Kevent[combobox2.ItemIndex],@nowevent);
@@ -645,7 +642,7 @@ begin
     for I := 0 to memo1.Lines.Count - 1 do
     begin
       len := 0;
-      handlestr := string(memo1.Lines.Strings[I]);
+      handlestr := widestring(memo1.Lines.Strings[I]);
       for i2 := 1 to length(handlestr) do
       begin
         if handlestr[i2] = ';' then
@@ -656,7 +653,7 @@ begin
       begin
         setlength(handlestr, len);
         strlist.Clear;
-        strnum := ExtractStrings([' '], [], PChar(handlestr), Strlist);
+        strnum := ExtractStrings([' '], [], Pwidechar(handlestr), Strlist);
         if strnum > 0 then
         begin
           inc(atrbnum);
@@ -690,7 +687,7 @@ begin
     displayevent;
     listbox2.Clear;
   except
-    showmessage('ä»å‰ªåˆ‡æ¿å¤åˆ¶å¤±è´¥ï¼');
+    showmessage('´Ó¼ôÇĞ°å¸´ÖÆÊ§°Ü£¡');
     strlist.Free;
     savedatatoevent(@noworievent, @Kevent[combobox2.ItemIndex]);
     //calkdef(@noworievent, @nowevent);
@@ -704,7 +701,7 @@ procedure TForm7.Button1Click(Sender: TObject);
 begin
   inc(talkstrnum);
   setlength(talkstr, talkstrnum);
-  WriteTalkStr(@talkstr[talkstrnum - 1], string('è«‹è¼¸å…¥å°è©±å…§å®¹ï¼Œè‹¥ç‚ºåŸç‰ˆå°è©±ï¼Œæ¯éš”12å€‹æ¼¢å­—åŠ ä¸€å€‹æ˜Ÿè™Ÿ*'));
+  WriteTalkStr(@talkstr[talkstrnum - 1], widestring('Õˆİ”ÈëŒ¦Ô’ƒÈÈİ£¬ÈôéÔ­°æŒ¦Ô’£¬Ã¿¸ô12‚€h×Ö¼ÓÒ»‚€ĞÇÌ–*'));
   //arrangetalktocombobox;
   combobox1.Items.Add(inttostr(talkstrnum - 1) + ':'+ readtalkstr(@talkstr[talkstrnum - 1]));
   combobox1.ItemIndex := talkstrnum - 1;
@@ -716,7 +713,7 @@ var
   temp2: integer;
 begin
   temp2 := combobox1.ItemIndex;
-  WriteTalkStr(@talkstr[temp2], string(edit1.Text));
+  WriteTalkStr(@talkstr[temp2], widestring(edit1.Text));
   combobox1.Items.Strings[temp2] := inttostr(temp2) + ':'+ readtalkstr(@talkstr[temp2]);
   //arrangetalktocombobox;
   combobox1.ItemIndex := temp2;
@@ -733,13 +730,13 @@ begin
     edit1.Text := displaystr(readtalkstr(@talkstr[talkstrnum - 1]));
   end
   else
-    showmessage('åªå‰©ä¸€ä¸ªå¯¹è¯ï¼Œä¸å¯åˆ é™¤');
+    showmessage('Ö»Ê£Ò»¸ö¶Ô»°£¬²»¿ÉÉ¾³ı');
 end;
 
 procedure TForm7.Button4Click(Sender: TObject);
 var
-  len, I, I2, len2, Ncount, a: integer;
-  Astr, Bstr, Cstr: string;
+  next, len, I, I2, len2, Ncount, a: integer;
+  Astr, Bstr, Cstr: widestring;
   ini: Tinifile;
 begin
   Ncount := strtoint(edit2.Text);
@@ -751,8 +748,8 @@ begin
     ini.WriteInteger('Kdef','talkarrange', Kdefini.talkarrange);
     ini.Free;
   end;
-  //å»æ˜Ÿå·
-  Cstr := string(edit1.Text);
+  //È¥ĞÇºÅ
+  Cstr := widestring(edit1.Text);
   len := length(Cstr);
   len2 := len;
   for I := 1 to len do
@@ -801,7 +798,7 @@ var
 begin
   if eventamount <= 0 then
     exit;
-  if MessageBox(Self.Handle, 'ç¡®å®è¦äº‹ä»¶æ–‡ä»¶å’Œå¯¹è¯æ–‡ä»¶å—ï¼Ÿ',  'ä¿å­˜æ–‡ä»¶', MB_OKCANCEL) = 1 then
+  if MessageBox(Self.Handle, 'È·ÊµÒªÊÂ¼şÎÄ¼şºÍ¶Ô»°ÎÄ¼şÂğ£¿',  '±£´æÎÄ¼ş', MB_OKCANCEL) = 1 then
   begin
     try
       if lastevent >=0 then
@@ -829,9 +826,9 @@ begin
       fileclose(Fidx);
       fileclose(Fgrp);
       savetalk;
-      showmessage('ä¿å­˜äº‹ä»¶æ–‡ä»¶å’Œå¯¹è¯æ–‡ä»¶æˆåŠŸï¼');
+      showmessage('±£´æÊÂ¼şÎÄ¼şºÍ¶Ô»°ÎÄ¼ş³É¹¦£¡');
     except
-      showmessage('ä¿å­˜å¤±è´¥ï¼');
+      showmessage('±£´æÊ§°Ü£¡');
       exit;
     end;
   end;
@@ -844,7 +841,7 @@ var
   tempUnicodehead: word;
   tempunicodenextline: cardinal;
 begin
-  SaveDialog1.Filter := 'æ–‡æœ¬æ–‡ä»¶(*.txt)|*.txt';
+  SaveDialog1.Filter := 'ÎÄ±¾ÎÄ¼ş(*.txt)|*.txt';
   if savedialog1.Execute then
   begin
     filename := SaveDialog1.filename;
@@ -853,7 +850,7 @@ begin
 
     memo1.Clear;
 
-    memo1.Lines.Add('å¯¹è¯æ–‡ä»¶â€”â€”æ€»æ•°ï¼š' + inttostr(talkstrnum));
+    memo1.Lines.Add('¶Ô»°ÎÄ¼ş¡ª¡ª×ÜÊı£º' + inttostr(talkstrnum));
     memo1.Lines.Add(' ');
     for I := 0 to TalkStrnum - 1 do
     begin
@@ -884,18 +881,18 @@ var
   tempunicodehead: Word;
   tempunicodenextline: cardinal;
 begin
-  SaveDialog1.Filter := 'æ–‡æœ¬æ–‡ä»¶(*.txt)|*.txt';
+  SaveDialog1.Filter := 'ÎÄ±¾ÎÄ¼ş(*.txt)|*.txt';
   if savedialog1.Execute then
   begin
     filename := SaveDialog1.filename;
     if not SameText(ExtractFileExt(filename), '.txt') then
       filename := filename + '.txt';
     memo1.Clear;
-    memo1.Lines.Add('äº‹ä»¶æ–‡ä»¶â€”â€”æ€»æ•°ï¼š' + inttostr(eventamount));
+    memo1.Lines.Add('ÊÂ¼şÎÄ¼ş¡ª¡ª×ÜÊı£º' + inttostr(eventamount));
     for I := 0 to eventamount - 1 do
     begin
       memo1.Lines.Add(' ');
-      memo1.Lines.Add('äº‹ä»¶:'+inttostr(I));
+      memo1.Lines.Add('ÊÂ¼ş:'+inttostr(I));
       try
         savedatatoevent(@temporievent, @kevent[I]);
         //calkdef(@temporievent,@tempevent);
@@ -931,9 +928,9 @@ procedure TForm7.Button8Click(Sender: TObject);
 begin
   try
     savetalk;
-    showmessage('ä¿å­˜æˆåŠŸï¼')
+    showmessage('±£´æ³É¹¦£¡')
   except
-    showmessage('ä¿å­˜å¤±è´¥ï¼');
+    showmessage('±£´æÊ§°Ü£¡');
     exit;
   end;
 end;
@@ -972,14 +969,14 @@ begin
   listbox2.Clear;
 end;
 
-procedure TForm7.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm7.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   talkstrnum := 0;
   setlength(talkstr, talkstrnum);
   eventamount := 0;
   setlength(Kevent, eventamount);
   CForm7 := true;
-  CloseAction := caFree;
+  action := cafree;
 end;
 
 procedure TForm7.FormCreate(Sender: TObject);
@@ -1002,7 +999,7 @@ begin
     CalWnamePos(@useW);
   end;
   readname;
-  //è¯»å¯¹è¯é…ç½®æ–‡ä»¶å’Œäº‹ä»¶æ–‡ä»¶
+  //¶Á¶Ô»°ÅäÖÃÎÄ¼şºÍÊÂ¼şÎÄ¼ş
   if readkdefini and readkdef and readtalk then
   begin
     arrangekdef;
@@ -1115,7 +1112,7 @@ begin
     if listbox2.Items[listbox2.ItemIndex] <> '' then
     begin
       try
-        temp := strtoint(inputbox('ä¿®æ”¹','ä¿®æ”¹æ­¤é¡¹å€¼', listbox2.Items[listbox2.ItemIndex]));
+        temp := strtoint(inputbox('ĞŞ¸Ä','ĞŞ¸Ä´ËÏîÖµ', listbox2.Items[listbox2.ItemIndex]));
         listbox2.Items[listbox2.ItemIndex] := inttostr(temp);
       except
         exit;
@@ -1178,7 +1175,7 @@ end;
 
 procedure TForm7.N4Click(Sender: TObject);
 begin
-  if (eventcopy.copyevent > 0) and (MessageBox(Self.Handle, 'ç¡®å®è¦è¦†ç›–è¿™ä¸ªäº‹ä»¶å—ï¼Ÿ',  'ç²˜è´´äº‹ä»¶', MB_OKCANCEL) = 1) then
+  if (eventcopy.copyevent > 0) and (MessageBox(Self.Handle, 'È·ÊµÒª¸²¸ÇÕâ¸öÊÂ¼şÂğ£¿',  'Õ³ÌùÊÂ¼ş', MB_OKCANCEL) = 1) then
   begin
     copyevent(@nowevent,@copyent);
     saveeventtodata(@Kevent[combobox2.ItemIndex], @nowevent);
@@ -1246,12 +1243,12 @@ begin
       edit1.Text := displaystr(readTalkstr(@talkstr[0]));
       result := true;
     except
-      showmessage('å¯¹è¯è¯»å–å‡ºé”™ï¼');
+      showmessage('¶Ô»°¶ÁÈ¡³ö´í£¡');
       exit;
     end;
   end
   else
-    showmessage('å¯¹è¯æ–‡ä»¶ä¸å­˜åœ¨ï¼');
+    showmessage('¶Ô»°ÎÄ¼ş²»´æÔÚ£¡');
 end;
 
 procedure readname;
@@ -1292,7 +1289,7 @@ begin
       end;
       fileclose(F);
     except
-      showmessage('è¯»å–åå­—å‡ºé”™ï¼');
+      showmessage('¶ÁÈ¡Ãû×Ö³ö´í£¡');
       exit;
     end;
   end;
@@ -1302,7 +1299,7 @@ procedure TForm7.arrangetalktocombobox;
 var
   I: integer;
 begin
-  //å¯¹è¯æ·»åŠ åˆ°combobox
+  //¶Ô»°Ìí¼Óµ½combobox
   combobox1.Clear;
   for I := 0 to talkstrnum - 1 do
   begin
@@ -1367,7 +1364,7 @@ begin
       strlist.Clear;
       strnum := 0;
       if tempstr <> '' then
-        strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
+        strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
       if strnum = 6 then
       begin
         kdefini.KDEFitem[I].index := strtoint('$'+strlist.Strings[0]);
@@ -1416,7 +1413,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1427,7 +1424,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1443,7 +1440,7 @@ begin
         strlist.Clear;
         strnum := 0;
         if tempstr <> '' then
-          strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
+          strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
 
         for I2 := 0 to min(InstructGuideini.Instruct[I].ParamAmount, strnum) - 1 do
         begin
@@ -1464,7 +1461,7 @@ begin
       strnum := 0;
       tempstr := ini.ReadString('Kdefattrib', 'GuideComboBox' + inttostr(I), '');
       if tempstr <> '' then
-        strnum := ExtractStrings([' '], [], PChar(tempstr), Strlist);
+        strnum := ExtractStrings([' '], [], Pwidechar(tempstr), Strlist);
       InstructGuideComboboxini.Combobox[I].ListAmount := max(strnum div 2, 0);
       setlength(InstructGuideComboboxini.Combobox[I].List, InstructGuideComboboxini.Combobox[I].ListAmount);
       for I2 := 0 to InstructGuideComboboxini.Combobox[I].ListAmount - 1 do
@@ -1482,7 +1479,7 @@ begin
     ini.Free;
     result := true;
   except
-    showmessage('è¯»å–æŒ‡ä»¤é…ç½®æ–‡ä»¶å¤±è´¥ï¼');
+    showmessage('¶ÁÈ¡Ö¸ÁîÅäÖÃÎÄ¼şÊ§°Ü£¡');
     exit;
   end;
 end;
@@ -1552,12 +1549,12 @@ begin
       fileclose(Fgrp);
       result := true;
     except
-      showmessage('è¯»å–äº‹ä»¶æ–‡ä»¶å¤±è´¥ï¼');
+      showmessage('¶ÁÈ¡ÊÂ¼şÎÄ¼şÊ§°Ü£¡');
       exit;
     end;
   end
   else
-    showmessage('äº‹ä»¶æ–‡ä»¶ä¸å­˜åœ¨ï¼');
+    showmessage('ÊÂ¼şÎÄ¼ş²»´æÔÚ£¡');
 end;
 
 procedure TForm7.arrangekdef;
@@ -1584,7 +1581,7 @@ begin
   setlength(ict.par, 0);
 end;
 
-//(ä¿®æ”¹ä¸­)æ˜¾ç¤ºç¬¬numä¸ªäº‹ä»¶ï¼Œå¹¶æŠŠnumäº‹ä»¶å†…å®¹ä¿å­˜åˆ°noworievent å¹¶ä¸”å¸¦æœ‰labelåœ°æ·»åŠ åˆ°nowevent
+//(ĞŞ¸ÄÖĞ)ÏÔÊ¾µÚnum¸öÊÂ¼ş£¬²¢°ÑnumÊÂ¼şÄÚÈİ±£´æµ½noworievent ²¢ÇÒ´øÓĞlabelµØÌí¼Óµ½nowevent
 procedure TForm7.calevent(noworievent, nowevent: Pevent);
 var
   I1, I2, I3, temp: integer;
@@ -1703,7 +1700,7 @@ begin
 
 end;
 
-//(åŸå§‹)æ˜¾ç¤ºç¬¬numä¸ªäº‹ä»¶ï¼Œå¹¶æŠŠnumäº‹ä»¶å†…å®¹ä¿å­˜åˆ°noworievent å¹¶ä¸”å¸¦æœ‰labelåœ°æ·»åŠ åˆ°nowevent
+//(Ô­Ê¼)ÏÔÊ¾µÚnum¸öÊÂ¼ş£¬²¢°ÑnumÊÂ¼şÄÚÈİ±£´æµ½noworievent ²¢ÇÒ´øÓĞlabelµØÌí¼Óµ½nowevent
 procedure TForm7.calKdef(noworievent, nowevent: Pevent);
 var
   I1,i2,i3,temp, attribnum, tempamount,bytenum, newattribnum: integer;
@@ -1744,7 +1741,7 @@ begin
         begin
 
 
-          //è‹¥éœ€æ·»åŠ æ ‡ç­¾ï¼Œæ˜¯åˆ™è·³è½¬
+          //ÈôĞèÌí¼Ó±êÇ©£¬ÊÇÔòÌø×ª
           if (nowevent.attrib[i1].par[kdefini.KDEFitem[nowevent.attrib[i1].attribnum].yesjump] <> 0) then
           begin
             nowevent.attrib[i1].labelstatus := nowevent.attrib[i1].par[kdefini.KDEFitem[nowevent.attrib[i1].attribnum].yesjump];
@@ -1899,7 +1896,7 @@ begin
             nowevent.attrib[i1].labelto := labelnum;
             addattrib(nowevent,@tempattrib,i1 + 1);
           end;
-          //æ·»åŠ äº†æ ‡ç­¾é‡æ’
+          //Ìí¼ÓÁË±êÇ©ÖØÅÅ
           break;
         end;
       end;
@@ -2007,8 +2004,8 @@ begin
       and (InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount < useR.typenumber) then
       begin
         GuideisCombobox[I] := InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType;
-        GuideCombobox[I].Items.Add('-2ä¿æŒä¸å˜');
-        GuideCombobox[I].Items.Add('-1æ— ');
+        GuideCombobox[I].Items.Add('-2±£³Ö²»±ä');
+        GuideCombobox[I].Items.Add('-1ÎŞ');
         for I2 := 0 to useR.Rtype[InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount].datanum - 1 do
         begin
           GuideCombobox[I].Items.Add(calrname(InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteCount, I2));
@@ -2018,8 +2015,8 @@ begin
       else if (InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType = 2) then
       begin
         GuideisCombobox[I] := InstructGuideini.Instruct[atrb.attribnum].Param[I + 1].QuoteType;
-        GuideCombobox[I].Items.Add('-2ä¿æŒä¸å˜');
-        GuideCombobox[I].Items.Add('-1æ— ');
+        GuideCombobox[I].Items.Add('-2±£³Ö²»±ä');
+        GuideCombobox[I].Items.Add('-1ÎŞ');
         for I2 := 0 to useW.Wtype.datanum - 1 do
         begin
           GuideCombobox[I].Items.Add(calWname(I2));
@@ -2156,7 +2153,7 @@ begin
   end;
 end;
 
-function CalInstructGuideParamName(atrb: Pattrib; param: integer): string;
+function CalInstructGuideParamName(atrb: Pattrib; param: integer): widestring;
 var
   I: integer;
 begin
@@ -2202,7 +2199,7 @@ begin
   end;
 end;
 
-function CalInstructGuideName(atrb: Pattrib): string;
+function CalInstructGuideName(atrb: Pattrib): widestring;
 var
   I: integer;
   tempstr, tempstr1, tempstr2: String;
@@ -2223,10 +2220,10 @@ begin
   if atrb.labelway <> 0 then
   begin
     if atrb.labelway > 0 then
-      tempstr := tempstr + ';æ»¡è¶³æ¡ä»¶'
+      tempstr := tempstr + ';Âú×ãÌõ¼ş'
     else
-      tempstr := tempstr + ';ä¸æ»¡è¶³æ¡ä»¶';
-    tempstr := tempstr + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+      tempstr := tempstr + ';²»Âú×ãÌõ¼ş';
+    tempstr := tempstr + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
   end;
   result := tempstr;
 end;
@@ -2241,10 +2238,10 @@ begin
     result := true;
 end;
 
-function calattribname(atrb: Pattrib): string;
+function calattribname(atrb: Pattrib): widestring;
 var
   I, temp: integer;
-  tempstr: string;
+  tempstr: widestring;
 begin
   if atrb.labelstatus = -1 then
   begin
@@ -2263,7 +2260,7 @@ begin
     case atrb.attribnum of
       -1:
         begin
-          result := result + 'äº‹ä»¶ç»“æŸ';
+          result := result + 'ÊÂ¼ş½áÊø';
         end;
       1:
         begin
@@ -2276,256 +2273,256 @@ begin
         end;
       2:
         begin
-          result := result + 'å¾—åˆ°ç‰©å“['+ calRname(2, atrb.par[1]) + ']' + inttostr(atrb.par[2]) + 'ä¸ª';
+          result := result + 'µÃµ½ÎïÆ·['+ calRname(2, atrb.par[1]) + ']' + inttostr(atrb.par[2]) + '¸ö';
         end;
       3:
         begin
           if atrb.par[1] = -2 then
-            result := result + string('ä¿®æ”¹äº‹ä»¶å®šä¹‰:å½“å‰åœºæ™¯')
+            result := result + widestring('ĞŞ¸ÄÊÂ¼ş¶¨Òå:µ±Ç°³¡¾°')
           else
-            result := result + string('ä¿®æ”¹äº‹ä»¶å®šä¹‰:åœºæ™¯[') + calRname(3, atrb.par[1]) + string(']:');
+            result := result + widestring('ĞŞ¸ÄÊÂ¼ş¶¨Òå:³¡¾°[') + calRname(3, atrb.par[1]) + widestring(']:');
           if atrb.par[2] = -2 then
-            result := result + string('å½“å‰åœºæ™¯äº‹ä»¶ç¼–å·')
+            result := result + widestring('µ±Ç°³¡¾°ÊÂ¼ş±àºÅ')
           else
-            result := result + string('åœºæ™¯äº‹ä»¶ç¼–å·[')+ inttostr(atrb.par[2]) + ']';
+            result := result + widestring('³¡¾°ÊÂ¼ş±àºÅ[')+ inttostr(atrb.par[2]) + ']';
         end;
       4:
         begin
-          result := result + 'æ˜¯å¦ä½¿ç”¨ç‰©å“[' + calRname(2, atrb.par[1]) +']ï¼Ÿ';
+          result := result + 'ÊÇ·ñÊ¹ÓÃÎïÆ·[' + calRname(2, atrb.par[1]) +']£¿';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       5:
         begin
-          result := result + 'æ˜¯å¦é€‰æ‹©æˆ˜æ–—ï¼Ÿ';
+          result := result + 'ÊÇ·ñÑ¡ÔñÕ½¶·£¿';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       6:
         begin
-          result := result + 'æˆ˜æ–—[' + CalWname(atrb.par[1]) +']';
+          result := result + 'Õ½¶·[' + CalWname(atrb.par[1]) +']';
           if atrb.labelway > 0 then
-            result := result + ' èƒœ'
+            result := result + ' Ê¤'
           else
-            result := result + ' è´Ÿ';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + ' ¸º';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
 
         end;
       8:
         begin
-          result := result + 'æ”¹å˜å¤§åœ°å›¾éŸ³ä¹(éŸ³ä¹ç¼–å·' + inttostr(atrb.par[1]) + ')';
+          result := result + '¸Ä±ä´óµØÍ¼ÒôÀÖ(ÒôÀÖ±àºÅ' + inttostr(atrb.par[1]) + ')';
         end;
       9:
         begin
-          result := result + 'è¯¢é—®æ˜¯å¦åŠ å…¥ï¼Ÿ';
+          result := result + 'Ñ¯ÎÊÊÇ·ñ¼ÓÈë£¿';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       10:
         begin
-          result := result + 'åŠ å…¥é˜Ÿå‘˜[' + calRname(1,atrb.par[1]) + ']';
+          result := result + '¼ÓÈë¶ÓÔ±[' + calRname(1,atrb.par[1]) + ']';
         end;
       11:
         begin
-          result := result + 'è¯¢é—®æ˜¯å¦ä½å®¿ï¼Ÿ';
+          result := result + 'Ñ¯ÎÊÊÇ·ñ×¡ËŞ£¿';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       16:
         begin
-          result := result + 'åˆ¤æ–­é˜Ÿä¼æ˜¯å¦æœ‰[' + calRname(1, atrb.par[1]) + ']?';
+          result := result + 'ÅĞ¶Ï¶ÓÎéÊÇ·ñÓĞ[' + calRname(1, atrb.par[1]) + ']?';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       17:
         begin
-          result := result + 'ä¿®æ”¹åœºæ™¯è´´å›¾:åœºæ™¯[' + calRname(3,atrb.par[1]) + ']å±‚:' + inttostr(atrb.par[2]) + 'åæ ‡' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]) + 'è´´å›¾ç¼–å·' + inttostr(atrb.par[5]);
+          result := result + 'ĞŞ¸Ä³¡¾°ÌùÍ¼:³¡¾°[' + calRname(3,atrb.par[1]) + ']²ã:' + inttostr(atrb.par[2]) + '×ø±ê' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]) + 'ÌùÍ¼±àºÅ' + inttostr(atrb.par[5]);
         end;
       18:
         begin
-          result := result + 'åˆ¤æ–­æ˜¯å¦æœ‰ç‰©å“[' + calRname(2, atrb.par[1]) + ']';
+          result := result + 'ÅĞ¶ÏÊÇ·ñÓĞÎïÆ·[' + calRname(2, atrb.par[1]) + ']';
           if atrb.labelway > 0 then
-            result := result + 'æœ‰'
+            result := result + 'ÓĞ'
           else
-            result := result + 'æ²¡æœ‰';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + 'Ã»ÓĞ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       19:
         begin
-          result := result + 'ä¸»è§’ç§»åŠ¨è‡³' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]);
+          result := result + 'Ö÷½ÇÒÆ¶¯ÖÁ' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]);
         end;
       20:
         begin
-          result := result + 'åˆ¤æ–­é˜Ÿä¼æ˜¯å¦å·²æ»¡';
+          result := result + 'ÅĞ¶Ï¶ÓÎéÊÇ·ñÒÑÂú';
           if atrb.labelway > 0 then
-            result := result + 'å·²æ»¡'
+            result := result + 'ÒÑÂú'
           else
-            result := result + 'ä¸æ»¡';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '²»Âú';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       21:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']ç¦»é˜Ÿ';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']Àë¶Ó';
         end;
       23:
         begin
-          result := result + 'è®¾ç½®äººç‰©[' + calRname(1, atrb.par[1])+ ']ç”¨æ¯’èƒ½åŠ›[' + inttostr(atrb.par[2]) + ']';
+          result := result + 'ÉèÖÃÈËÎï[' + calRname(1, atrb.par[1])+ ']ÓÃ¶¾ÄÜÁ¦[' + inttostr(atrb.par[2]) + ']';
         end;
       25:
         begin
-          result := result + 'åœºæ™¯ç§»åŠ¨' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
+          result := result + '³¡¾°ÒÆ¶¯' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
         end;
       28:
         begin
-          result := result + 'åˆ¤æ–­['+calRname(1,atrb.par[1])+']é“å¾·' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
+          result := result + 'ÅĞ¶Ï['+calRname(1,atrb.par[1])+']µÀµÂ' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
           if atrb.labelway > 0 then
-            result := result + 'åœ¨èŒƒå›´å†…'
+            result := result + 'ÔÚ·¶Î§ÄÚ'
           else
-            result := result + 'ä¸åœ¨èŒƒå›´å†…';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '²»ÔÚ·¶Î§ÄÚ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       29:
         begin
-          result := result + 'åˆ¤æ–­['+calRname(1,atrb.par[1])+']æ­¦åŠ›' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
+          result := result + 'ÅĞ¶Ï['+calRname(1,atrb.par[1])+']ÎäÁ¦' + inttostr(atrb.par[2]) + '-' + inttostr(atrb.par[3]);
           if atrb.labelway > 0 then
-            result := result + 'åœ¨èŒƒå›´å†…'
+            result := result + 'ÔÚ·¶Î§ÄÚ'
           else
-            result := result + 'ä¸åœ¨èŒƒå›´å†…';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '²»ÔÚ·¶Î§ÄÚ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       30:
         begin
-           result :=result + 'ä¸»è§’èµ°åŠ¨' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
+           result :=result + 'Ö÷½Ç×ß¶¯' + inttostr(atrb.par[1]) + '-' + inttostr(atrb.par[2]) + '--' + inttostr(atrb.par[3]) + '-' + inttostr(atrb.par[4]);
         end;
       31:
         begin
-          result :=result + 'åˆ¤æ–­é“¶å­æ˜¯å¦å¤Ÿ[' + inttostr(atrb.par[1]) + ']';
+          result :=result + 'ÅĞ¶ÏÒø×ÓÊÇ·ñ¹»[' + inttostr(atrb.par[1]) + ']';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       32:
         begin
-          result := result + '[' + calRname(2,atrb.par[1]) + ']å¢åŠ [' + inttostr(atrb.par[2]) + ']ä¸ª';
+          result := result + '[' + calRname(2,atrb.par[1]) + ']Ôö¼Ó[' + inttostr(atrb.par[2]) + ']¸ö';
         end;
       33:
         begin
-          result := result + '[' + calRname(1, atrb.par[1]) +']å­¦ä¼š[' + calRname(4, atrb.par[2]) + ']';
+          result := result + '[' + calRname(1, atrb.par[1]) +']Ñ§»á[' + calRname(4, atrb.par[2]) + ']';
         end;
       34:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']å¢åŠ èµ„è´¨[' + inttostr(atrb.par[2]) + ']';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']Ôö¼Ó×ÊÖÊ[' + inttostr(atrb.par[2]) + ']';
         end;
       35:
         begin
-          result := result + 'è®¾ç½®[' + calRname(1,atrb.par[1]) + ']æ­¦åŠŸ[' + inttostr(atrb.par[2]) +']ä¸º[' + calRname(4, atrb.par[3]) + ']ç»éªŒä¸º' + inttostr(atrb.par[4]);
+          result := result + 'ÉèÖÃ[' + calRname(1,atrb.par[1]) + ']Îä¹¦[' + inttostr(atrb.par[2]) +']Îª[' + calRname(4, atrb.par[3]) + ']¾­ÑéÎª' + inttostr(atrb.par[4]);
         end;
       36:
         begin
           if atrb.par[1] >= 256 then
           begin
-            result := result + 'JMPæ˜¯å¦ä¸º0?';
+            result := result + 'JMPÊÇ·ñÎª0?';
             if atrb.labelway > 0 then
-              result := result + 'æ˜¯'
+              result := result + 'ÊÇ'
             else
-              result := result + 'å¦';
-            result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+              result := result + '·ñ';
+            result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
           end
           else
           begin
-            result := result + 'ä¸»è§’æ€§åˆ«æ˜¯å¦ä¸º[' + inttostr(atrb.par[1]) +']?';
+            result := result + 'Ö÷½ÇĞÔ±ğÊÇ·ñÎª[' + inttostr(atrb.par[1]) +']?';
             if atrb.labelway > 0 then
-              result := result + 'æ˜¯'
+              result := result + 'ÊÇ'
             else
-              result := result + 'å¦';
-            result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+              result := result + '·ñ';
+            result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
           end;
         end;
       37:
         begin
-          result := result + 'å¢åŠ é“å¾·' + inttostr(atrb.par[1]);
+          result := result + 'Ôö¼ÓµÀµÂ' + inttostr(atrb.par[1]);
         end;
       38:
         begin
-          result := result + 'ä¿®æ”¹åœºæ™¯[' + calRname(3,atrb.par[1]) + ']å±‚' + inttostr(atrb.par[2]) + 'åŸè´´å›¾' + inttostr(atrb.par[3]) + 'å˜ä¸º' + inttostr(atrb.par[4]);
+          result := result + 'ĞŞ¸Ä³¡¾°[' + calRname(3,atrb.par[1]) + ']²ã' + inttostr(atrb.par[2]) + 'Ô­ÌùÍ¼' + inttostr(atrb.par[3]) + '±äÎª' + inttostr(atrb.par[4]);
         end;
       39:
         begin
-          result := result + 'æ‰“å¼€åœºæ™¯[' + calRname(3,atrb.par[1]) + ']';
+          result := result + '´ò¿ª³¡¾°[' + calRname(3,atrb.par[1]) + ']';
         end;
       40:
         begin
-          result := result + 'ä¸»è§’ç«™ç«‹æ–¹å‘' + inttostr(atrb.par[1]);
+          result := result + 'Ö÷½ÇÕ¾Á¢·½Ïò' + inttostr(atrb.par[1]);
         end;
       41:
         begin
-          result := result + '[' + calRname(1,atrb.par[1]) + ']å¾—åˆ°ç‰©å“[' + calRname(2,atrb.par[2])+']æ•°é‡[' + inttostr(atrb.par[3]) + ']';
+          result := result + '[' + calRname(1,atrb.par[1]) + ']µÃµ½ÎïÆ·[' + calRname(2,atrb.par[2])+']ÊıÁ¿[' + inttostr(atrb.par[3]) + ']';
         end;
       42:
         begin
-          result := result + 'é˜Ÿä¼ä¸­æ˜¯å¦æœ‰å¥³æ€§ï¼Ÿ';
+          result := result + '¶ÓÎéÖĞÊÇ·ñÓĞÅ®ĞÔ£¿';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       43:
         begin
-          result := result + 'æ˜¯å¦æœ‰ç‰©å“[' + calRname(2, atrb.par[1]) +']?';
+          result := result + 'ÊÇ·ñÓĞÎïÆ·[' + calRname(2, atrb.par[1]) +']?';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       45:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']å¢åŠ è½»åŠŸ' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']Ôö¼ÓÇá¹¦' + inttostr(atrb.par[2]);
         end;
       46:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']å¢åŠ å†…åŠ›' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']Ôö¼ÓÄÚÁ¦' + inttostr(atrb.par[2]);
         end;
       47:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']å¢åŠ æ­¦åŠŸ' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']Ôö¼ÓÎä¹¦' + inttostr(atrb.par[2]);
         end;
       48:
         begin
-          result := result + '['+ CalRname(1,atrb.par[1])+']å¢åŠ ç”Ÿå‘½' + inttostr(atrb.par[2]);
+          result := result + '['+ CalRname(1,atrb.par[1])+']Ôö¼ÓÉúÃü' + inttostr(atrb.par[2]);
         end;
       49:
         begin
-          result :=  result + '['+ CalRname(1,atrb.par[1])+']å†…åŠ›å±æ€§' + inttostr(atrb.par[2]);
+          result :=  result + '['+ CalRname(1,atrb.par[1])+']ÄÚÁ¦ÊôĞÔ' + inttostr(atrb.par[2]);
         end;
       50:
         begin
           case atrb.par[1] of
             0:
               begin
-                result := result + 'å˜é‡èµ‹å€¼[x' + inttostr(atrb.par[2]) + ']=' + inttostr(atrb.par[3]);
+                result := result + '±äÁ¿¸³Öµ[x' + inttostr(atrb.par[2]) + ']=' + inttostr(atrb.par[3]);
               end;
             1:
               begin
-                result := result + 'æ•°ç»„å˜é‡èµ‹å€¼ æ•°ç»„' + inttostr(atrb.par[4]);
+                result := result + 'Êı×é±äÁ¿¸³Öµ Êı×é' + inttostr(atrb.par[4]);
                 if ((atrb.par[2] and 1) = 1) then
                   result := result  + '([X' + inttostr(atrb.par[5])+'])='
                 else
@@ -2541,7 +2538,7 @@ begin
               end;
             2:
               begin
-                result := result + 'æ•°ç»„å˜é‡å–å€¼' + '[X' + inttostr(atrb.par[6])+']=æ•°ç»„';
+                result := result + 'Êı×é±äÁ¿È¡Öµ' + '[X' + inttostr(atrb.par[6])+']=Êı×é';
                 result := result  + inttostr(atrb.par[4]);
                 if ((atrb.par[2] and 1) = 1) then
                   result := result  + '([X' + inttostr(atrb.par[5])+'])'
@@ -2554,7 +2551,7 @@ begin
               end;
             3:
               begin
-                result := result + 'å››åˆ™è¿ç®— [X' + inttostr(atrb.par[4]) + ']=[X' + inttostr(atrb.par[5]) + ']';
+                result := result + 'ËÄÔòÔËËã [X' + inttostr(atrb.par[4]) + ']=[X' + inttostr(atrb.par[5]) + ']';
                 case atrb.par[3] of
                   0: result := result + '+';
                   1: result := result + '-';
@@ -2569,7 +2566,7 @@ begin
               end;
             4:
               begin
-                result := result + 'å˜é‡åˆ¤æ–­ ';
+                result := result + '±äÁ¿ÅĞ¶Ï ';
                 case atrb.par[3] of
                   0:
                     begin
@@ -2578,7 +2575,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   1:
                     begin
@@ -2587,7 +2584,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   2:
                     begin
@@ -2596,7 +2593,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   3:
                     begin
@@ -2605,7 +2602,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   4:
                     begin
@@ -2614,7 +2611,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   5:
                     begin
@@ -2623,7 +2620,7 @@ begin
                         result := result + inttostr(atrb.par[5])
                       else
                         result := result +'[X' + inttostr(atrb.par[5]) +']';
-                      result := result + ' then JMP=0ï¼Œelse JMP=1';
+                      result := result + ' then JMP=0£¬else JMP=1';
                     end;
                   6:
                     begin
@@ -2637,7 +2634,7 @@ begin
               end;
             8:
               begin
-                result := result + 'è¯»å¯¹è¯åˆ°å­—ç¬¦ä¸² str([X' + inttostr(atrb.par[4]) + ']=talk(';
+                result := result + '¶Á¶Ô»°µ½×Ö·û´® str([X' + inttostr(atrb.par[4]) + ']=talk(';
                 if atrb.par[2]=0 then
                   result := result + inttostr(atrb.par[3]) + ')'
                 else
@@ -2645,28 +2642,28 @@ begin
               end;
             10:
               begin
-                result := result + 'å–å­—ç¬¦ä¸²é•¿åº¦ [X' + inttostr(atrb.par[3]) + ']=len(Str[X' + inttostr(atrb.par[2]) + ']';
+                result := result + 'È¡×Ö·û´®³¤¶È [X' + inttostr(atrb.par[3]) + ']=len(Str[X' + inttostr(atrb.par[2]) + ']';
               end;
             11:
               begin
-                result := result + 'å­—ç¬¦ä¸²åˆå¹¶ Str[X' + inttostr(atrb.par[2]) + ']=Str[X' + inttostr(atrb.par[3]) + ']+Str[X' + inttostr(atrb.par[4]) + ']';
+                result := result + '×Ö·û´®ºÏ²¢ Str[X' + inttostr(atrb.par[2]) + ']=Str[X' + inttostr(atrb.par[3]) + ']+Str[X' + inttostr(atrb.par[4]) + ']';
               end;
             12:
               begin
-                result := result + 'ç©ºæ ¼å­—ç¬¦ä¸² Str[X' + inttostr(atrb.par[3]) + ']=';
+                result := result + '¿Õ¸ñ×Ö·û´® Str[X' + inttostr(atrb.par[3]) + ']=';
                 if atrb.par[2]=0 then
-                  result := result + inttostr(atrb.par[4]) +'ä¸ªç©ºæ ¼'
+                  result := result + inttostr(atrb.par[4]) +'¸ö¿Õ¸ñ'
                 else
-                  result := result + '[X' + inttostr(atrb.par[4]) + ']ä¸ªç©ºæ ¼';
+                  result := result + '[X' + inttostr(atrb.par[4]) + ']¸ö¿Õ¸ñ';
               end;
             16:
               begin
-                result := result + 'ä¿å­˜å±æ€§ ';
+                result := result + '±£´æÊôĞÔ ';
                 case atrb.par[3] of
-                  0: result := result + 'äººç‰©';
-                  1: result := result + 'ç‰©å“';
-                  2: result := result + 'åœºæ™¯';
-                  3: result := result + 'æ­¦åŠŸ';
+                  0: result := result + 'ÈËÎï';
+                  1: result := result + 'ÎïÆ·';
+                  2: result := result + '³¡¾°';
+                  3: result := result + 'Îä¹¦';
                 end;
                 if ((atrb.par[2] and 1) = 0) then
                 begin
@@ -2681,10 +2678,10 @@ begin
                 end;
                 if ((atrb.par[2] and 2) = 0) then
                 begin
-                  result := result + 'å±æ€§åç§»' + inttostr(atrb.par[5]);
+                  result := result + 'ÊôĞÔÆ«ÒÆ' + inttostr(atrb.par[5]);
                 end
                 else
-                  result := result + 'å±æ€§åç§»[X' +  inttostr(atrb.par[5]) + ']';
+                  result := result + 'ÊôĞÔÆ«ÒÆ[X' +  inttostr(atrb.par[5]) + ']';
                 if ((atrb.par[2] and 4) = 0) then
                 begin
                   result := result + '=' + inttostr(atrb.par[6]);
@@ -2694,12 +2691,12 @@ begin
               end;
             17:
               begin
-                result := result + 'è¯»å–å±æ€§ ';
+                result := result + '¶ÁÈ¡ÊôĞÔ ';
                 case atrb.par[3] of
-                  0: result := result + 'äººç‰©';
-                  1: result := result + 'ç‰©å“';
-                  2: result := result + 'åœºæ™¯';
-                  3: result := result + 'æ­¦åŠŸ';
+                  0: result := result + 'ÈËÎï';
+                  1: result := result + 'ÎïÆ·';
+                  2: result := result + '³¡¾°';
+                  3: result := result + 'Îä¹¦';
                 end;
                 result := result + '[X' + inttostr(atrb.par[6]) + ']=';
                 if ((atrb.par[2] and 1) = 0) then
@@ -2715,14 +2712,14 @@ begin
                 end;
                 if ((atrb.par[2] and 2) = 0) then
                 begin
-                  result := result + 'å±æ€§åç§»' + inttostr(atrb.par[5]);
+                  result := result + 'ÊôĞÔÆ«ÒÆ' + inttostr(atrb.par[5]);
                 end
                 else
-                  result := result + 'å±æ€§åç§»[X' +  inttostr(atrb.par[5]) + ']';
+                  result := result + 'ÊôĞÔÆ«ÒÆ[X' +  inttostr(atrb.par[5]) + ']';
               end;
             18:
               begin
-                result := result + 'ä¿å­˜é˜Ÿä¼ é˜Ÿå‹';
+                result := result + '±£´æ¶ÓÎé ¶ÓÓÑ';
                 if ((atrb.par[2] and 1) = 0) then
                   result := result + inttostr(atrb.par[3])
                 else
@@ -2734,35 +2731,35 @@ begin
               end;
             19:
               begin
-                result := result + 'è¯»å–é˜Ÿä¼ [X' + inttostr(atrb.par[4]) + ']=';
+                result := result + '¶ÁÈ¡¶ÓÎé [X' + inttostr(atrb.par[4]) + ']=';
                 if atrb.par[2] = 0 then
-                  result := result + 'é˜Ÿå‹' + inttostr(atrb.par[3])
+                  result := result + '¶ÓÓÑ' + inttostr(atrb.par[3])
                 else
-                  result := result + 'é˜Ÿå‹[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '¶ÓÓÑ[X' + inttostr(atrb.par[3]) + ']';
               end;
             20:
               begin
-                result := result + 'ä¸»è§’ç‰©å“ä¸ªæ•° [X' + inttostr(atrb.par[4]) + ']';
+                result := result + 'Ö÷½ÇÎïÆ·¸öÊı [X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] = 0 then
-                  result := result + '=' + CalRname(2,atrb.par[3]) +'æ•°é‡'
+                  result := result + '=' + CalRname(2,atrb.par[3]) +'ÊıÁ¿'
                 else
-                  result := result + '=ç‰©å“ç¼–å·[X' + inttostr(atrb.par[3]) + ']æ•°é‡';
+                  result := result + '=ÎïÆ·±àºÅ[X' + inttostr(atrb.par[3]) + ']ÊıÁ¿';
               end;
             21:
               begin
-                result := result + 'ä¿å­˜D*æ•°æ® ';
+                result := result + '±£´æD*Êı¾İ ';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + 'åœºæ™¯' + inttostr(atrb.par[3])
+                  result := result + '³¡¾°' + inttostr(atrb.par[3])
                 else
-                  result := result + 'åœºæ™¯[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '³¡¾°[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + 'åœºæ™¯äº‹ä»¶' + inttostr(atrb.par[4])
+                  result := result + '³¡¾°ÊÂ¼ş' + inttostr(atrb.par[4])
                 else
-                  result := result + 'åœºæ™¯äº‹ä»¶[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '³¡¾°ÊÂ¼ş[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + 'å±æ€§' + inttostr(atrb.par[5])
+                  result := result + 'ÊôĞÔ' + inttostr(atrb.par[5])
                 else
-                  result := result + 'å±æ€§[X' + inttostr(atrb.par[5]) + ']';
+                  result := result + 'ÊôĞÔ[X' + inttostr(atrb.par[5]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 8 = 0 then
                   result := result + inttostr(atrb.par[6])
@@ -2771,37 +2768,37 @@ begin
               end;
             22:
               begin
-                result := result + 'è¯»å–D*æ•°æ® ';
+                result := result + '¶ÁÈ¡D*Êı¾İ ';
                 result := result + '[X' + inttostr(atrb.par[6]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + 'åœºæ™¯' + inttostr(atrb.par[3])
+                  result := result + '³¡¾°' + inttostr(atrb.par[3])
                 else
-                  result := result + 'åœºæ™¯[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '³¡¾°[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + 'åœºæ™¯äº‹ä»¶' + inttostr(atrb.par[4])
+                  result := result + '³¡¾°ÊÂ¼ş' + inttostr(atrb.par[4])
                 else
-                  result := result + 'åœºæ™¯äº‹ä»¶[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '³¡¾°ÊÂ¼ş[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + 'å±æ€§' + inttostr(atrb.par[5])
+                  result := result + 'ÊôĞÔ' + inttostr(atrb.par[5])
                 else
-                  result := result + 'å±æ€§[X' + inttostr(atrb.par[5]) + ']';
+                  result := result + 'ÊôĞÔ[X' + inttostr(atrb.par[5]) + ']';
               end;
             23:
               begin
-                result := result + 'ä¿å­˜S*æ•°æ® ';
+                result := result + '±£´æS*Êı¾İ ';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + 'åœºæ™¯' + inttostr(atrb.par[3])
+                  result := result + '³¡¾°' + inttostr(atrb.par[3])
                 else
-                  result := result + 'åœºæ™¯[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '³¡¾°[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + 'å±‚' + inttostr(atrb.par[4])
+                  result := result + '²ã' + inttostr(atrb.par[4])
                 else
-                  result := result + 'å±‚[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '²ã[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + 'åæ ‡(' + inttostr(atrb.par[5])
+                  result := result + '×ø±ê(' + inttostr(atrb.par[5])
                 else
-                  result := result + 'åæ ‡([X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '×ø±ê([X' + inttostr(atrb.par[5]) + ']';
                   if atrb.par[2] and 8 = 0 then
                   result := result + ',' + inttostr(atrb.par[6]) + ')'
                 else
@@ -2814,21 +2811,21 @@ begin
               end;
             24:
               begin
-                result := result + 'è¯»å–S*æ•°æ® ';
+                result := result + '¶ÁÈ¡S*Êı¾İ ';
                 result := result + '[X' + inttostr(atrb.par[7]) + ']';
                 result := result + '=';
                 if atrb.par[2] and 1 = 0 then
-                  result := result + 'åœºæ™¯' + inttostr(atrb.par[3])
+                  result := result + '³¡¾°' + inttostr(atrb.par[3])
                 else
-                  result := result + 'åœºæ™¯[X' + inttostr(atrb.par[3]) + ']';
+                  result := result + '³¡¾°[X' + inttostr(atrb.par[3]) + ']';
                 if atrb.par[2] and 2 = 0 then
-                  result := result + 'å±‚' + inttostr(atrb.par[4])
+                  result := result + '²ã' + inttostr(atrb.par[4])
                 else
-                  result := result + 'å±‚[X' + inttostr(atrb.par[4]) + ']';
+                  result := result + '²ã[X' + inttostr(atrb.par[4]) + ']';
                 if atrb.par[2] and 4 = 0 then
-                  result := result + 'åæ ‡(' + inttostr(atrb.par[5])
+                  result := result + '×ø±ê(' + inttostr(atrb.par[5])
                 else
-                  result := result + 'åæ ‡([X' + inttostr(atrb.par[5]) + ']';
+                  result := result + '×ø±ê([X' + inttostr(atrb.par[5]) + ']';
                 if atrb.par[2] and 8 = 0 then
                   result := result + ',' + inttostr(atrb.par[6]) + ')'
                 else
@@ -2836,177 +2833,177 @@ begin
               end;
             25:
               begin
-                result := result + 'ä¿å­˜ç»™å®šåœ°å€æ•°æ®[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
+                result := result + '±£´æ¸ø¶¨µØÖ·Êı¾İ[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']=' + e_getstr(0, atrb.par[2], atrb.par[6]);
               end;
             26:
               begin
-                result := result + 'è¯»å–ç»™å®šåœ°å€æ•°æ®[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
+                result := result + '¶ÁÈ¡¸ø¶¨µØÖ·Êı¾İ[X' + inttostr(atrb.par[6]) + ']=[' + Format('%X' , [atrb.par[5] and $FFFF]) + '-' + Format('%X-' , [atrb.par[4] and $FFFF]) + e_getstr(1,atrb.par[2],atrb.par[7]) + ']';
               end;
             27:
               begin
-                result := result + 'è¯»å–åç§°åˆ°å­—ç¬¦ä¸² Str' + inttostr(atrb.par[5]) + '=';
+                result := result + '¶ÁÈ¡Ãû³Æµ½×Ö·û´® Str' + inttostr(atrb.par[5]) + '=';
                 case atrb.par[3] of
-                  0: result := result + 'äººç‰©';
-                  1: result := result + 'ç‰©å“';
-                  2: result := result + 'åœºæ™¯';
-                  3: result := result + 'æ­¦åŠŸ';
+                  0: result := result + 'ÈËÎï';
+                  1: result := result + 'ÎïÆ·';
+                  2: result := result + '³¡¾°';
+                  3: result := result + 'Îä¹¦';
                 end;
                 result:= result + e_getstr(0, atrb.par[2],atrb.par[4]);
               end;
             28:
               begin
-                result := result + 'å–å½“å‰äººç‰©æˆ˜æ–—ç¼–å·åˆ°[X' + inttostr(atrb.par[2]) + ']';
+                result := result + 'È¡µ±Ç°ÈËÎïÕ½¶·±àºÅµ½[X' + inttostr(atrb.par[2]) + ']';
               end;
             29:
               begin
-                result := result + 'é€‰æ‹©æ”»å‡»ç›®æ ‡ æˆ˜æ–—åºå·' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'æ­¥æ•°' + e_getstr(1,atrb.par[2],atrb.par[4]) + 'è¿”å›å€¼[X' + inttostr(atrb.par[5]) + ']';
+                result := result + 'Ñ¡Ôñ¹¥»÷Ä¿±ê Õ½¶·ĞòºÅ' + e_getstr(0,atrb.par[2],atrb.par[3]) + '²½Êı' + e_getstr(1,atrb.par[2],atrb.par[4]) + '·µ»ØÖµ[X' + inttostr(atrb.par[5]) + ']';
                 if atrb.par[6] = 0 then
-                  result := result +'(æ˜¾ç¤º)'
+                  result := result +'(ÏÔÊ¾)'
                 else
-                  result := result +'(ä¸æ˜¾ç¤º)';
+                  result := result +'(²»ÏÔÊ¾)';
               end;
             30:
               begin
-                result := result + 'è¯»å–äººç‰©æˆ˜æ–—å±æ€§[X' + inttostr(atrb.par[5]) + ']=æˆ˜æ–—åºå·' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'åç§»'+e_getstr(1,atrb.par[2],atrb.par[4]);
+                result := result + '¶ÁÈ¡ÈËÎïÕ½¶·ÊôĞÔ[X' + inttostr(atrb.par[5]) + ']=Õ½¶·ĞòºÅ' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'Æ«ÒÆ'+e_getstr(1,atrb.par[2],atrb.par[4]);
               end;
             31:
               begin
-                result := result + 'ä¿å­˜äººç‰©æˆ˜æ–—å±æ€§ æˆ˜æ–—åºå·' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'åç§»'+e_getstr(1,atrb.par[2],atrb.par[4]) + '=' + e_getstr(2,atrb.par[2],atrb.par[5]);
+                result := result + '±£´æÈËÎïÕ½¶·ÊôĞÔ Õ½¶·ĞòºÅ' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'Æ«ÒÆ'+e_getstr(1,atrb.par[2],atrb.par[4]) + '=' + e_getstr(2,atrb.par[2],atrb.par[5]);
               end;
             32:
               begin
-                result := result + 'ä¿®æ”¹ä¸‹ä¸€æ¡æŒ‡ä»¤ å‚æ•°' + e_getstr(0, atrb.par[2],atrb.par[4]) + '=' + e_getstr(0,1,atrb.par[3]);
+                result := result + 'ĞŞ¸ÄÏÂÒ»ÌõÖ¸Áî ²ÎÊı' + e_getstr(0, atrb.par[2],atrb.par[4]) + '=' + e_getstr(0,1,atrb.par[3]);
               end;
             33:
               begin
-                result := result + 'æ˜¾ç¤ºå­—ç¬¦ä¸² Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
+                result := result + 'ÏÔÊ¾×Ö·û´® Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
               end;
             34:
               begin
-                result := result + 'å¤„ç†èƒŒæ™¯ ä½ç½®(' + e_getstr(0,atrb.par[2], atrb.par[3]) + ',' + e_getstr(1,atrb.par[2], atrb.par[4]) + ') å®½' + e_getstr(2,atrb.par[2], atrb.par[5]) + ' é«˜' + e_getstr(3,atrb.par[2], atrb.par[6]) + '(é€æ˜åº¦' + e_getstr(4,atrb.par[2], atrb.par[7]) + ')';
+                result := result + '´¦Àí±³¾° Î»ÖÃ(' + e_getstr(0,atrb.par[2], atrb.par[3]) + ',' + e_getstr(1,atrb.par[2], atrb.par[4]) + ') ¿í' + e_getstr(2,atrb.par[2], atrb.par[5]) + ' ¸ß' + e_getstr(3,atrb.par[2], atrb.par[6]) + '(Í¸Ã÷¶È' + e_getstr(4,atrb.par[2], atrb.par[7]) + ')';
               end;
             35:
               begin
-                result := result + 'è¯»å–é”®å€¼ ' + e_getstr(0,1,atrb.par[2]) +'=é”®å€¼ ' + e_getstr(0,1,atrb.par[3]) + '=é¼ æ ‡X '  + e_getstr(0,1,atrb.par[4]) + '=é¼ æ ‡Y '
+                result := result + '¶ÁÈ¡¼üÖµ ' + e_getstr(0,1,atrb.par[2]) +'=¼üÖµ ' + e_getstr(0,1,atrb.par[3]) + '=Êó±êX '  + e_getstr(0,1,atrb.par[4]) + '=Êó±êY '
               end;
             36:
               begin
-                result := result + 'æ˜¾ç¤ºå­—ç¬¦ä¸²å¹¶ç­‰å¾…å‡»é”® Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
+                result := result + 'ÏÔÊ¾×Ö·û´®²¢µÈ´ı»÷¼ü Str' + inttostr(atrb.par[3]) + '(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')Color' + e_getstr(2,atrb.par[2],atrb.par[6]);
               end;
             37:
               begin
-                result := result + 'å»¶æ—¶' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + 'ÑÓÊ±' + e_getstr(0,atrb.par[2],atrb.par[3]);
               end;
             38:
               begin
-                result := result + 'éšæœºæ•° ' + e_getstr(0,1,atrb.par[4]) +'=Random(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ')';
+                result := result + 'Ëæ»úÊı ' + e_getstr(0,1,atrb.par[4]) +'=Random(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ')';
               end;
             39:
               begin
-                result := result + 'èœå•é€‰æ‹© èœå•ä¸ªæ•°' + e_getstr(0,atrb.par[2],atrb.par[3]) + 'å­—ç¬¦ä¸²æ•°ç»„' + inttostr(atrb.par[4]) + ' è¿”å›åˆ°'+ e_getstr(0,1,atrb.par[5]) + ' æ˜¾ç¤ºä½ç½®(' + e_getstr(1,atrb.par[2],atrb.par[6]) + ',' + e_getstr(2,atrb.par[2],atrb.par[7]) +')';
+                result := result + '²Ëµ¥Ñ¡Ôñ ²Ëµ¥¸öÊı' + e_getstr(0,atrb.par[2],atrb.par[3]) + '×Ö·û´®Êı×é' + inttostr(atrb.par[4]) + ' ·µ»Øµ½'+ e_getstr(0,1,atrb.par[5]) + ' ÏÔÊ¾Î»ÖÃ(' + e_getstr(1,atrb.par[2],atrb.par[6]) + ',' + e_getstr(2,atrb.par[2],atrb.par[7]) +')';
               end;
             40:
               begin
-                result := result + 'èœå•é€‰æ‹© èœå•ä¸ªæ•°' + e_getstr(0,atrb.par[2] and $FF,atrb.par[3]) +'æœ€å¤§æ˜¾ç¤ºä¸ªæ•°'+ inttostr((atrb.par[2] shr 8) and $FF) + ' å­—ç¬¦ä¸²æ•°ç»„' + inttostr(atrb.par[4]) + ' è¿”å›åˆ°'+ e_getstr(0,1,atrb.par[5]) + ' æ˜¾ç¤ºä½ç½®(' + e_getstr(1,atrb.par[2]and $FF,atrb.par[6]) + ',' + e_getstr(2,atrb.par[2]and $FF,atrb.par[7]) +')';
+                result := result + '²Ëµ¥Ñ¡Ôñ ²Ëµ¥¸öÊı' + e_getstr(0,atrb.par[2] and $FF,atrb.par[3]) +'×î´óÏÔÊ¾¸öÊı'+ inttostr((atrb.par[2] shr 8) and $FF) + ' ×Ö·û´®Êı×é' + inttostr(atrb.par[4]) + ' ·µ»Øµ½'+ e_getstr(0,1,atrb.par[5]) + ' ÏÔÊ¾Î»ÖÃ(' + e_getstr(1,atrb.par[2]and $FF,atrb.par[6]) + ',' + e_getstr(2,atrb.par[2]and $FF,atrb.par[7]) +')';
               end;
             41:
               begin
-                result := result + 'æ˜¾ç¤ºè´´å›¾';
+                result := result + 'ÏÔÊ¾ÌùÍ¼';
                 case atrb.par[3] of
-                  0: result := result + 'åœºæ™¯';
-                  1: result := result + 'å¤´åƒ';
-                  2: result := result + 'ç‰©å“';
+                  0: result := result + '³¡¾°';
+                  1: result := result + 'Í·Ïñ';
+                  2: result := result + 'ÎïÆ·';
                 end;
-                result:= result + e_getstr(2,atrb.par[2],atrb.par[6]) + ' ä½ç½®(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')';
+                result:= result + e_getstr(2,atrb.par[2],atrb.par[6]) + ' Î»ÖÃ(' + e_getstr(0,atrb.par[2],atrb.par[4]) + ',' + e_getstr(1,atrb.par[2],atrb.par[5]) + ')';
               end;
             42:
               begin
-                result := result + 'æ”¹å˜ä¸»åœ°å›¾åæ ‡(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' +e_getstr(1,atrb.par[2],atrb.par[4]) + ')';
+                result := result + '¸Ä±äÖ÷µØÍ¼×ø±ê(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' +e_getstr(1,atrb.par[2],atrb.par[4]) + ')';
               end;
             43:
               begin
-                result := result + 'è°ƒç”¨å…¶ä»–äº‹ä»¶ Call Sub' + e_getstr(0,atrb.par[2],atrb.par[3]) + '(' + e_getstr(1,atrb.par[2],atrb.par[4]) +',' + e_getstr(2,atrb.par[2],atrb.par[5])+','+e_getstr(3,atrb.par[2],atrb.par[6])+','+ e_getstr(4,atrb.par[2],atrb.par[7]) + ')';
+                result := result + 'µ÷ÓÃÆäËûÊÂ¼ş Call Sub' + e_getstr(0,atrb.par[2],atrb.par[3]) + '(' + e_getstr(1,atrb.par[2],atrb.par[4]) +',' + e_getstr(2,atrb.par[2],atrb.par[5])+','+e_getstr(3,atrb.par[2],atrb.par[6])+','+ e_getstr(4,atrb.par[2],atrb.par[7]) + ')';
               end;
             44:
               begin
-                result := result + 'æ’­æ”¾æ•ˆæœ åºå·' + e_getstr(0,atrb.par[2],atrb.par[3]) + ' åŠ¨ä½œç±»å‹' + e_getstr(1,atrb.par[2],atrb.par[4]) + ' æ•ˆæœç¼–å·' +e_getstr(2,atrb.par[2],atrb.par[5]);
+                result := result + '²¥·ÅĞ§¹û ĞòºÅ' + e_getstr(0,atrb.par[2],atrb.par[3]) + ' ¶¯×÷ÀàĞÍ' + e_getstr(1,atrb.par[2],atrb.par[4]) + ' Ğ§¹û±àºÅ' +e_getstr(2,atrb.par[2],atrb.par[5]);
               end;
             45:
               begin
-                result := result + 'æ˜¾ç¤ºæ•°å­— é¢œè‰²' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + 'ÏÔÊ¾Êı×Ö ÑÕÉ«' + e_getstr(0,atrb.par[2],atrb.par[3]);
                 if atrb.par[4]=0 then
-                  result := result + ' é—ªçƒ'
+                  result := result + ' ÉÁË¸'
                 else
-                  result := result + ' ä¸é—ªçƒ';
+                  result := result + ' ²»ÉÁË¸';
                 result := result + e_getstr(1,atrb.par[2],atrb.par[5]);
               end;
             46:
               begin
-                result := result + 'è®¾å®šæ•ˆæœå±‚ èµ·å§‹ç‚¹(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' + e_getstr(1,atrb.par[2],atrb.par[4]) + ') é•¿åº¦(' + e_getstr(2,atrb.par[2],atrb.par[5]) + ',' + e_getstr(3,atrb.par[2],atrb.par[6]) + ')';
+                result := result + 'Éè¶¨Ğ§¹û²ã ÆğÊ¼µã(' + e_getstr(0,atrb.par[2],atrb.par[3]) + ',' + e_getstr(1,atrb.par[2],atrb.par[4]) + ') ³¤¶È(' + e_getstr(2,atrb.par[2],atrb.par[5]) + ',' + e_getstr(3,atrb.par[2],atrb.par[6]) + ')';
                 if atrb.par[7] = 0 then
-                  result := result + ' æ— æ•ˆæœ'
+                  result := result + ' ÎŞĞ§¹û'
                 else
-                  result := result +  ' æœ‰æ•ˆæœ';
+                  result := result +  ' ÓĞĞ§¹û';
               end;
             47:
               begin
-                result := result + 'é‡ç½®æˆ˜åœºè´´å›¾ åºå·=' + e_getstr(0,atrb.par[2],atrb.par[3]);
+                result := result + 'ÖØÖÃÕ½³¡ÌùÍ¼ ĞòºÅ=' + e_getstr(0,atrb.par[2],atrb.par[3]);
               end;
             48:
               begin
-                result := result + 'è°ƒè¯•æŒ‡ä»¤ æ˜¾ç¤ºå˜é‡' + e_getstr(0,1,atrb.par[2]) +'--' + e_getstr(0,1,atrb.par[2] + atrb.par[3]-1);
+                result := result + 'µ÷ÊÔÖ¸Áî ÏÔÊ¾±äÁ¿' + e_getstr(0,1,atrb.par[2]) +'--' + e_getstr(0,1,atrb.par[2] + atrb.par[3]-1);
 
               end;
             49:
               begin
-                result := result + 'è°ƒç”¨ä»»æ„å­ç¨‹(å¤åˆ»ç‰ˆä¸å¯ç”¨)'
+                result := result + 'µ÷ÓÃÈÎÒâ×Ó³Ì(¸´¿Ì°æ²»¿ÉÓÃ)'
               end
             else
               begin
                 if (atrb.par[1] >= 0) and (atrb.par[1] < Kdef50.num) and (Kdef50.sub[atrb.par[1]] <> '') then
                   result := result + displayname(Kdef50.sub[atrb.par[1]])
                 else
-                  result := result + 'æœªçŸ¥æŒ‡ä»¤';
+                  result := result + 'Î´ÖªÖ¸Áî';
               end;
           end;
         end;
       55:
         begin
-          result := result + 'åˆ¤æ–­D*ç¼–å·' + inttostr(atrb.par[1]) + 'æ˜¯å¦ä¸º' + inttostr(atrb.par[2]);
+          result := result + 'ÅĞ¶ÏD*±àºÅ' + inttostr(atrb.par[1]) + 'ÊÇ·ñÎª' + inttostr(atrb.par[2]);
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       56:
         begin
-          result := result + 'å¢åŠ é“å¾·' + inttostr(atrb.par[1]);
+          result := result + 'Ôö¼ÓµÀµÂ' + inttostr(atrb.par[1]);
         end;
       60:
         begin
-          result := result + 'åˆ¤æ–­åœºæ™¯' + inttostr(atrb.par[1]) + 'äº‹ä»¶ä½ç½®' + inttostr(atrb.par[2]) + 'æ˜¯å¦æœ‰è´´å›¾' + inttostr(atrb.par[3]) + '?';
+          result := result + 'ÅĞ¶Ï³¡¾°' + inttostr(atrb.par[1]) + 'ÊÂ¼şÎ»ÖÃ' + inttostr(atrb.par[2]) + 'ÊÇ·ñÓĞÌùÍ¼' + inttostr(atrb.par[3]) + '?';
           if atrb.labelway > 0 then
-            result := result + 'æ˜¯'
+            result := result + 'ÊÇ'
           else
-            result := result + 'å¦';
-          result := result + 'åˆ™è·³è½¬Label' + inttostr(atrb.labelstatus);
+            result := result + '·ñ';
+          result := result + 'ÔòÌø×ªLabel' + inttostr(atrb.labelstatus);
         end;
       63:
         begin
-          result := result + 'è®¾ç½®[' + CalRname(1, atrb.par[1]) + ']æ€§åˆ«' + inttostr(atrb.par[2]);
+          result := result + 'ÉèÖÃ[' + CalRname(1, atrb.par[1]) + ']ĞÔ±ğ' + inttostr(atrb.par[2]);
         end;
       66:
         begin
-          result := result + 'æ’­æ”¾éŸ³ä¹' + inttostr(atrb.par[1]);
+          result := result + '²¥·ÅÒôÀÖ' + inttostr(atrb.par[1]);
         end;
       67:
         begin
-          result := result + 'æ’­æ”¾å£°éŸ³' + inttostr(atrb.par[1]);
+          result := result + '²¥·ÅÉùÒô' + inttostr(atrb.par[1]);
         end;
       68:
         begin
-          //æ–°å¯¹è¯
+          //ĞÂ¶Ô»°
           if atrb.par[3] = -2 then
             result := result + '[' + calRname(1,atrb.par[1]) + ']'
           else if (atrb.par[3] >=0) and (atrb.par[3]< namestrnum) then
@@ -3021,48 +3018,48 @@ begin
           except
             result := result + ' ';
           end;
-          result := result + ' èƒŒæ™¯(' + inttostr(atrb.par[7]) +')';
+          result := result + ' ±³¾°(' + inttostr(atrb.par[7]) +')';
         end;
       69:
         begin
-          result := result + 'æ›¿æ¢åç§° ';
+          result := result + 'Ìæ»»Ãû³Æ ';
           case atrb.par[1] of
-            0: result := result + 'äººç‰©';
-            1: result := result + 'ç‰©å“';
-            2: result := result + 'åœºæ™¯';
-            3: result := result + 'æ­¦åŠŸ';
+            0: result := result + 'ÈËÎï';
+            1: result := result + 'ÎïÆ·';
+            2: result := result + '³¡¾°';
+            3: result := result + 'Îä¹¦';
           end;
             result := result + '[' + calRname(atrb.par[1] + 1, atrb.par[2]) + inttostr(atrb.par[2]) +']';
           result := result + '=' + cutstr(displaystr(readtalkstr(@Namestr[atrb.par[3]])));
         end;
       70:
         begin
-          result := result + 'æ˜¾ç¤ºå­—å¹•ï¼Œå¯¹è¯'+ inttostr(atrb.par[1]) +' é¢œè‰²'+inttostr(atrb.par[2]);
+          result := result + 'ÏÔÊ¾×ÖÄ»£¬¶Ô»°'+ inttostr(atrb.par[1]) +' ÑÕÉ«'+inttostr(atrb.par[2]);
         end;
       71:
         begin
-          result := result +'è·³è½¬åœºæ™¯'+ CalRname(3,atrb.par[1]) + ' ä½ç½®(' + inttostr(atrb.par[2]) + ',' + inttostr(atrb.par[3]) +')';
+          result := result +'Ìø×ª³¡¾°'+ CalRname(3,atrb.par[1]) + ' Î»ÖÃ(' + inttostr(atrb.par[2]) + ',' + inttostr(atrb.par[3]) +')';
         end;
       72:
         begin
-          result := result + 'è®¾ç½®äººç‰©,æŒ‡ä»¤ä¸å¯ç”¨';
+          result := result + 'ÉèÖÃÈËÎï,Ö¸Áî²»¿ÉÓÃ';
         end;
       73:
         begin
-          result := result + 'æ”¹å˜è¿›é—¨éŸ³ä¹'+inttostr(atrb.par[1]);
+          result := result + '¸Ä±ä½øÃÅÒôÀÖ'+inttostr(atrb.par[1]);
         end
       else
       begin
         if (atrb.attribnum >=0) and (atrb.attribnum < kdefini.KDEFnum) and (kdefini.KDEFitem[atrb.attribnum].note <> '') then
           result := result + displayname(kdefini.KDEFitem[atrb.attribnum].note)
         else
-          result := result + 'æœªçŸ¥æŒ‡ä»¤';
+          result := result + 'Î´ÖªÖ¸Áî';
       end;
     end;
   end;
 end;
 
-function E_getstr(bit,t,x: smallint): string;
+function E_getstr(bit,t,x: smallint): widestring;
 begin
   if (t and (1 shl bit)) = 0 then
     result := inttostr(x)
@@ -3070,7 +3067,7 @@ begin
     result := '[X' + inttostr(x) + ']';
 end;
 
-function cutstr(str:string): string;
+function cutstr(str:widestring): widestring;
 var
   I : integer;
 begin
@@ -3083,7 +3080,7 @@ begin
     end;
 end;
 
-function calRname(datatype, index: integer): string;
+function calRname(datatype, index: integer): widestring;
 var
   I: integer;
 begin
@@ -3099,7 +3096,7 @@ begin
     end;
 end;
 
-function calWname(index: integer): string;
+function calWname(index: integer): widestring;
 var
   I: integer;
 begin
@@ -3305,10 +3302,10 @@ begin
 
   copyattrib(@ent.attrib[num], atrb);
 
-  if atrb.labelstatus = -1 then//å¦‚æœæ·»åŠ çš„æ˜¯æ ‡ç­¾ï¼Œå°±ä¸éœ€è¦åç»­å¤„ç†ï¼Œç›´æ¥è¿”å›
+  if atrb.labelstatus = -1 then//Èç¹ûÌí¼ÓµÄÊÇ±êÇ©£¬¾Í²»ĞèÒªºóĞø´¦Àí£¬Ö±½Ó·µ»Ø
     exit;
 
-  //å¯¹å…¶å®ƒå¸¦æ ‡ç­¾æŒ‡ä»¤çš„æ ‡ç­¾è·ç¦»è¿›è¡Œé‡æ–°è®¡ç®—
+  //¶ÔÆäËü´ø±êÇ©Ö¸ÁîµÄ±êÇ©¾àÀë½øĞĞÖØĞÂ¼ÆËã
   for I1 := 0 to num - 1 do
   begin
     if ent.attrib[I1].labelstatus >= 0 then
@@ -3349,7 +3346,7 @@ begin
     end;
   end;
 
-  //å¦‚éœ€æ·»åŠ æ ‡ç­¾ï¼Œåˆ™è¿›è¡Œæ·»åŠ ï¼ˆé€’å½’ï¼‰
+  //ÈçĞèÌí¼Ó±êÇ©£¬Ôò½øĞĞÌí¼Ó£¨µİ¹é£©
   if atrb.labelstatus >= 0 then
   begin
     if atrb.par[kdefini.KDEFitem[atrb.attribnum].yesjump] <> 0 then
@@ -3560,7 +3557,7 @@ begin
   temp := 0;
   for i1 := 0 to sourceent.attribamount - 1 do
   begin
-    {-1è¡¨ç¤ºæ˜¯æ ‡ç­¾ï¼Œ-2è¡¨ç¤ºæ²¡æœ‰æ ‡ç­¾çš„æŒ‡ä»¤ï¼Œ>=0è¡¨ç¤ºæœ‰æ ‡ç­¾çš„æŒ‡ä»¤}
+    {-1±íÊ¾ÊÇ±êÇ©£¬-2±íÊ¾Ã»ÓĞ±êÇ©µÄÖ¸Áî£¬>=0±íÊ¾ÓĞ±êÇ©µÄÖ¸Áî}
     if sourceent.attrib[i1].labelstatus <> -1 then
       inc(temp, max(sourceent.attrib[i1].parcount, 0) * 2);
   end;
@@ -3650,7 +3647,7 @@ var
   I: integer;
   tempadr: cardinal;
 begin
-  //ç¼–è¾‘äº‹ä»¶
+  //±à¼­ÊÂ¼ş
   //
   if GetInstructNeedGuide(atrb) then
   begin
@@ -3702,7 +3699,7 @@ begin
     3:
       begin
         Form16.ComboBox1.Clear;
-        Form16.ComboBox1.Items.Add('å½“å‰åœºæ™¯');
+        Form16.ComboBox1.Items.Add('µ±Ç°³¡¾°');
         for I := 0 to useR.Rtype[3].datanum - 1 do
         begin
           Form16.ComboBox1.Items.Add(CalRname(3,I));
@@ -4087,8 +4084,8 @@ begin
     26:
       begin
         Form27.ComboBox1.Clear;
-        Form27.ComboBox1.Items.Add('-2å½“å‰åœºæ™¯');
-        Form27.ComboBox1.Items.Add('-1æ— ');
+        Form27.ComboBox1.Items.Add('-2µ±Ç°³¡¾°');
+        Form27.ComboBox1.Items.Add('-1ÎŞ');
         for I := 0 to useR.Rtype[3].datanum - 1 do
           Form27.ComboBox1.Items.Add(CalRname(3,I));
         Form27.ComboBox1.ItemIndex := atrb.par[1] + 2;
@@ -4382,10 +4379,10 @@ begin
     40:
       begin
         Form21.ComboBox1.Clear;
-        Form21.ComboBox1.Items.Add(string('0-å‘ä¸Š'));
-        Form21.ComboBox1.Items.Add(string('1-å‘å³'));
-        Form21.ComboBox1.Items.Add(string('2-å‘å·¦'));
-        Form21.ComboBox1.Items.Add(string('3-å‘ä¸‹'));
+        Form21.ComboBox1.Items.Add(widestring('0-ÏòÉÏ'));
+        Form21.ComboBox1.Items.Add(widestring('1-ÏòÓÒ'));
+        Form21.ComboBox1.Items.Add(widestring('2-Ïò×ó'));
+        Form21.ComboBox1.Items.Add(widestring('3-ÏòÏÂ'));
         Form21.ComboBox1.ItemIndex := max(atrb.par[1],0);
         if Form21.ShowModal = mrOK then
         begin

@@ -1,6 +1,4 @@
-锘縰nit FileRelation;
-
-{$modeswitch autoderef}
+unit FileRelation;
 
 interface
 
@@ -25,7 +23,7 @@ type
     CheckBox9: TCheckBox;
     procedure Button2Click(Sender: TObject);
     procedure Button1Click(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure FormShow(Sender: TObject);
     procedure FormCreate(Sender: TObject);
   private
@@ -41,7 +39,7 @@ var
 
 implementation
 
-{$R *.lfm}
+{$R *.dfm}
 
 procedure RegisterFileType(prefix: string; exepfad: string; index: integer);
 var
@@ -78,7 +76,7 @@ begin
     reg.OpenKey(prefix + 'UPfile', True);
 
     try
-      reg.Writestring('', prefix + ' - ' + Appname + '鏂囦欢');
+      reg.Writestring('', prefix + ' - '+ Appname + '文件');
     finally
       reg.CloseKey;
     end;
@@ -119,7 +117,7 @@ begin
 
     reg.OpenKey(prefix + 'UPfile\shell\open', True);
     try
-      reg.Writestring('', '浣跨敤' + Appname + '鎵撳紑');
+      reg.Writestring('', '使用'+ Appname +'打开');
     finally
       reg.CloseKey;
     end;
@@ -138,7 +136,7 @@ begin
 
     reg.OpenKey('Software\Classes\' + prefix + 'UPfile', True);
     try
-      reg.Writestring('', prefix + ' - ' + Appname + '鏂囦欢');
+      reg.Writestring('', prefix + ' - '+ Appname + '文件');
     finally
       reg.CloseKey;
     end;
@@ -177,7 +175,7 @@ begin
 
     reg.OpenKey('Software\Classes\' + prefix + 'UPfile\shell\open', True);
     try
-      reg.Writestring('', '浣跨敤' + Appname + '鎵撳紑');
+      reg.Writestring('', '使用'+ Appname +'打开');
     finally
       reg.CloseKey;
     end;
@@ -213,9 +211,9 @@ begin
   if checkbox8.Checked then
     RegisterFileType('gif', paramstr(0), 5);
   if checkbox9.Checked then
-    RegisterFileType('zip', paramstr(0), 5);
+    RegisterFileType('imz', paramstr(0), 5);
   except
-    showmessage('鍏宠仈澶辫触锛學in7 鐢ㄦ埛璇峰皾璇曚互绠＄悊鍛樿韩浠借繍琛岋紒');
+    showmessage('设置失败，win7用户请以管理员身份运行!');
   end;
   finally
     self.Close;
@@ -228,7 +226,7 @@ begin
   self.Close;
 end;
 
-procedure TForm92.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm92.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   checkbox1.Checked := false;
   checkbox2.Checked := false;
@@ -260,7 +258,3 @@ begin
 end;
 
 end.
-
-
-
-

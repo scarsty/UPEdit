@@ -1,6 +1,4 @@
-﻿unit PNGimportModify;
-
-{$modeswitch autoderef}
+unit PNGimportModify;
 
 interface
 
@@ -45,7 +43,9 @@ var
   Form95active: Boolean = false;
 
 implementation
-{$R *.lfm}
+
+{$R *.dfm}
+
 procedure TForm95.Edit1Change(Sender: TObject);
 var
   temp: integer;
@@ -117,7 +117,3 @@ begin
 end;
 
 end.
-
-
-
-

@@ -1,7 +1,0 @@
-﻿object Form87: TForm87
-  Left = 0
-  Height = 400
-  Top = 0
-  Width = 600
-  Caption = 'Update'
-end

@@ -1,7 +1,0 @@
-﻿object Form6: TForm6
-  Left = 0
-  Height = 400
-  Top = 0
-  Width = 600
-  Caption = 'Reditform'
-end

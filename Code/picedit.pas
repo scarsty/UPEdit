@@ -1,12 +1,10 @@
-ï»¿unit picedit;
-
-{$modeswitch autoderef}
+unit picedit;
 
 interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, ExtCtrls, StdCtrls, Buttons, head, Spin, math,
+  Dialogs, ExtCtrls, StdCtrls, Buttons, head, PNGimage, JPEG, Spin, math,
   clipbrd, FileCtrl, GIFimg, ComCtrls;
 
 type
@@ -50,7 +48,7 @@ type
     Button11: TButton;
     Panel5: TPanel;
     ProgressBar1: TProgressBar;
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure Button1Click(Sender: TObject);
 
     procedure Readnowpictobmp;
@@ -112,7 +110,9 @@ function calPNG(Pdata: Pbyte): integer;
 
 
 implementation
-{$R *.lfm}
+
+{$R *.dfm}
+
 uses
   main;
 
@@ -209,10 +209,15 @@ end;
 
 
 procedure TForm4.Button2Click(Sender: TObject);
+var
+  MyFormat: Word;
+  AData: THandle;
+  APalette: HPALETTE;
 begin
   if picnum > 0 then
   begin
-    Clipboard.Assign(bufpic);
+    bufpic.SaveToClipBoardFormat(MyFormat, AData, APalette);
+    ClipBoard.SetAsHandle(MyFormat, AData);
   end;
 end;
 
@@ -222,7 +227,8 @@ begin
   begin
     if ClipBoard.HasFormat(CF_BITMAP) then
     begin
-      bufpic.Assign(Clipboard);
+      bufpic.LoadFromClipboardFormat(CF_BITMAP,
+        ClipBoard.GetAsHandle(CF_BITMAP), 0);
       CLIPTRANS := false;
       picdata[nowmainpicnum].xs := 0;
       picdata[nowmainpicnum].ys := 0;
@@ -314,7 +320,7 @@ var
 begin
   if picnum > 0 then
   begin
-    if SelectFolderDialog(self.Handle,'é€‰æ‹©ä¿å­˜æ–‡ä»¶å¤¹', dir, dir) then
+    if SelectFolderDialog(self.Handle,'Ñ¡Ôñ±£´æÎÄ¼ş¼Ğ', dir, dir) then
     begin
       if dir[length(dir)] <> '\' then
         dir := dir + '\';
@@ -376,14 +382,14 @@ begin
 
 end;
 
-procedure TForm4.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+procedure TForm4.FormClose(Sender: TObject; var Action: TCloseAction);
 begin
   picnum:= 0;
   setlength(picdata,picnum);
   CForm4 := true;
   bufpic.Free;
   smallbufpic.Free;
-  CloseAction := cafree;
+  Action := cafree;
 end;
 
 procedure TForm4.FormCreate(Sender: TObject);
@@ -554,13 +560,13 @@ begin
           for iy := 0 to tempbmp2.Height - 1 do
           begin
             Pdat := PNGrs.AlphaScanline[iy];
-            Move(tempbmp2.ScanLine[iy]^, PD[0], tempbmp2.Width * 3);
+            copymemory(@PD[0],tempbmp2.ScanLine[iy],tempbmp2.Width * 3);
             for ix := 0 to tempbmp2.Width - 1 do
 
               if ({tempbmp2.Canvas.Pixels[ix, iy]} PD[ix * 3] shl 16 + PD[ix * 3 + 1] shl 8 + PD[ix * 3 + 2] = tcol) then
               begin
-                if Pdat^[ix] <> 0 then
-                  Pdat^[ix] := 0;
+                if Pdat[ix]<>0 then
+                  Pdat[ix] := 0;
                 //tempbmp2.Canvas.Pixels[ix, iy] := bcol;
               end;
           end;
@@ -925,12 +931,12 @@ begin
     for iy := 0 to PNG.Height - 1 do
     begin
       Pdat := PNG.AlphaScanline[iy];
-      Move(temppicbmp.ScanLine[iy]^, PD[0], temppicbmp.Width * 3);
+      copymemory(@PD[0],temppicbmp.ScanLine[iy], temppicbmp.Width * 3);
       for ix := 0 to PNG.Width - 1 do
         if PD[ix * 3] shl 16 + PD[ix * 3 + 1] shl 8 + PD[ix * 3 + 2]= pictranscol then
-          Pdat^[ix] := 0
+          Pdat[ix] := 0
         else
-          Pdat^[ix] := 255;
+          Pdat[ix] := 255;
     end;
   end;
   rs := TMemoryStream.create;
@@ -970,13 +976,13 @@ var
 begin
   if picnum > 0 then
   begin
-     OpenDialog1.Filter := 'PNG,JPG,BMP,GIF|*.Png;*.jpg;*.{$IFDEF DELPHI}jpeg{$ENDIF};*.bmp;*.gif|All files (*.*)|*.*';
+     OpenDialog1.Filter := 'PNG,JPG,BMP,GIF|*.Png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*';
     if OpenDialog1.Execute then
     begin
       CLIPTRANS := false;
       if SameText(ExtractFileExt(OpenDialog1.filename), '.png') or SameText
         (ExtractFileExt(OpenDialog1.filename), '.jpg') or SameText
-        (ExtractFileExt(OpenDialog1.filename), '.{$IFDEF DELPHI}jpeg{$ENDIF}') then
+        (ExtractFileExt(OpenDialog1.filename), '.jpeg') then
       begin
         inc(picnum);
         setlength(picdata, picnum);
@@ -1016,7 +1022,7 @@ begin
         picgif.Canvas.Brush.Color := bufgif.BackgroundColor;
         if (bufgif.Images.Count <= 10) or
           ((bufgif.Images.Count > 10) and (MessageBox(Self.Handle,
-              'GIFåŒ…å«å›¾ç‰‡å¤§äº10å¼ ï¼Œå¯¼å…¥ä¼šèŠ±ä¸€æ®µå¾ˆé•¿æ—¶é—´ã€‚ç¡®å®è¦å¯¼å…¥å—ï¼Ÿ', 'æ’å…¥å›¾ç‰‡', MB_OKCANCEL) = 1)) then
+              'GIF°üº¬Í¼Æ¬´óÓÚ10ÕÅ£¬µ¼Èë»á»¨Ò»¶ÎºÜ³¤Ê±¼ä¡£È·ÊµÒªµ¼ÈëÂğ£¿', '²åÈëÍ¼Æ¬', MB_OKCANCEL) = 1)) then
         begin
           //Image3.Canvas.Pixels[0, 0] := clblue;
           progressbar1.Min := 0;
@@ -1085,13 +1091,13 @@ var
 begin
   if picnum > 0 then
   begin
-    OpenDialog1.Filter := 'PNG,JPG,BMP,GIF|*.Png;*.jpg;*.{$IFDEF DELPHI}jpeg{$ENDIF};*.bmp;*.gif|All files (*.*)|*.*';
+    OpenDialog1.Filter := 'PNG,JPG,BMP,GIF|*.Png;*.jpg;*.jpeg;*.bmp;*.gif|All files (*.*)|*.*';
     if OpenDialog1.Execute then
     begin
       CLIPTRANS := false;
       if SameText(ExtractFileExt(OpenDialog1.filename), '.png') or SameText
         (ExtractFileExt(OpenDialog1.filename), '.jpg') or SameText
-        (ExtractFileExt(OpenDialog1.filename), '.{$IFDEF DELPHI}jpeg{$ENDIF}') then
+        (ExtractFileExt(OpenDialog1.filename), '.jpeg') then
       begin
         inc(picnum);
         setlength(picdata, picnum);
@@ -1138,7 +1144,7 @@ begin
         picgif.Canvas.Brush.Color := bufgif.BackgroundColor;
         if (bufgif.Images.Count <= 10) or
           ((bufgif.Images.Count > 10) and (MessageBox(Self.Handle,
-              'GIFåŒ…å«å›¾ç‰‡å¤§äº10å¼ ï¼Œå¯¼å…¥ä¼šèŠ±ä¸€æ®µå¾ˆé•¿æ—¶é—´ã€‚ç¡®å®è¦å¯¼å…¥å—ï¼Ÿ', 'æ’å…¥å›¾ç‰‡', MB_OKCANCEL) = 1)) then
+              'GIF°üº¬Í¼Æ¬´óÓÚ10ÕÅ£¬µ¼Èë»á»¨Ò»¶ÎºÜ³¤Ê±¼ä¡£È·ÊµÒªµ¼ÈëÂğ£¿', '²åÈëÍ¼Æ¬', MB_OKCANCEL) = 1)) then
         begin
           progressbar1.Min := 0;
           progressbar1.Max := bufgif.Images.Count;
@@ -1199,13 +1205,3 @@ begin
 end;
 
 end.
-
-
-
-
-
-
-
-
-
-
