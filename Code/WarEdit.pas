@@ -1081,10 +1081,9 @@ begin
     RLEMode:
       begin
         poseditmap := tbitmap.Create;
+        poseditmap.PixelFormat := pf24bit;
         poseditmap.Width := 2304;
         poseditmap.Height := 1152;
-        poseditmap.PixelFormat := pf8bit;
-        poseditmap.Palette := Palle;
       end;
     IMZMode, PNGMode:
       begin
@@ -1092,7 +1091,6 @@ begin
         poseditmap.Width := 2304;
         poseditmap.Height := 1152;
         poseditmap.PixelFormat := pf32bit;
-        // poseditmap.Palette := palle;
       end;
   end;
 
@@ -1598,11 +1596,24 @@ procedure TForm10.displaywareditmap(waropMap: Pmap; waropbmp2: PNTbitmap);
 VAR
   ix, iy, I, i2, posx, posy: integer;
   pointx, pointy: integer;
+  ClearY, BytesPerLine: integer;
+  ClearLine: PByte;
 begin
   pointx := waropbmp2.Width DIV 2;
   pointy := waropbmp2.Height div 2 - 31 * 18;
-  waropbmp2.Canvas.Brush.color := clBlack;
-  waropbmp2.Canvas.FillRect(waropbmp2.Canvas.ClipRect);
+
+  { ScanLine clear + BeginUpdate to avoid Canvas/ScanLine desync }
+  waropbmp2.BeginUpdate(false);
+  if waropbmp2.PixelFormat = pf32bit then
+    BytesPerLine := waropbmp2.Width * 4
+  else
+    BytesPerLine := waropbmp2.Width * 3;
+  for ClearY := 0 to waropbmp2.Height - 1 do
+  begin
+    ClearLine := PByte(waropbmp2.ScanLine[ClearY]);
+    FillChar(ClearLine^, BytesPerLine, 0);
+  end;
+
   for I := 0 to min(waropMap.X, waropMap.Y) - 1 do
   begin
     for ix := I to waropMap.X - 1 do
@@ -1644,6 +1655,7 @@ begin
         end;
     end;
   end;
+  waropbmp2.EndUpdate(false);
 end;
 
 end.
