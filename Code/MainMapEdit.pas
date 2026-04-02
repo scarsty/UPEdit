@@ -1,4 +1,4 @@
-﻿unit MainMapEdit;
+unit MainMapEdit;
 
 {$modeswitch autoderef}
 
@@ -464,11 +464,11 @@ begin
     // Warlock := false;
     needupdate := true;
   end
-  else if EMode = IMZMode then
+  else if EMode = PNGZipMode then
   begin
     if not ImzFile.ReadImzFromFile(gamepath + MMAPIMZ) then
     begin
-      showmessage('读取 IMZ 文件失败');
+      showmessage('读取 ZIP 文件失败');
       MMapInitial := false;
       RadioGroup1.ItemIndex := Integer(MMapEditMode);
       exit;
@@ -481,11 +481,11 @@ begin
     // scenelock := false;
     needupdate := true;
   end
-  else if EMode = PNGMode then
+  else if EMode = PNGPathMode then
   begin
     if not ImzFile.ReadImzFromFolder(gamepath + MMAPPNGpath) then
     begin
-      showmessage('读取 IMZ 文件夹失败');
+      showmessage('读取 PNG 文件夹失败');
       MMapInitial := false;
       RadioGroup1.ItemIndex := Integer(MMapEditMode);
       exit;
@@ -571,7 +571,7 @@ begin
         end;
     end;
   end
-  else if (MMapEditMode = PNGMode) or (MMapEditMode = IMZMode) then
+  else if (MMapEditMode = PNGPathMode) or (MMapEditMode = PNGZipMode) then
   begin
     if CFormImz then
     begin
@@ -579,11 +579,11 @@ begin
       FormImz := TImzForm.Create(application);
       MdiChildHandle[13] := FormImz.Handle;
       FormImz.WindowState := wsnormal;
-      if MMapEditMode = IMZMode then
+      if MMapEditMode = PNGZipMode then
       begin
         FormImz.edit2.Text := gamepath + MMAPIMZ;
-        // FormImz.IMZeditMode := TIMZEditMode(0);
-        FormImz.SetEditMode(TIMZEditMode(0));
+        // ZIP 模式
+        FormImz.SetEditMode(TIMZEditMode(2));
       end
       else
       begin
@@ -598,11 +598,11 @@ begin
       for i := 0 to self.MDIChildCount - 1 do
         if Mainform.MDIChildren[i].Handle = MdiChildHandle[13] then
         begin
-          if MMapEditMode = IMZMode then
+          if MMapEditMode = PNGZipMode then
           begin
             TImzForm(Mainform.MDIChildren[i]).edit2.Text := gamepath + MMAPIMZ;
-            // TImzForm(Mainform.MDIChildren[I]).IMZeditMode := TIMZEditMode(0);
-            TImzForm(Mainform.MDIChildren[i]).SetEditMode(TIMZEditMode(0));
+            // ZIP 模式
+            TImzForm(Mainform.MDIChildren[i]).SetEditMode(TIMZEditMode(2));
           end
           else
           begin
@@ -765,7 +765,7 @@ begin
                         DrawMainRLE8ColorBitmap(@MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].data[0],
                           MMApgrp[MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2].size, @wartempbmp, posx, posy, true);
                     end;
-                  IMZMode, PNGMode:
+                  PNGZipMode, PNGPathMode:
                     begin
                       ImzFile.SceneQuickDraw(@wartempbmp, MMApcopymap.maplayer[i].pic[MMApcopymap.Y - iy - 1][MMApcopymap.X - ix - 1] div 2, posx, posy);
                     end;
@@ -1424,7 +1424,7 @@ begin
                 (MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
                 RenderPreviewRLE(Image2, MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               ImzFile.DrawImztocanvas(Image2.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
@@ -1442,7 +1442,7 @@ begin
                 (MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
                 RenderPreviewRLE(Image3, MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               ImzFile.DrawImztocanvas(Image3.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
@@ -1459,7 +1459,7 @@ begin
                 (MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
                 RenderPreviewRLE(Image4, MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               ImzFile.DrawImztocanvas(Image4.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2, 0, 0, 0);
             end;
@@ -1480,7 +1480,7 @@ begin
                 RenderPreviewRLE(Image5,
                   MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               ImzFile.DrawImztocanvas(Image5.Picture.Bitmap.Canvas, @ImzFile.ImzFile, MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]]
                 [MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2, 0, 0, 0);
@@ -2232,7 +2232,7 @@ begin
     end;
   end;
 
-  if (MMapEditMode = IMZMode) or (MMapEditMode = PNGMode) then
+  if (MMapEditMode = PNGZipMode) or (MMapEditMode = PNGPathMode) then
   begin
     Mmapopbmp2.Canvas.Lock;
     for i := 0 to MMapPNGBuf.height - 1 do

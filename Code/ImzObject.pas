@@ -101,7 +101,6 @@ begin
       setlength(imzFile.imzPNG[I].PNG, imzFile.imzPNG[I].frame);
       for I2 := 0 to imzFile.imzPNG[I].frame - 1 do
       begin
-
         try
           try
             tempPNG := TPNGobject.Create;

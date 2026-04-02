@@ -449,13 +449,14 @@ begin
             end;
         end;
       end
-      else if SameText(ExtractFileExt(FileName), '.imz') then
+      else if SameText(ExtractFileExt(FileName), '.zip') then
       begin
         if CFormImz then
         begin
           CFormImz := false;
           FormImz := TImzForm.Create(application);
           FormImz.Edit2.Text := FileName;
+          FormImz.SetEditMode(zZIPmode);
           FormImz.Button5.Click;
           MdiChildHandle[13] := FormImz.Handle;
         end
@@ -467,7 +468,7 @@ begin
               self.MDIChildren[i].Show;
               FormImz := TImzForm(self.MDIChildren[i]);
               FormImz.Edit2.Text := FileName;
-              FormImz.SetEditMode(zImzMode);
+              FormImz.SetEditMode(zZIPmode);
               FormImz.Button5.Click;
               Break;
             end;
@@ -634,7 +635,7 @@ begin
 
     warmapgrp := ini.ReadString('file', 'WarMAPGRP', '');
     warmapidx := ini.ReadString('file', 'WarMAPIDX', '');
-    WMAPIMZ := ini.ReadString('file', 'WMAPIMZ', '');
+    WMAPIMZ := ini.ReadString('file', 'WMAPZIP', ini.ReadString('file', 'WMAPIMZ', ''));
     WMAPPNGPATH := ini.ReadString('file', 'WMAPPNGPATH', '');
     if length(WMAPPNGPATH) > 0 then
       if WMAPPNGPATH[length(WMAPPNGPATH)] <> '\' then
@@ -644,7 +645,7 @@ begin
 
     SMAPGRP := ini.ReadString('file', 'SMAPGRP', '');
     SMAPIDX := ini.ReadString('file', 'SMAPIDX', '');
-    SMAPIMZ := ini.ReadString('file', 'SMAPIMZ', '');
+    SMAPIMZ := ini.ReadString('file', 'SMAPZIP', ini.ReadString('file', 'SMAPIMZ', ''));
     SMAPPNGPATH := ini.ReadString('file', 'SMAPPNGPATH', '');
     if length(SMAPPNGPATH) > 0 then
       if SMAPPNGPATH[length(SMAPPNGPATH)] <> '\' then
@@ -652,7 +653,7 @@ begin
 
     MMAPfileGRP := ini.ReadString('file', 'MMAPGRP', '');
     MMAPfileIDX := ini.ReadString('file', 'MMAPIDX', '');
-    MMAPIMZ := ini.ReadString('file', 'MMAPIMZ', '');
+    MMAPIMZ := ini.ReadString('file', 'MMAPZIP', ini.ReadString('file', 'MMAPIMZ', ''));
     MMAPPNGPATH := ini.ReadString('file', 'MMAPPNGPATH', '');
     if length(MMAPPNGPATH) > 0 then
       if MMAPPNGPATH[length(MMAPPNGPATH)] <> '\' then
@@ -1778,13 +1779,14 @@ begin
                   end;
               end;
             end
-            else if SameText(ExtractFileExt(FileName), '.imz') then
+            else if SameText(ExtractFileExt(FileName), '.zip') then
             begin
               if CFormImz then
               begin
                 CFormImz := false;
                 FormImz := TImzForm.Create(application);
                 FormImz.Edit2.Text := FileName;
+                FormImz.SetEditMode(zZIPmode);
                 FormImz.Button5.Click;
                 MdiChildHandle[13] := FormImz.Handle;
               end
@@ -1796,7 +1798,7 @@ begin
                     self.MDIChildren[i].Show;
                     FormImz := TImzForm(self.MDIChildren[i]);
                     FormImz.Edit2.Text := FileName;
-                    FormImz.SetEditMode(zImzMode);
+                    FormImz.SetEditMode(zZIPmode);
                     FormImz.Button5.Click;
                     Break;
                   end;

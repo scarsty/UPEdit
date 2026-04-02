@@ -378,11 +378,11 @@ begin
     //Warlock := false;
     needupdate := true;
   end
-  else if EMode = IMZMode then
+  else if EMode = PNGZipMode then
   begin
     if not imzFile.ReadImzFromFile(gamepath + WMAPIMZ) then
     begin
-      showmessage('读取IDX或GRP文件错误！');
+      showmessage('读取 ZIP 文件错误！');
       WarMapInitial := false;
       RadioGroup1.ItemIndex := integer(WarEditMode);
       exit;
@@ -396,7 +396,7 @@ begin
     //scenelock := false;
     needupdate := true;
   end
-  else if EMode = PNGMode then
+  else if EMode = PNGPathMode then
   begin
     if not imzFile.ReadImzFromFolder(gamepath + WMAPPNGpath) then
     begin
@@ -483,7 +483,7 @@ begin
       end;
   end;
   end
-  else if (WarEditMode = PNGMode) or (WarEditMode = IMZMode) then
+  else if (WarEditMode = PNGPathMode) or (WarEditMode = PNGZipMode) then
   begin
   if CFormImz then
   begin
@@ -491,11 +491,11 @@ begin
     FormImz := TImzForm.Create(application);
     MdiChildHandle[13] := FormImz.Handle;
     FormImz.WindowState := wsnormal;
-    if WarEditMode = IMZMode then
+    if WarEditMode = PNGZipMode then
     begin
       FormImz.Edit2.Text := gamepath + WmapIMZ;
-      //FormImz.IMZeditMode := TIMZEditMode(0);
-      FormIMZ.SetEditMode(TIMZEditMode(0));
+      // ZIP 模式
+      FormIMZ.SetEditMode(TIMZEditMode(2));
     end
     else
     begin
@@ -510,11 +510,11 @@ begin
     for I := 0 to self.MDIChildCount - 1 do
       if Mainform.MDIChildren[I].Handle = MdiChildHandle[13] then
       begin
-        if WarEditMode = IMZMode then
+        if WarEditMode = PNGZipMode then
         begin
           TImzForm(Mainform.MDIChildren[I]).Edit2.Text := gamepath + WmapIMZ;
-          //TImzForm(Mainform.MDIChildren[I]).IMZeditMode := TIMZEditMode(0);
-          TImzForm(Mainform.MDIChildren[I]).SetEditMode(TIMZEditMode(0));
+          // ZIP 模式
+          TImzForm(Mainform.MDIChildren[I]).SetEditMode(TIMZEditMode(2));
         end
         else
         begin
@@ -696,7 +696,7 @@ begin
                        then
                          DrawWarRLE8ColorBitmap(@Wargrp[Warcopymap.maplayer[I].pic[Warcopymap.y - iy - 1][Warcopymap.x - ix - 1] div 2].data[0], Wargrp[Warcopymap.maplayer[I].pic[Warcopymap.y - iy - 1][Warcopymap.x - ix - 1] div 2].size, @Wartempbmp, posx, posy, true);
                      end;
-                   IMZMode, PNGMode:
+                   PNGZipMode, PNGPathMode:
                      begin
                        //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
                        ImzFile.SceneQuickDraw(@Wartempbmp, Warcopymap.maplayer[I].pic[Warcopymap.y - iy - 1][Warcopymap.x - ix - 1] div 2, posx, posy);
@@ -768,7 +768,7 @@ begin
               RLEMode:
                 if (PictureIndex < wargrpnum) and (wargrp[PictureIndex].size >= 8) then
                   DrawWarRLE8ColorBitmap(@wargrp[PictureIndex].data[0], wargrp[PictureIndex].size, @ExportBitmap, PosX, PosY, true);
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, PosY);
             end;
         end;
@@ -781,7 +781,7 @@ begin
               RLEMode:
                 if (PictureIndex < wargrpnum) and (wargrp[PictureIndex].size >= 8) then
                   DrawWarRLE8ColorBitmap(@wargrp[PictureIndex].data[0], wargrp[PictureIndex].size, @ExportBitmap, PosX, PosY, true);
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, PosY);
             end;
         end;
@@ -1049,7 +1049,7 @@ begin
             FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
-        IMZMode, PNGMode:
+        PNGZipMode, PNGPathMode:
           begin
             FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
@@ -1073,7 +1073,7 @@ begin
             FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
-        IMZMode, PNGMode:
+        PNGZipMode, PNGPathMode:
           begin
             FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
@@ -1097,7 +1097,7 @@ begin
             FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
-        IMZMode, PNGMode:
+        PNGZipMode, PNGPathMode:
           begin
             FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
@@ -1232,7 +1232,7 @@ begin
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].size >= 8) then
                 RenderWarPreviewRLE(Image2, warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2, 0, 0, 0);
             end;
@@ -1252,7 +1252,7 @@ begin
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].size >= 8) then
                 RenderWarPreviewRLE(Image3, warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image3.Picture.Bitmap.Canvas, @imzFIle.imzFile, warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2, 0, 0, 0);
             end;
@@ -1285,7 +1285,7 @@ begin
             FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, warbufbmp, warbufbmp.Canvas.ClipRect);
           end;
-        IMZMode, PNGMode:
+        PNGZipMode, PNGPathMode:
           begin
             FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
             FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, warbufbmppng, warbufbmppng.Canvas.ClipRect);
@@ -1305,7 +1305,7 @@ begin
     begin
       FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
     end
-    else if (WarEditMode = IMZMode) or (WarEditMode = PNGMode) then
+    else if (WarEditMode = PNGZipMode) or (WarEditMode = PNGPathMode) then
     begin
       FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
     end;
@@ -1376,7 +1376,7 @@ begin
               if (nowwargrpnum < wargrpnum) and (wargrp[nowwargrpnum].size >= 8) then
                 McoldrawRLE8(@wargrp[nowwargrpnum].data[0],wargrp[nowwargrpnum].size,@warbufbmp, posx,posy, true);
             end;
-          PNGMode, IMZMode:
+          PNGPathMode, PNGZipMode:
             begin
               Imzfile.DrawImztocanvasEx(warbufbmpPNG.Canvas, @imzFIle.imzFile, nowwargrpnum, 0, posx, posy);
             end;
@@ -1401,7 +1401,7 @@ begin
                      and (wargrp[warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].size >= 8) then
                        McoldrawRLE8(@wargrp[warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].data[0],wargrp[warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].size,@warbufbmp, posx,posy, true);
                    end;
-                 PNGMode, IMZMode:
+                 PNGPathMode, PNGZipMode:
                    begin
                      ImzFile.SceneQuickDrawBuf(@warPNGbuf, warcopymap.maplayer[warlayer].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2, posx, posy);
                    end;
@@ -1434,7 +1434,7 @@ begin
                      and (wargrp[warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].size >= 8) then
                        McoldrawRLE8(@wargrp[warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].data[0],wargrp[warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2].size,@warbufbmp, posx,posy, true);
                    end;
-                 PNGMode, IMZMode:
+                 PNGPathMode, PNGZipMode:
                    begin
                      ImzFile.SceneQuickDrawBuf(@warPNGbuf, warcopymap.maplayer[I].pic[warcopymap.y - iy - 1][warcopymap.x - ix - 1] div 2, posx, posy);
                    end;
@@ -1579,7 +1579,7 @@ begin
                   if (waropmap.maplayer[I2].pic[I][ix] div 2 < wargrpnum) and (waropmap.maplayer[I2].pic[I][ix] div 2 >= 0) and (wargrp[waropmap.maplayer[I2].pic[I][ix] div 2].size >= 8) then
                     McoldrawRLE8(@wargrp[waropmap.maplayer[I2].pic[I][ix] div 2].data[0],wargrp[waropmap.maplayer[I2].pic[I][ix] div 2].size,waropbmp2, posx, posy, true);
                 end;
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 begin
                   ImzFile.SceneQuickDrawBuf(@warPNGbuf, waropmap.maplayer[I2].pic[I][ix] div 2, posx, posy);
                 end;
@@ -1607,7 +1607,7 @@ begin
                   if (waropmap.maplayer[I2].pic[Iy][i] div 2 < wargrpnum) and (waropmap.maplayer[I2].pic[Iy][i] div 2 >= 0) and (wargrp[waropmap.maplayer[I2].pic[Iy][i] div 2].size >= 8) then
                     McoldrawRLE8(@wargrp[waropmap.maplayer[I2].pic[Iy][i] div 2].data[0],wargrp[waropmap.maplayer[I2].pic[Iy][i] div 2].size,waropbmp2, posx, posy, true);
                 end;
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 begin
                   ImzFile.SceneQuickDrawBuf(@warPNGbuf, waropmap.maplayer[I2].pic[Iy][i] div 2, posx, posy);
                 end;

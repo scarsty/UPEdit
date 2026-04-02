@@ -1,4 +1,4 @@
-﻿unit WarEdit;
+unit WarEdit;
 
 {$modeswitch autoderef}
 
@@ -1061,14 +1061,14 @@ begin
         begin
           readWareditgrp;
         end;
-      IMZMode:
+      PNGZipMode:
         begin
           if ImzFile.ReadImzFromFile(gamepath + WMAPIMZ) then
           begin
             ImzFile.ReadAllPNG;
           end;
         end;
-      PNGMode:
+      PNGPathMode:
         begin
           if ImzFile.ReadImzFromFolder(gamepath + WMAPPNGpath) then
             ImzFile.ReadAllPNG;
@@ -1085,7 +1085,7 @@ begin
         poseditmap.Width := 2304;
         poseditmap.Height := 1152;
       end;
-    IMZMode, PNGMode:
+    PNGZipMode, PNGPathMode:
       begin
         poseditmap := tbitmap.Create;
         poseditmap.Width := 2304;
@@ -1628,7 +1628,7 @@ begin
               begin
                 McoldrawRLE8(@wareditgrp[waropMap.maplayer[i2].pic[I][ix] div 2].data[0], wareditgrp[waropMap.maplayer[i2].pic[I][ix] div 2].size, waropbmp2, posx, posy, true);
               end;
-            IMZMode, PNGMode:
+            PNGZipMode, PNGPathMode:
               begin
                 ImzFile.SceneQuickDraw(waropbmp2, waropMap.maplayer[i2].pic[I][ix] div 2, posx, posy);
               end;
@@ -1647,7 +1647,7 @@ begin
               begin
                 McoldrawRLE8(@wareditgrp[waropMap.maplayer[i2].pic[iy][I] div 2].data[0], wareditgrp[waropMap.maplayer[i2].pic[iy][I] div 2].size, waropbmp2, posx, posy, true);
               end;
-            IMZMode, PNGMode:
+            PNGZipMode, PNGPathMode:
               begin
                 ImzFile.SceneQuickDraw(waropbmp2, waropMap.maplayer[i2].pic[iy][I] div 2, posx, posy);
               end;

@@ -1,4 +1,4 @@
-﻿unit head;
+unit head;
 
 {$modeswitch autoderef}
 
@@ -359,7 +359,7 @@ type
 
   PScenePNGbuf = ^TScenePNGbuf;
 
-  TMapEditMode = (RLEMode, IMZMode, PNGMode);
+  TMapEditMode = (RLEMode, PNGZipMode, PNGPathMode);
 
   TPNGAlpha = record
     width: integer;

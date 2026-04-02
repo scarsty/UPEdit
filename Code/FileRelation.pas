@@ -213,7 +213,7 @@ begin
   if checkbox8.Checked then
     RegisterFileType('gif', paramstr(0), 5);
   if checkbox9.Checked then
-    RegisterFileType('imz', paramstr(0), 5);
+    RegisterFileType('zip', paramstr(0), 5);
   except
     showmessage('关联失败，Win7 用户请尝试以管理员身份运行！');
   end;

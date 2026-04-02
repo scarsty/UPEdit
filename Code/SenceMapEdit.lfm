@@ -454,8 +454,8 @@
         object Image1: TImage
           Left = 0
           Top = 0
-          Width = 2500
-          Height = 1400
+          Width = 2615
+          Height = 1465
           OnDragDrop = Image1DragDrop
           OnDragOver = Image1DragOver
           OnMouseDown = Image1MouseDown

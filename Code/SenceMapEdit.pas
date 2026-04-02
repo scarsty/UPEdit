@@ -535,11 +535,11 @@ begin
     FormImz := TImzForm.Create(application);
     MdiChildHandle[13] := FormImz.Handle;
     FormImz.WindowState := wsnormal;
-    if SceneEditMode = IMZMode then
+    if SceneEditMode = PNGZipMode then
     begin
       FormImz.Edit2.Text := gamepath + SmapIMZ;
-      //FormImz.IMZeditMode := TIMZEditMode(0);
-      FormIMZ.SetEditMode(TIMZEditMode(0));
+      // ZIP 模式
+      FormIMZ.SetEditMode(TIMZEditMode(2));
     end
     else
     begin
@@ -554,11 +554,11 @@ begin
     for I := 0 to self.MDIChildCount - 1 do
       if Mainform.MDIChildren[I].Handle = MdiChildHandle[13] then
       begin
-        if SceneEditMode = IMZMode then
+        if SceneEditMode = PNGZipMode then
         begin
           TImzForm(Mainform.MDIChildren[I]).Edit2.Text := gamepath + SmapIMZ;
-          //TImzForm(Mainform.MDIChildren[I]).IMZeditMode := TIMZEditMode(0);
-          TImzForm(Mainform.MDIChildren[I]).SetEditMode(TIMZEditMode(0));
+          // ZIP 模式
+          TImzForm(Mainform.MDIChildren[I]).SetEditMode(TIMZEditMode(2));
         end
         else
         begin
@@ -703,7 +703,7 @@ begin
     needupdate := true;
 
   end
-  else if EMODE = IMZMode then
+  else if EMODE = PNGZipMode then
   begin
 
     {sceneopbmp.ReleasePalette;
@@ -716,7 +716,7 @@ begin
 
     if not imzFile.ReadImzFromFile(@imzFIle.imzFile, gamepath + SMAPIMZ) then
     begin
-      showmessage('读取IDX或GRP文件错误！');
+      showmessage('读取 ZIP 文件错误！');
       SceneMapInitial := false;
       RadioGroup1.ItemIndex := integer(SceneEditMode);
       exit;
@@ -729,7 +729,7 @@ begin
     scenelock := false;
     needupdate := true;
   end
-  else if EMode = PNGMode then
+  else if EMode = PNGPathMode then
   begin
    { sceneopbmp.PixelFormat := pf32bit;
     scenebufbmp.PixelFormat := pf32bit;
@@ -1486,7 +1486,7 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2].size >= 8) then
                 RenderScenePreviewRLE(Image2, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
@@ -1506,7 +1506,7 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2].size >= 8) then
                 RenderScenePreviewRLE(Image3, scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image3.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[1].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
@@ -1528,7 +1528,7 @@ begin
               and (scenegrp[scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2].size >= 8) then
                 RenderScenePreviewRLE(Image4, scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image4.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[2].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
@@ -1555,7 +1555,7 @@ begin
                 RenderScenePreviewRLE(Image5,
                   Dfile.mapevent[combobox2.ItemIndex].sceneevent[scenemapfile.map[combobox2.ItemIndex].maplayer[3].pic[scenetempy][scenetempx]].beginpic1 div 2);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvas(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, scenemapfile.map[combobox2.ItemIndex].maplayer[0].pic[scenetempy][scenetempx] div 2, 0, 0, 0);
             end;
@@ -1737,7 +1737,7 @@ begin
               if (nowscenegrpnum >= 0) and (nowscenegrpnum < scenegrpnum) and (scenegrp[nowscenegrpnum].size >= 8) then
                 McoldrawRLE8(@scenegrp[nowscenegrpnum].data[0],scenegrp[nowscenegrpnum].size,@scenebufbmp, posx,posy, true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvasEx(scenebufbmpPNG.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx, posy);
               //ImzFile.SceneQuickDraw(@scenebufbmp, nowscenegrpnum, posx, posy);
@@ -1766,7 +1766,7 @@ begin
                      then
                        McoldrawRLE8(@scenegrp[scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenebufbmp, posx,posy, true);
                    end;
-                 IMZMode, PNGMode:
+                 PNGZipMode, PNGPathMode:
                    begin
                     //imzFile.DrawImztocanvasEx(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
                     //ImzFile.SceneQuickDraw(@scenebufbmpPNG, scenecopymap.maplayer[scenelayer].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
@@ -1854,7 +1854,7 @@ begin
                        then
                          McoldrawRLE8(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0],scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size,@scenebufbmp, posx,posy, true);
                      end;
-                   IMZMode, PNGMode:
+                   PNGZipMode, PNGPathMode:
                      begin
                       //imzFile.DrawImztocanvasEx(image2.Picture.Bitmap.Canvas, @imzFIle.imzFile, nowscenegrpnum, 0, posx,posy);
                       ImzFile.SceneQuickDraw(@scenebufbmpPNG, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
@@ -1967,7 +1967,7 @@ begin
                 image5.Picture.Bitmap.Canvas.CopyRect(image5.Picture.Bitmap.Canvas.ClipRect,scenesmallbmp.Canvas,image5.Picture.Bitmap.Canvas.ClipRect);
               end;
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               //ImzFile.SceneQuickDraw(@scenebufbmp, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
@@ -2176,7 +2176,7 @@ begin
               RLEMode:
                 if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
                   DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, PosY, true);
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, PosY);
             end;
         end;
@@ -2190,7 +2190,7 @@ begin
               RLEMode:
                 if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
                   DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
             end;
         end;
@@ -2204,7 +2204,7 @@ begin
               RLEMode:
                 if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
                   DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
-              IMZMode, PNGMode:
+              PNGZipMode, PNGPathMode:
                 ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
             end;
         end;
@@ -2221,7 +2221,7 @@ begin
                 RLEMode:
                   if (PictureIndex < scenegrpnum) and (scenegrp[PictureIndex].size >= 8) then
                     DrawSceneRLE8ColorBitmap(@scenegrp[PictureIndex].data[0], scenegrp[PictureIndex].size, @ExportBitmap, PosX, DrawY, true);
-                IMZMode, PNGMode:
+                PNGZipMode, PNGPathMode:
                   ImzFile.SceneQuickDraw(@ExportBitmap, PictureIndex, PosX, DrawY);
               end;
           end;
@@ -2504,7 +2504,7 @@ begin
                        then
                          DrawSceneRLE8ColorBitmap(@scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].data[0], scenegrp[scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2].size, @scenetempbmp, posx, posy, true);
                      end;
-                   IMZMode, PNGMode:
+                   PNGZipMode, PNGPathMode:
                      begin
                        //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
                        ImzFile.SceneQuickDraw(@scenetempbmp, scenecopymap.maplayer[I].pic[scenecopymap.y - iy - 1][scenecopymap.x - ix - 1] div 2, posx, posy);
@@ -2955,7 +2955,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[0].pic[I][ix] div 2].data[0],scenegrp[sceneopmap.maplayer[0].pic[I][ix] div 2].size,sceneopbmp2, posx, posy, true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvas(sceneopbmp2.Canvas, @imzFIle.imzFile, sceneopmap.maplayer[0].pic[I][ix] div 2, posx, posy, 0);
               //ImzFile.SceneQuickDraw(sceneopbmp2, sceneopmap.maplayer[0].pic[I][ix] div 2, posx, posy);
@@ -2975,7 +2975,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[1].pic[I][ix] div 2].data[0],scenegrp[sceneopmap.maplayer[1].pic[I][ix] div 2].size, sceneopbmp2, posx, posy - sceneopmap.maplayer[4].pic[I][ix], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[1].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
@@ -2994,7 +2994,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[2].pic[I][ix] div 2].data[0],scenegrp[sceneopmap.maplayer[2].pic[I][ix] div 2].size,sceneopbmp2, posx, posy - sceneopmap.maplayer[5].pic[I][ix], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[2].pic[I][ix] div 2, posx, posy - sceneopmap.maplayer[5].pic[I][ix]);
@@ -3015,7 +3015,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[I][ix]].beginpic1 div 2].data[0],scenegrp[Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[I][ix]].beginpic1 div 2].size,sceneopbmp2, posx, posy - sceneopmap.maplayer[4].pic[I][ix], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[I][ix]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[I][ix]);
@@ -3048,7 +3048,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[0].pic[Iy][i] div 2].data[0],scenegrp[sceneopmap.maplayer[0].pic[Iy][i] div 2].size,sceneopbmp2, posx, posy, true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[0].pic[Iy][i] div 2, posx, posy);
@@ -3067,7 +3067,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[1].pic[Iy][i] div 2].data[0],scenegrp[sceneopmap.maplayer[1].pic[Iy][i] div 2].size,sceneopbmp2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[1].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
@@ -3086,7 +3086,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[sceneopmap.maplayer[2].pic[Iy][i] div 2].data[0],scenegrp[sceneopmap.maplayer[2].pic[Iy][i] div 2].size,sceneopbmp2, posx, posy - sceneopmap.maplayer[5].pic[Iy][i], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, sceneopmap.maplayer[2].pic[Iy][i] div 2, posx, posy - sceneopmap.maplayer[5].pic[Iy][i]);
@@ -3107,7 +3107,7 @@ begin
               then
                 McoldrawRLE8(@scenegrp[Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[Iy][i]].beginpic1 div 2].data[0],scenegrp[Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[Iy][i]].beginpic1 div 2].size,sceneopbmp2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i], true);
             end;
-          IMZMode, PNGMode:
+          PNGZipMode, PNGPathMode:
             begin
               //imzFile.DrawImztocanvasEx(image5.Picture.Bitmap.Canvas, @imzFIle.imzFile, tempint, 0, 0, 0);
               ImzFile.SceneQuickDrawBuf(@ScenePNGbuf, Dfile.mapevent[combobox2.itemindex].sceneevent[sceneopmap.maplayer[3].pic[Iy][i]].beginpic1 div 2, posx, posy - sceneopmap.maplayer[4].pic[Iy][i]);
