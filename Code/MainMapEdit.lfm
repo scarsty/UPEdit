@@ -267,6 +267,7 @@
         PageSize = 0
         TabOrder = 0
         OnChange = ScrollBar2Change
+        OnScroll = ScrollBar2Scroll
       end
       object StatusBar1: TStatusBar
         Left = 0
@@ -285,6 +286,7 @@
         PageSize = 0
         TabOrder = 2
         OnChange = ScrollBar1Change
+        OnScroll = ScrollBar1Scroll
       end
     end
   end

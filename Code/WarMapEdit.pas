@@ -1,4 +1,4 @@
-ï»¿unit WarMapEdit;
+unit WarMapEdit;
 
 {$modeswitch autoderef}
 
@@ -98,6 +98,8 @@ var
   warstill: integer;
   warstillx,warstilly: integer;
   mousex,mousey: integer;
+  warViewportX, warViewportY: integer;
+  warBufferWidth, warBufferHeight: integer;
   needupdate: boolean;
 
   warPNGBuf: TScenePNGBuf;
@@ -109,6 +111,7 @@ function readwardef(idx,grp:string; opmapstruct:Pmapstruct): integer;
 function readWarmapgrp: integer;
 procedure displaywarmap(waropMap: Pmap; waropbmp2:PNTbitmap; EMode: TMapEditMode; ImzFile: PImzFile);
 procedure McoldrawRLE8(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
+procedure DrawMainRLE8ColorBitmap(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
 
 implementation
 
@@ -118,6 +121,25 @@ uses
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
+
+{ ¿ìËÙÎ»Í¼¸´ÖÆº¯Êı - ¸ÄÓÃCanvas.DrawÒÔÈ·±£LCL¼æÈİĞÔ }
+procedure FastBitmapCopy(DestBMP: TBitmap; DestRect: TRect; SourceBMP: TBitmap; SourceRect: TRect);
+var
+  DestWidth, DestHeight, SourceWidth, SourceHeight: Integer;
+  DrawX, DrawY: Integer;
+begin
+  DestWidth := DestRect.Right - DestRect.Left;
+  DestHeight := DestRect.Bottom - DestRect.Top;
+  SourceWidth := SourceRect.Right - SourceRect.Left;
+  SourceHeight := SourceRect.Bottom - SourceRect.Top;
+
+  if (DestWidth <> SourceWidth) or (DestHeight <> SourceHeight) then
+    Exit;
+
+  DrawX := DestRect.Left - SourceRect.Left;
+  DrawY := DestRect.Top - SourceRect.Top;
+  DestBMP.Canvas.Draw(DrawX, DrawY, SourceBMP);
+end;
 
 function ClampTileScale(Value: integer): integer;
 begin
@@ -152,6 +174,26 @@ end;
 function TileOffsetY: integer;
 begin
   Result := 110 * TileScale;
+end;
+
+procedure RenderWarPreviewRLE(TargetImage: TImage; GroupIndex: integer);
+var
+  TargetBitmap: TBitmap;
+  PicWidth, PicHeight: Integer;
+  DrawX, DrawY: Integer;
+begin
+  TargetImage.Picture.Bitmap.PixelFormat := pf24bit;
+  TargetImage.Picture.Bitmap.Width := TargetImage.Width;
+  TargetImage.Picture.Bitmap.Height := TargetImage.Height;
+  TargetImage.Picture.Bitmap.Canvas.Brush.Color := clWhite;
+  TargetImage.Picture.Bitmap.Canvas.FillRect(TargetImage.Picture.Bitmap.Canvas.ClipRect);
+  TargetBitmap := TargetImage.Picture.Bitmap;
+  PicWidth := PSmallInt(@wargrp[GroupIndex].data[0])^;
+  PicHeight := PSmallInt(@wargrp[GroupIndex].data[2])^;
+  DrawX := Max(0, (TargetImage.Width - PicWidth) div 2);
+  DrawY := Max(0, (TargetImage.Height - PicHeight) div 2);
+  DrawMainRLE8ColorBitmap(@wargrp[GroupIndex].data[0], wargrp[GroupIndex].size, @TargetBitmap, DrawX, DrawY, false);
+  TargetImage.Repaint;
 end;
 
 procedure SetupWarExportBitmap(Target: TBitmap; Width, Height: integer; TransparentBackground: boolean);
@@ -279,6 +321,11 @@ begin
   end;
 end;
 
+procedure DrawMainRLE8ColorBitmap(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
+begin
+  DrawWarRLE8ColorBitmap(Ppic, len, PBMP, dx, dy, canmove);
+end;
+
 procedure TForm11.SetEditMode(EMode: TMapEditMode);
 begin
   //
@@ -287,7 +334,7 @@ begin
   begin
     if not (readWarmapgrp = 1) then
     begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
       WarMapInitial := false;
       RadioGroup1.ItemIndex := integer(WarEditMode);
       exit;
@@ -304,7 +351,7 @@ begin
   begin
     if not imzFile.ReadImzFromFile(gamepath + WMAPIMZ) then
     begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
       WarMapInitial := false;
       RadioGroup1.ItemIndex := integer(WarEditMode);
       exit;
@@ -313,6 +360,7 @@ begin
     WarPNGBuf.width := image1.width;
     WarPNGBuf.height := image1.height;
     setlength(warPNGBuf.data, warPNGBuf.height, warPNGBuf.width * 4);
+
     WarMapInitial := true;
     //scenelock := false;
     needupdate := true;
@@ -321,7 +369,7 @@ begin
   begin
     if not imzFile.ReadImzFromFolder(gamepath + WMAPPNGpath) then
     begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
       warMapInitial := false;
       RadioGroup1.ItemIndex := integer(warEditMode);
       exit;
@@ -330,6 +378,7 @@ begin
     warPNGBuf.width := image1.width;
     warPNGBuf.height := image1.height;
     setlength(warPNGBuf.data, warPNGBuf.height, warPNGBuf.width * 4);
+
     warMapInitial := true;
     //scenelock := false;
     needupdate := true;
@@ -470,9 +519,9 @@ begin
         warmapfile.map[warmapfile.num - 1].maplayer[I].pic[iy][ix] := warmapfile.map[combobox1.ItemIndex].maplayer[I].pic[iy][ix]
   end;
     combobox1.Items.Add(inttostr(warmapfile.num - 1));
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   end;
 end;
 
@@ -490,9 +539,9 @@ begin
   dec(warmapfile.num);
   combobox1.Items.Delete(temp - 1);
   setlength(warmapfile.map, warmapfile.num);
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   end;
 end;
 
@@ -515,9 +564,9 @@ try
   end;
   fileclose(idx);
   fileclose(grp);
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
 except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
 end;
 end;
 
@@ -567,7 +616,7 @@ var
 begin
   if warlayer <> 2 then
   begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   end
   else
   begin
@@ -651,7 +700,7 @@ begin
     exit;
   if not (ExportGroundCheckBox.Checked or ExportBuildingCheckBox.Checked) then
   begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
     exit;
   end;
 
@@ -714,7 +763,7 @@ begin
       ReplaceBitmapColor(ExportBitmap, usualtrans, clBlack);
       ExportBitmap.SaveToFile(FileName);
     end;
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   finally
     ExportBitmap.Free;
   end;
@@ -735,38 +784,14 @@ begin
 end;
 
 procedure TForm11.ComboBox1Select(Sender: TObject);
-begin
-  if not WarmapInitial then
-    exit;
-  if combobox1.ItemIndex >= 0 then
-  begin
-    needupdate := false;
-    displaywarmap(@warmapfile.map[combobox1.ItemIndex], @waropbmp, Wareditmode, @ImzFile);
-    //waropbmp.PixelFormat := pf24bit;
-    //warbufbmp.PixelFormat := pf24bit;
-    case WarEditMode of
-        RLEMode:
-          begin
-            warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-          end;
-        IMZMode, PNGMode:
-          begin
-            warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-          end;
-    end;
-  end;
-end;
-
-procedure TForm11.ComboBox2Select(Sender: TObject);
 var
   I: integer;
 begin
   if not WarmapInitial then
     exit;
-  warlayer := combobox2.ItemIndex - 1;
-  if warlayer = 2 then
+  if combobox1.ItemIndex >= 0 then
+  begin
+    needupdate := true;
     if warcopymapmode = 0 then
     begin
       warcopymapmode := 1;
@@ -786,9 +811,13 @@ begin
         setlength(warcopymap.maplayer[I].pic, warcopymap.y, warcopymap.x);
         warcopymap.maplayer[I].pic[0][0] := 0;
       end;
-
     end;
+  end;
+end;
 
+procedure TForm11.ComboBox2Select(Sender: TObject);
+begin
+  // placeholder
 end;
 
 procedure TForm11.FormClose(Sender: TObject; var CloseAction: TCloseAction);
@@ -838,7 +867,7 @@ begin
    //
      Palle:=CreatePalette(pLogPalette(@plogpalle)^);
   except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
   end;
   warlayer := -1;
   combobox2.ItemIndex := 0;
@@ -866,25 +895,23 @@ begin
   warbufbmppng.PixelFormat := pf32bit;
 
   warsmallbmp := Tbitmap.Create;
-  warsmallbmp.Canvas.Brush.Color := clwhite;//$707030;
+  warsmallbmp.Canvas.Brush.Color := clwhite;
   waropbmp := Tbitmap.Create;
   warbufbmp := Tbitmap.Create;
   waropbmp.Width := image1.Width;
   waropbmp.Height := image1.Height;
   warbufbmp.Width := image1.Width;
   warbufbmp.Height := image1.Height;
-  warsmallbmp.PixelFormat := pf8bit;
-  waropbmp.PixelFormat := pf8bit;
-  warbufbmp.PixelFormat := pf8bit;
-  warsmallbmp.Palette := palle;
+  warsmallbmp.PixelFormat := pf24bit;  { ¸ÄÎª24bit RGB¸ñÊ½ }
+  waropbmp.PixelFormat := pf24bit;     { ¸ÄÎª24bit RGB¸ñÊ½ }
+  warbufbmp.PixelFormat := pf24bit;    { ¸ÄÎª24bit RGB¸ñÊ½ }
   warsmallbmp.Height := 500;
   warsmallbmp.Width := 500;
-  waropbmp.Palette := palle;
-  warbufbmp.Palette := palle;
   warcenterx := image1.Width div 2;
   warcentery := image1.Height div 2;
   image1.Picture.Bitmap.Width := image1.Width;
   image1.Picture.Bitmap.Height := image1.Height;
+  image1.Picture.Bitmap.PixelFormat := pf24bit;  { È·±£ÓëÎ»Í¼»º³å¸ñÊ½Ò»ÖÂ }
   image2.Picture.Bitmap.Width := image2.Width;
   image2.Picture.Bitmap.Height := image2.Height;
   image3.Picture.Bitmap.Width := image3.Width;
@@ -893,7 +920,7 @@ begin
   try
   if not ({(readWarmapgrp = 1) and }(readwardef(gamepath + warmapdefidx,gamepath + warmapdefgrp,@warmapfile) = 1)) then
   begin
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
     self.Close;
     exit;
   end;
@@ -902,7 +929,7 @@ begin
     combobox1.Items.Add(inttostr(I));
   combobox1.ItemIndex := 0;
   except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
     self.Close;
     exit;
   end;
@@ -914,14 +941,17 @@ begin
   if WarEditMode = RLEMode then
   begin
     displaywarmap(@warmapfile.map[0], @waropbmp, Wareditmode, @ImzFile);
-    warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+    waropbmp.SaveToFile('1.bmp');
+    FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
+   warbufbmp.SaveToFile('2.bmp');
+   FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
+  image1.Picture.Bitmap.SaveToFile('3.bmp');
   end
   else
   begin
     displaywarmap(@warmapfile.map[0], @waropbmpPng, Wareditmode, @ImzFile);
-    warbufbmpPng.Canvas.CopyRect(warbufbmpPng.Canvas.ClipRect, waropbmpPng.Canvas,waropbmp.Canvas.ClipRect);
-    image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect, waropbmpPng.Canvas, waropbmpPng.Canvas.ClipRect);
+    FastBitmapCopy(warbufbmpPng, warbufbmpPng.Canvas.ClipRect, waropbmpPng, waropbmp.Canvas.ClipRect);
+    FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmpPng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
   end;
 
 
@@ -929,7 +959,7 @@ begin
   wartempy := -1;
   timer1.Enabled := true;
   except
-      showmessage('è¯»å–IDXæˆ–GRPæ–‡ä»¶é”™è¯¯ï¼');
+      showmessage('¶ÁÈ¡IDX»òGRPÎÄ¼ş´íÎó£¡');
     self.Close;
     exit;
   end;
@@ -956,7 +986,7 @@ begin
   end;
 
   warcopymapmode := 0;
-  // æ‹–æ‹½ååˆ·æ–°å¹¶åŒæ­¥æ˜¾ç¤º
+  // ÍÏ×§ºóË¢ĞÂ²¢Í¬²½ÏÔÊ¾
   self.BringToFront;
 end;
 
@@ -986,13 +1016,13 @@ begin
       case WarEditMode of
         RLEMode:
           begin
-            warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
         IMZMode, PNGMode:
           begin
-            warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas, waropbmppng.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
       end;
 
@@ -1010,13 +1040,13 @@ begin
       case WarEditMode of
         RLEMode:
           begin
-            warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
         IMZMode, PNGMode:
           begin
-            warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
       end;
       UpdatewarSmallImg;
@@ -1034,13 +1064,13 @@ begin
       case WarEditMode of
         RLEMode:
           begin
-            warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmp, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
         IMZMode, PNGMode:
           begin
-            warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(image1.Picture.Bitmap, image1.ClientRect, waropbmppng, Rect(warViewportX, warViewportY, warViewportX + image1.Width, warViewportY + image1.Height));
           end;
       end;
       UpdatewarSmallImg;
@@ -1074,7 +1104,7 @@ begin
   if button = mbleft then
   begin
     warstill := 0;
-    warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+    FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
     if (warlayer <> 2) and (warstillx = wartempx) and (warstilly = wartempy) then
     begin
       if (wartempx >= 0) and (wartempx < warmapfile.map[combobox1.ItemIndex].x) and (wartempy >=0) and (wartempy < warmapfile.map[combobox1.ItemIndex].y) then
@@ -1170,10 +1200,7 @@ begin
               if (warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2 >= 0)
               and (warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2 < wargrpnum)
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].data[0],wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2].size,@warsmallbmp, 0,0, false);
-                image2.Picture.Bitmap.Canvas.CopyRect(image2.Picture.Bitmap.Canvas.ClipRect,warsmallbmp.Canvas,image2.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderWarPreviewRLE(Image2, warmapfile.map[combobox1.ItemIndex].maplayer[0].pic[wartempy][wartempx] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1193,10 +1220,7 @@ begin
               if (warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2 >= 0)
               and (warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2 < wargrpnum)
               and (wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].data[0],wargrp[warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2].size,@warsmallbmp, 0,0, false);
-                image3.Picture.Bitmap.Canvas.CopyRect(image3.Picture.Bitmap.Canvas.ClipRect,warsmallbmp.Canvas,image3.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderWarPreviewRLE(Image3, warmapfile.map[combobox1.ItemIndex].maplayer[1].pic[wartempy][wartempx] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1228,15 +1252,16 @@ begin
     case WarEditMode of
         RLEMode:
           begin
-            warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect, warbufbmp.Canvas, warbufbmp.Canvas.ClipRect);
           end;
         IMZMode, PNGMode:
           begin
-            warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
-            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,waropbmppng.Canvas,waropbmppng.Canvas.ClipRect);
+            FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
+            image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect, warbufbmppng.Canvas, warbufbmppng.Canvas.ClipRect);
           end;
       end;
+    image1.Repaint;
   end;
   if (axp <> wartempx) or (ayp <> wartempy) then
   begin
@@ -1248,11 +1273,11 @@ begin
     statusbar1.Canvas.TextOut(10,10,'X='+inttostr(axp) + ',Y='+inttostr(ayp));
     if WarEditMode = RLEMode then
     begin
-      warbufbmp.Canvas.CopyRect(warbufbmp.Canvas.ClipRect, waropbmp.Canvas,waropbmp.Canvas.ClipRect);
+      FastBitmapCopy(warbufbmp, warbufbmp.Canvas.ClipRect, waropbmp, waropbmp.Canvas.ClipRect);
     end
     else if (WarEditMode = IMZMode) or (WarEditMode = PNGMode) then
     begin
-      warbufbmppng.Canvas.CopyRect(warbufbmppng.Canvas.ClipRect, waropbmppng.Canvas, waropbmppng.Canvas.ClipRect);
+      FastBitmapCopy(warbufbmppng, warbufbmppng.Canvas.ClipRect, waropbmppng, waropbmppng.Canvas.ClipRect);
     end;
 
     if (wartempx >= 0) and (wartempy >= 0) and (wartempx < warmapfile.map[combobox1.ItemIndex].x) and (wartempy < warmapfile.map[combobox1.ItemIndex].y) then
@@ -1397,6 +1422,7 @@ begin
     begin
       image1.Picture.Bitmap.Canvas.CopyRect(image1.ClientRect,warbufbmppng.Canvas,warbufbmppng.Canvas.ClipRect);
     end;
+    image1.Invalidate;
   end;
 end;
 
@@ -1423,7 +1449,7 @@ begin
   except
     fileclose(F);
     result := 0;
-    //showmessage('idxé”™è¯¯');
+    //showmessage('idx´íÎó');
     exit;
   end;
   try
@@ -1450,7 +1476,7 @@ begin
     fileclose(FF);
   except
     fileclose(FF);
-    //showmessage('è´´å›¾é”™è¯¯');
+    //showmessage('ÌùÍ¼´íÎó');
     result := 0;
     exit;
   end;
@@ -1488,7 +1514,7 @@ begin
     fileclose(idx);
     fileclose(grp);
     result := 0;
-  // showmessage('ä¿å­˜é”™è¯¯');
+  // showmessage('±£´æ´íÎó');
   end;
 
 end;
@@ -1578,108 +1604,98 @@ end;
 
 procedure McoldrawRLE8(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
 var
-  state,i, iy, ix, linesize, temp: integer;
-  pw,ph,xs,ys: integer;
-  Pbuf: Pbyte;
+  state, i, iy, ix, linesize, temp, size: integer;
+  pw, ph, xs, ys: integer;
+  Pbuf, PixelData: Pbyte;
+  ColorIndex: Byte;
+  DrawY: Integer;
 begin
-  //
   try
   if len > 8 then
   begin
-  pw := Psmallint((Ppic))^;
-  Inc(Ppic, 2);
-  ph := Psmallint((Ppic))^;
-  Inc(Ppic, 2);
-  xs := Psmallint((Ppic))^;
-  Inc(Ppic, 2);
-  ys := Psmallint((Ppic))^;
-  Inc(Ppic, 2);
+    pw := Psmallint((Ppic))^;
+    Inc(Ppic, 2);
+    ph := Psmallint((Ppic))^;
+    Inc(Ppic, 2);
+    xs := Psmallint((Ppic))^;
+    Inc(Ppic, 2);
+    ys := Psmallint((Ppic))^;
+    Inc(Ppic, 2);
+    size := 8;
 
-
-  if canmove then
-  begin
-    dy := dy - ys;
-    dx := dx - xs;
-  end;
-
-  if (dx > Pbmp.width) or (dx + pw < 0) or (dy > Pbmp.height) or (dy + ph < 0) then
-    exit;
-  //if (dx < 0)  or ((dx + pw) >= pbmp.Width) or (dy < 0)  or ((dy + ph) >= pbmp.Height) then
-    //exit;
-
-  for iy := 0 to ph - 1 do
-  begin
-    linesize := Ppic^;
-    inc(Ppic);
-    state := 2;
-    ix := dx;
-    I := 0;
-    while I < linesize do
+    if canmove then
     begin
-      if state = 2 then
-      begin
-        temp := (Ppic + I)^;
-        ix := ix + temp;
-        state := 1;
-        inc(I);
-      end
-      else if state = 1 then
-      begin
-        temp := (Ppic + I)^;
-        state := 2 + temp;
-        inc(I);
-      end
-      else if state > 2 then
-      begin
-        temp := (Ppic + I)^;
-        try
-          //Pbuf := Pbmp.ScanLine[iy + dy];
-          //Move((Pbuf + ix), (Ppic + I), state - 2);
-          if (iy + dy < PBMP.Height)and (iy + dy >= 0) then
-          begin
-            Pbuf := Pbmp.ScanLine[iy + dy];
-            if ix < 0 then
-            begin
-              if ix + state - 2 < PBMP.Width then
-              begin
-                Move((Ppic + I - ix)^, Pbuf^, state - 2 + ix);
-              end
-              else
-              begin
-                Move((Ppic + I - ix)^, Pbuf^, PBMP.Width);
-              end;
-            end
-            else if ix + state - 2 < PBMP.Width then
-              Move((Ppic + I)^, (Pbuf + ix)^, state - 2)
-            else if ix < PBMP.Width then
-              Move((Ppic + I)^, (Pbuf + ix)^, PBMP.Width - ix);
-          end;
-        except
-
-        end;
-        inc(ix, state - 2);
-        inc(I ,state - 2);
-        state := 2;
-
-       { if (iy + dy >= 0) and (iy + dy < Pbmp.Height) and (ix >=0) and (ix < Pbmp.Width) then
-        begin
-        Pbuf := Pbmp.ScanLine[iy + dy];
-        (Pbuf + ix)^ := temp;
-      //  (Pbuf + 3 * ix)^ := McolB[temp];
-       // (Pbuf + 3 * ix + 1)^ := McolG[temp];
-       // (Pbuf + 3 * ix + 2)^ := McolR[temp];
-        //PBMP.canvas.Pixels[ix, iy + dy] := (McolB[temp] shl 16) or (McolG[temp] shl 8) or McolR[temp];
-
-        end;
-        dec(state);
-        inc(ix);  }
-      end;
+      dy := dy - ys;
+      dx := dx - xs;
     end;
-    inc(Ppic, linesize);
-  end;
+
+    if (dx > Pbmp.width) or (dx + pw < 0) or (dy > Pbmp.height) or (dy + ph < 0) then
+      exit;
+
+    for iy := 0 to ph - 1 do
+    begin
+      DrawY := iy + dy;
+      linesize := Ppic^;
+      inc(Ppic);
+      inc(size);
+      if size >= len then
+        exit;
+      if size + linesize >= len then
+        exit;
+
+      if (DrawY < PBMP.height) and (DrawY >= 0) then
+        Pbuf := PBMP.ScanLine[DrawY]
+      else
+        Pbuf := nil;
+
+      state := 2;
+      ix := dx;
+      I := 0;
+      while I < linesize do
+      begin
+        if state = 2 then
+        begin
+          temp := (Ppic + I)^;
+          ix := ix + temp;
+          state := 1;
+          inc(I);
+        end
+        else if state = 1 then
+        begin
+          temp := (Ppic + I)^;
+          state := 2 + temp;
+          inc(I);
+        end
+        else if state > 2 then
+        begin
+          { Ö±½ÓÊä³öRGBÉ«Öµ¶ø²»ÊÇË÷Òı }
+          try
+            if (Pbuf <> nil) and (ix + state - 2 <= PBMP.width) and (state > 2) then
+            begin
+              for temp := 0 to state - 3 do
+              begin
+                if (ix + temp >= 0) and (ix + temp < PBMP.width) then
+                begin
+                  ColorIndex := (Ppic + i + temp)^;
+                  { Ê¹ÓÃÊı×éË÷Òı¶ø·ÇÖ¸ÕëµİÔö£¬±ÜÃâĞ´¹ı½ç }
+                  PByte(Pbuf)[((ix + temp) * 3)] := McolB[ColorIndex];
+                  PByte(Pbuf)[((ix + temp) * 3) + 1] := McolG[ColorIndex];
+                  PByte(Pbuf)[((ix + temp) * 3) + 2] := McolR[ColorIndex];
+                end;
+              end;
+            end;
+          except
+          end;
+          
+          inc(ix, state - 2);
+          inc(I, state - 2);
+          state := 2;
+        end;
+      end;
+      inc(Ppic, linesize);
+    end;
   end;
   except
-
   end;
 end;
 

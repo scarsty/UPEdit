@@ -53,10 +53,13 @@ type
     procedure Image1DragOver(Sender, Source: TObject; X, Y: Integer; State: TDragState; var Accept: Boolean);
     procedure Image1DragDrop(Sender, Source: TObject; X, Y: Integer);
     procedure FormCreate(Sender: TObject);
-    procedure displayMmap(MmapopMap: Pmap; Mmapopbmp2: PNTbitmap);
+    procedure displayMmap(MmapopMap: Pmap; Mmapopbmp2: PNTbitmap; Scroll1Pos, Scroll2Pos: Integer);
     procedure FormResize(Sender: TObject);
     procedure ScrollBar2Change(Sender: TObject);
     procedure ScrollBar1Change(Sender: TObject);
+    procedure ScrollBar1Scroll(Sender: TObject; ScrollCode: TScrollCode; var ScrollPos: Integer);
+    procedure ScrollBar2Scroll(Sender: TObject; ScrollCode: TScrollCode; var ScrollPos: Integer);
+    procedure Image1Paint(Sender: TObject);
     procedure Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
     procedure Timer1Timer(Sender: TObject);
     procedure Image1MouseDown(Sender: TObject; Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
@@ -78,6 +81,8 @@ type
     procedure Button6Click(Sender: TObject);
   private
     { Private declarations }
+    procedure TriggerMapRefresh;
+    procedure UpdateHoverPreviewFromMouse;
   public
     { Public declarations }
   var
@@ -90,6 +95,7 @@ var
   TileScale: integer = 1;
   MMApopbmp: Tbitmap;
   MMApbufbmp: Tbitmap;
+  MMAviewbmp: Tbitmap;
   MMApgrp: array of Tgrppic;
   MMApgrpnum: Integer;
   nowMMApgrpnum: Integer;
@@ -105,6 +111,7 @@ var
   // sceneeventnum: integer;
   mousex, mousey: Integer;
   needupdate: Boolean;
+  RenderScrollBar1Pos, RenderScrollBar2Pos: Integer;
   qbuildx, qbuildy: Integer;
 
   MMapPNGBuf: TScenePNGBuf;
@@ -114,15 +121,166 @@ var
 function readMmapfile: Integer;
 function readMmapGRP: Integer;
 procedure McoldrawRLE8(Ppic: Pbyte; len: Integer; PBMP: PNTbitmap; dx, dy: Integer; canmove: Boolean);
+procedure DrawMainRLE8ColorBitmap(Ppic: Pbyte; len: integer; PBMP: PntBitMap; dx, dy: integer; canmove: boolean);
 
 implementation
 
 uses
   main, grplist, outputMap;
 {$R *.lfm}
+
 type
   PByteLine = ^TByteLine;
   TByteLine = array[0..65535] of Byte;
+
+{ 快速位图复制函数 - 按 SourceRect 逐行 ScanLine 精确裁切拷贝 }
+procedure FastBitmapCopy(DestBMP: TBitmap; DestRect: TRect; SourceBMP: TBitmap; SourceRect: TRect);
+var
+  DestWidth, DestHeight, SourceWidth, SourceHeight: Integer;
+  Y, SrcY, DstY: Integer;
+  BytesPerPixel, BytesToCopy: Integer;
+  SrcLine, DstLine: PByte;
+begin
+  DestWidth := DestRect.Right - DestRect.Left;
+  DestHeight := DestRect.Bottom - DestRect.Top;
+  SourceWidth := SourceRect.Right - SourceRect.Left;
+  SourceHeight := SourceRect.Bottom - SourceRect.Top;
+
+  if (DestWidth <> SourceWidth) or (DestHeight <> SourceHeight) then
+    Exit;
+
+  if SourceBMP.PixelFormat = pf24bit then
+    BytesPerPixel := 3
+  else if SourceBMP.PixelFormat = pf32bit then
+    BytesPerPixel := 4
+  else
+  begin
+    DestBMP.Canvas.CopyRect(DestRect, SourceBMP.Canvas, SourceRect);
+    Exit;
+  end;
+
+  if DestBMP.PixelFormat <> SourceBMP.PixelFormat then
+  begin
+    DestBMP.Canvas.CopyRect(DestRect, SourceBMP.Canvas, SourceRect);
+    Exit;
+  end;
+
+  BytesToCopy := SourceWidth * BytesPerPixel;
+  for Y := 0 to SourceHeight - 1 do
+  begin
+    SrcY := SourceRect.Top + Y;
+    DstY := DestRect.Top + Y;
+    if (SrcY < 0) or (SrcY >= SourceBMP.Height) or (DstY < 0) or (DstY >= DestBMP.Height) then
+      Continue;
+    SrcLine := PByte(SourceBMP.ScanLine[SrcY]);
+    DstLine := PByte(DestBMP.ScanLine[DstY]);
+    Move((SrcLine + SourceRect.Left * BytesPerPixel)^,
+         (DstLine + DestRect.Left * BytesPerPixel)^,
+         BytesToCopy);
+  end;
+end;
+
+procedure TForm13.TriggerMapRefresh;
+var
+  srcRect: TRect;
+  dstRect: TRect;
+begin
+  if not MMapInitial then
+    Exit;
+
+  Timer1.Enabled := false;
+  try
+    needupdate := false;
+    if (MMAviewbmp.Width <> Image1.ClientWidth) or (MMAviewbmp.Height <> Image1.ClientHeight) then
+    begin
+      MMAviewbmp.PixelFormat := pf24bit;
+      MMAviewbmp.Width := Image1.ClientWidth;
+      MMAviewbmp.Height := Image1.ClientHeight;
+    end;
+
+    srcRect := Rect(200, 0, 200 + Image1.ClientWidth, Image1.ClientHeight);
+    dstRect := Rect(0, 0, Image1.ClientWidth, Image1.ClientHeight);
+    if MMapEditMode = RLEMode then
+    begin
+      displayMmap(@MMApfile.Map[0], @MMApopbmp, RenderScrollBar1Pos, RenderScrollBar2Pos);
+      FastBitmapCopy(MMAviewbmp, dstRect, MMApopbmp, srcRect);
+    end
+    else
+    begin
+      displayMmap(@MMApfile.Map[0], @MMapopbmppng, RenderScrollBar1Pos, RenderScrollBar2Pos);
+      FastBitmapCopy(MMAviewbmp, dstRect, MMapopbmppng, srcRect);
+    end;
+
+    Image1.Picture.Bitmap.PixelFormat := pf24bit;
+    Image1.Picture.Bitmap.Width := Image1.ClientWidth;
+    Image1.Picture.Bitmap.Height := Image1.ClientHeight;
+    Image1.Picture.Bitmap.Canvas.StretchDraw(Rect(0, 0, Image1.ClientWidth, Image1.ClientHeight), MMAviewbmp);
+    Image1.Repaint;
+  except
+    on E: Exception do
+      ShowMessage('滚动重绘失败: ' + E.Message);
+  end;
+  Timer1.Enabled := true;
+end;
+
+procedure TForm13.UpdateHoverPreviewFromMouse;
+var
+  pointx, pointy: Integer;
+  axp, ayp: Integer;
+begin
+  pointx := Image1.Width div 2;
+  pointy := Image1.Height div 2;
+  axp := Round(((mousex - pointx) / (18 * TileScale) + (mousey - pointy + 9 * TileScale) / (9 * TileScale)) / 2);
+  ayp := Round(-((mousex - pointx) / (18 * TileScale) - (mousey - pointy + 9 * TileScale) / (9 * TileScale)) / 2);
+  axp := axp + RenderScrollBar1Pos + RenderScrollBar2Pos - MMApfile.Map[0].Y div 2;
+  ayp := ayp + RenderScrollBar2Pos - RenderScrollBar1Pos + MMApfile.Map[0].Y div 2;
+
+  MMAptempx := axp;
+  MMAptempy := ayp;
+  if (MMAptempx >= 0) and (MMAptempy >= 0) and (MMAptempx < MMApfile.Map[0].X) and (MMAptempy < MMApfile.Map[0].Y) then
+  begin
+    Label6.Caption := IntToStr(MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2);
+    Label7.Caption := IntToStr(MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2);
+    Label8.Caption := IntToStr(MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2);
+    Label9.Caption := '(' + IntToStr(MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]) + ',' + IntToStr(MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]) + ')';
+    UpdateMainSmallBmp;
+  end;
+end;
+
+procedure PreparePreviewBitmap(TargetImage: TImage);
+begin
+  TargetImage.Picture.Bitmap.PixelFormat := pf24bit;
+  TargetImage.Picture.Bitmap.Width := TargetImage.Width;
+  TargetImage.Picture.Bitmap.Height := TargetImage.Height;
+  TargetImage.Picture.Bitmap.Canvas.Brush.Color := clWhite;
+  TargetImage.Picture.Bitmap.Canvas.FillRect(Rect(0, 0, TargetImage.Width, TargetImage.Height));
+end;
+
+procedure PresentPreviewBitmap(TargetImage: TImage; SourceBitmap: TBitmap);
+var
+  previewRect: TRect;
+begin
+  PreparePreviewBitmap(TargetImage);
+  previewRect := Rect(0, 0, TargetImage.Width, TargetImage.Height);
+  FastBitmapCopy(TargetImage.Picture.Bitmap, previewRect, SourceBitmap, previewRect);
+  TargetImage.Repaint;
+end;
+
+procedure RenderPreviewRLE(TargetImage: TImage; GroupIndex: Integer);
+var
+  TargetBitmap: TBitmap;
+  PicWidth, PicHeight: Integer;
+  DrawX, DrawY: Integer;
+begin
+  PreparePreviewBitmap(TargetImage);
+  TargetBitmap := TargetImage.Picture.Bitmap;
+  PicWidth := PSmallInt(@MMApgrp[GroupIndex].data[0])^;
+  PicHeight := PSmallInt(@MMApgrp[GroupIndex].data[2])^;
+  DrawX := Max(0, (TargetImage.Width - PicWidth) div 2);
+  DrawY := Max(0, (TargetImage.Height - PicHeight) div 2);
+  DrawMainRLE8ColorBitmap(@MMApgrp[GroupIndex].data[0], MMApgrp[GroupIndex].size, @TargetBitmap, DrawX, DrawY, false);
+  TargetImage.Repaint;
+end;
 
 function ClampTileScale(Value: integer): integer;
 begin
@@ -711,6 +869,7 @@ procedure TForm13.FormClose(Sender: TObject; var CloseAction: TCloseAction);
 begin
   MMApopbmp.Free;
   MMApbufbmp.Free;
+  MMAviewbmp.Free;
   setlength(MMApgrp, 0);
   setlength(MMApfile.Map, 0);
   setlength(MMApcopymap.maplayer, 0);
@@ -790,18 +949,18 @@ begin
     MMApopbmp := Tbitmap.Create;
     MMApopbmp.width := Image1.width + 400;
     MMApopbmp.height := Image1.height + 200;
-    MMApopbmp.PixelFormat := pf8bit;
-    MMApopbmp.Palette := Palle;
+    MMApopbmp.PixelFormat := pf24bit;  { 改为24bit RGB格式 }
     MMApbufbmp := Tbitmap.Create;
     MMApbufbmp.width := Image1.width + 400;
     MMApbufbmp.height := Image1.height + 200;
-    MMApbufbmp.PixelFormat := pf8bit;
-    MMApbufbmp.Palette := Palle;
+    MMApbufbmp.PixelFormat := pf24bit;  { 改为24bit RGB格式 }
+    MMAviewbmp := Tbitmap.Create;
+    MMAviewbmp.width := Image1.width;
+    MMAviewbmp.height := Image1.height;
+    MMAviewbmp.PixelFormat := pf24bit;
     MMApsmallbmp := Tbitmap.Create;
-    MMApsmallbmp.PixelFormat := pf8bit;
-    MMApbufbmp.Palette := Palle;
-    MMApsmallbmp.Canvas.Brush.Color := CLWHITE; // $707030;
-    MMApsmallbmp.Palette := Palle;
+    MMApsmallbmp.PixelFormat := pf24bit;  { 改为24bit RGB格式 }
+    MMApsmallbmp.Canvas.Brush.Color := CLWHITE;
     MMApsmallbmp.width := 500;
     MMApsmallbmp.height := 500;
     Image2.Picture.Bitmap.Width := Image2.Width;
@@ -818,6 +977,8 @@ begin
     ScrollBar2.Max := Max(MMApfile.Map[0].X, MMApfile.Map[0].Y) - 1;
     ScrollBar2.Position := ScrollBar2.Max div 2;
     ScrollBar1.Position := ScrollBar1.Max div 2;
+    RenderScrollBar1Pos := ScrollBar1.Position;
+    RenderScrollBar2Pos := ScrollBar2.Position;
 
 
 
@@ -852,6 +1013,13 @@ begin
     end;
     Image1.Picture.Bitmap.width := Image1.width;
     Image1.Picture.Bitmap.height := Image1.height;
+    Image1.Picture.Bitmap.PixelFormat := pf24bit;  { 确保与位图缓冲格式一致 }
+    Image1.Stretch := True;
+    Image1.Proportional := False;
+    Image1.Center := False;
+    Image1.OnPaint := nil;
+    MMAviewbmp.width := Image1.width;
+    MMAviewbmp.height := Image1.height;
     MMApbufbmp.height := Image1.height + 200;
     MMApopbmp.width := Image1.width + 400;
     MMApopbmp.height := Image1.height + 200;
@@ -866,6 +1034,11 @@ begin
   except
 
   end;
+end;
+
+procedure TForm13.Image1Paint(Sender: TObject);
+begin
+  { 不使用Image自绘，统一走Picture.Bitmap显示链 }
 end;
 
 procedure TForm13.Image1DragDrop(Sender, Source: TObject; X, Y: Integer);
@@ -1011,6 +1184,8 @@ procedure TForm13.Image1MouseMove(Sender: TObject; Shift: TShiftState; X, Y: Int
 begin
   mousex := X;
   mousey := Y;
+  if MMapInitial then
+    UpdateHoverPreviewFromMouse;
 end;
 
 procedure TForm13.copymap(Dest, Source: Pmap);
@@ -1172,7 +1347,7 @@ begin
         qbuildx := 0;
         qbuildy := 0;
       end;
-      MMApbufbmp.Canvas.CopyRect(MMApbufbmp.Canvas.ClipRect, MMApopbmp.Canvas, MMApopbmp.Canvas.ClipRect);
+      FastBitmapCopy(MMApbufbmp, MMApbufbmp.Canvas.ClipRect, MMApopbmp, MMApopbmp.Canvas.ClipRect);
       pointx := Image1.width div 2;
       pointy := Image1.height div 2;
       axp := Round(((mousex - pointx) / TileW + (mousey - pointy + TileH) / TileH) / 2);
@@ -1186,7 +1361,7 @@ begin
       temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
       temprect.Left := temprect.Left + 200;
       temprect.Right := temprect.Right + 200;
-      Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+      FastBitmapCopy(Image1.Picture.Bitmap, Image1.ClientRect, MMApbufbmp, temprect);
     end;
     MMApstill := 0;
   end;
@@ -1199,30 +1374,42 @@ end;
 
 procedure TForm13.ScrollBar1Change(Sender: TObject);
 begin
-  // displayMmap(@Mmapfile.map[0], @Mmapopbmp);
-  // Mmapbufbmp.Canvas.CopyRect(Mmapbufbmp.Canvas.ClipRect, Mmapopbmp.Canvas,Mmapopbmp.Canvas.ClipRect);
-  // image1.Canvas.CopyRect(image1.ClientRect,Mmapopbmp.Canvas,Mmapopbmp.Canvas.ClipRect);
-  needupdate := true;
+  RenderScrollBar1Pos := ScrollBar1.Position;
+  TriggerMapRefresh;
 end;
 
 procedure TForm13.ScrollBar2Change(Sender: TObject);
 begin
-  // displayMmap(@Mmapfile.map[0], @Mmapopbmp);
-  // Mmapbufbmp.Canvas.CopyRect(Mmapbufbmp.Canvas.ClipRect, Mmapopbmp.Canvas,Mmapopbmp.Canvas.ClipRect);
-  // image1.Canvas.CopyRect(image1.ClientRect,Mmapopbmp.Canvas,Mmapopbmp.Canvas.ClipRect);
-  needupdate := true;
+  RenderScrollBar2Pos := ScrollBar2.Position;
+  TriggerMapRefresh;
+end;
+
+procedure TForm13.ScrollBar1Scroll(Sender: TObject; ScrollCode: TScrollCode; var ScrollPos: Integer);
+begin
+  RenderScrollBar1Pos := ScrollPos;
+  TriggerMapRefresh;
+end;
+
+procedure TForm13.ScrollBar2Scroll(Sender: TObject; ScrollCode: TScrollCode; var ScrollPos: Integer);
+begin
+  RenderScrollBar2Pos := ScrollPos;
+  TriggerMapRefresh;
 end;
 
 procedure TForm13.UpdateMainSmallBmp;
 begin
   try
-    Image2.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image2.Picture.Bitmap.PixelFormat := pf24bit;
+    Image3.Picture.Bitmap.PixelFormat := pf24bit;
+    Image4.Picture.Bitmap.PixelFormat := pf24bit;
+    Image5.Picture.Bitmap.PixelFormat := pf24bit;
+    Image2.Picture.Bitmap.Canvas.Brush.Color := CLWHITE;
     Image2.Picture.Bitmap.Canvas.FillRect(Image2.Picture.Bitmap.Canvas.ClipRect);
-    Image3.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image3.Picture.Bitmap.Canvas.Brush.Color := CLWHITE;
     Image3.Picture.Bitmap.Canvas.FillRect(Image3.Picture.Bitmap.Canvas.ClipRect);
-    Image4.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image4.Picture.Bitmap.Canvas.Brush.Color := CLWHITE;
     Image4.Picture.Bitmap.Canvas.FillRect(Image4.Picture.Bitmap.Canvas.ClipRect);
-    Image5.Picture.Bitmap.Canvas.Brush.Color := CLWHITE; // $606060;
+    Image5.Picture.Bitmap.Canvas.Brush.Color := CLWHITE;
     Image5.Picture.Bitmap.Canvas.FillRect(Image5.Picture.Bitmap.Canvas.ClipRect);
     if (MMAptempx >= 0) and (MMAptempx < MMApfile.Map[0].X) and (MMAptempy >= 0) and (MMAptempy < MMApfile.Map[0].Y) then
     begin
@@ -1230,18 +1417,12 @@ begin
       MMApsmallbmp.Canvas.FillRect(MMApsmallbmp.Canvas.ClipRect);
       if MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] > 0 then
       begin
-        // Mmapsmallbmp.Width := image2.Width;
-        // Mmapsmallbmp.Height := image2.Height;
         case MMapEditMode of
           RLEMode:
             begin
               if (MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2 >= 0) and (MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2 < MMApgrpnum) and
                 (MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
-                  0, false);
-                Image2.Picture.Bitmap.Canvas.CopyRect(Image2.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image2.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderPreviewRLE(Image2, MMApfile.Map[0].maplayer[0].pic[MMAptempy][MMAptempx] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1254,18 +1435,12 @@ begin
 
       if MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] > 0 then
       begin
-        // Mmapsmallbmp.Width := image3.Width;
-        // Mmapsmallbmp.Height := image3.Height;
         case MMapEditMode of
           RLEMode:
             begin
               if (MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2 >= 0) and (MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2 < MMApgrpnum) and
                 (MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
-                  0, false);
-                Image3.Picture.Bitmap.Canvas.CopyRect(Image3.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image3.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderPreviewRLE(Image3, MMApfile.Map[0].maplayer[1].pic[MMAptempy][MMAptempx] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1277,18 +1452,12 @@ begin
       MMApsmallbmp.Canvas.FillRect(MMApsmallbmp.Canvas.ClipRect);
       if MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] > 0 then
       begin
-        // Mmapsmallbmp.Width := image4.Width;
-        // Mmapsmallbmp.Height := image4.Height;
         case MMapEditMode of
           RLEMode:
             begin
               if (MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2 >= 0) and (MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2 < MMApgrpnum) and
                 (MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].data[0], MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2].size, @MMApsmallbmp, 0,
-                  0, false);
-                Image4.Picture.Bitmap.Canvas.CopyRect(Image4.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image4.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderPreviewRLE(Image4, MMApfile.Map[0].maplayer[2].pic[MMAptempy][MMAptempx] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1300,8 +1469,6 @@ begin
       MMApsmallbmp.Canvas.FillRect(MMApsmallbmp.Canvas.ClipRect);
       if MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] > 0 then
       begin
-        // Mmapsmallbmp.Width := image5.Width;
-        // Mmapsmallbmp.Height := image5.Height;
         case MMapEditMode of
           RLEMode:
             begin
@@ -1310,12 +1477,8 @@ begin
                 (MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2 >= 0) and
                 (MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2 < MMApgrpnum) and
                 (MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2].size >= 8) then
-              begin
-                McoldrawRLE8(@MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2].data[0],
-                  MMApgrp[MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2].size, @MMApsmallbmp, 0,
-                  0, false);
-                Image5.Picture.Bitmap.Canvas.CopyRect(Image5.Picture.Bitmap.Canvas.ClipRect, MMApsmallbmp.Canvas, Image5.Picture.Bitmap.Canvas.ClipRect);
-              end;
+                RenderPreviewRLE(Image5,
+                  MMApfile.Map[0].maplayer[2].pic[MMApfile.Map[0].maplayer[4].pic[MMAptempy][MMAptempx]][MMApfile.Map[0].maplayer[3].pic[MMAptempy][MMAptempx]] div 2);
             end;
           IMZMode, PNGMode:
             begin
@@ -1324,6 +1487,10 @@ begin
             end;
         end;
       end;
+      Image2.Repaint;
+      Image3.Repaint;
+      Image4.Repaint;
+      Image5.Repaint;
     end;
   except
     showmessage('绘制地图失败！');
@@ -1347,27 +1514,32 @@ begin
   // Ayp := (-mousex + pointx + 2 * mousey - pointy * 2 + 18) div 36;
   ix := axp;
   iy := ayp;
-  axp := axp + ScrollBar1.Position + ScrollBar2.Position - MMApfile.Map[0].Y div 2;
-  ayp := ayp + ScrollBar2.Position - ScrollBar1.Position + MMApfile.Map[0].Y div 2;
+  axp := axp + RenderScrollBar1Pos + RenderScrollBar2Pos - MMApfile.Map[0].Y div 2;
+  ayp := ayp + RenderScrollBar2Pos - RenderScrollBar1Pos + MMApfile.Map[0].Y div 2;
 
   if needupdate then
   begin
     try
       needupdate := false;
-      temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
-      temprect.Left := temprect.Left + 200;
-      temprect.Right := temprect.Right + 200;
+      temprect := Image1.ClientRect;
+      Inc(temprect.Left, 200);
+      Inc(temprect.Right, 200);
       if MMapEditMode = RLEMode then
       begin
-        displayMmap(@MMApfile.Map[0], @MMApopbmp);
-        MMApbufbmp.Canvas.CopyRect(MMApbufbmp.Canvas.ClipRect, MMApopbmp.Canvas, MMApopbmp.Canvas.ClipRect);
-        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+        { 渲染到 MMApopbmp（干净底图），再拷贝到 MMApbufbmp（工作缓冲） }
+        displayMmap(@MMApfile.Map[0], @MMApopbmp, RenderScrollBar1Pos, RenderScrollBar2Pos);
+        FastBitmapCopy(MMApbufbmp, MMApbufbmp.Canvas.ClipRect, MMApopbmp, MMApopbmp.Canvas.ClipRect);
+        FastBitmapCopy(MMAviewbmp, Image1.ClientRect, MMApbufbmp, temprect);
+        Image1.Picture.Assign(MMAviewbmp);
+        Image1.Refresh;
       end
       else
       begin
-        displayMmap(@MMApfile.Map[0], @MMapopbmppng);
-        MMapbufbmppng.Canvas.CopyRect(MMapbufbmppng.Canvas.ClipRect, MMapopbmppng.Canvas, MMapopbmppng.Canvas.ClipRect);
-        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
+        displayMmap(@MMApfile.Map[0], @MMapopbmppng, RenderScrollBar1Pos, RenderScrollBar2Pos);
+        FastBitmapCopy(MMapbufbmppng, MMapbufbmppng.Canvas.ClipRect, MMapopbmppng, MMapopbmppng.Canvas.ClipRect);
+        FastBitmapCopy(MMAviewbmp, Image1.ClientRect, MMapbufbmppng, temprect);
+        Image1.Picture.Assign(MMAviewbmp);
+        Image1.Refresh;
       end;
     except
       showmessage('刷新地图失败');
@@ -1384,11 +1556,11 @@ begin
       StatusBar1.Canvas.TextOut(10, 10, 'X=' + inttostr(axp) + ',Y=' + inttostr(ayp));
       if MMapEditMode = RLEMode then
       begin
-        MMApbufbmp.Canvas.CopyRect(MMApbufbmp.Canvas.ClipRect, MMApopbmp.Canvas, MMApopbmp.Canvas.ClipRect);
+        FastBitmapCopy(MMApbufbmp, MMApbufbmp.Canvas.ClipRect, MMApopbmp, MMApopbmp.Canvas.ClipRect);
       end
       else
       begin
-        MMapbufbmppng.Canvas.CopyRect(MMapbufbmppng.Canvas.ClipRect, MMapopbmppng.Canvas, MMapopbmppng.Canvas.ClipRect);
+        FastBitmapCopy(MMapbufbmppng, MMapbufbmppng.Canvas.ClipRect, MMapopbmppng, MMapopbmppng.Canvas.ClipRect);
       end;
       axp := ix;
       ayp := iy;
@@ -1521,16 +1693,20 @@ begin
 
       end;
 
-      temprect := Image1.Picture.Bitmap.Canvas.ClipRect;
-      temprect.Left := temprect.Left + 200;
-      temprect.Right := temprect.Right + 200;
+      temprect := Image1.ClientRect;
+      Inc(temprect.Left, 200);
+      Inc(temprect.Right, 200);
       if MMapEditMode = RLEMode then
       begin
-        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMApbufbmp.Canvas, temprect);
+        FastBitmapCopy(MMAviewbmp, Image1.ClientRect, MMApbufbmp, temprect);
+        Image1.Picture.Assign(MMAviewbmp);
+        Image1.Refresh;
       end
       else
       begin
-        Image1.Picture.Bitmap.Canvas.CopyRect(Image1.ClientRect, MMapbufbmppng.Canvas, temprect);
+        FastBitmapCopy(MMAviewbmp, Image1.ClientRect, MMapbufbmppng, temprect);
+        Image1.Picture.Assign(MMAviewbmp);
+        Image1.Refresh;
       end;
     except
       showmessage('绘制地图网格失败');
@@ -1588,10 +1764,10 @@ procedure McoldrawRLE8(Ppic: Pbyte; len: Integer; PBMP: PNTbitmap; dx, dy: Integ
 var
   State, i, iy, ix, linesize, temp, size: Integer;
   pw, ph, xs, ys: Integer;
-  Pbuf: Pbyte;
+  Pbuf, PixelData: Pbyte;
+  ColorIndex: Byte;
+  DrawY: Integer;
 begin
-  //
-
   if len > 8 then
   begin
     pw := Psmallint((Ppic))^;
@@ -1612,11 +1788,10 @@ begin
 
     if (dx > PBMP.width) or (dx + pw < 0) or (dy > PBMP.height) or (dy + ph < 0) then
       exit;
-    // if (dx < 0)  or ((dx + pw) >= pbmp.Width) or (dy < 0)  or ((dy + ph) >= pbmp.Height) then
-    // exit;
 
     for iy := 0 to ph - 1 do
     begin
+      DrawY := iy + dy;
       linesize := Ppic^;
       Inc(Ppic);
       Inc(size);
@@ -1624,9 +1799,16 @@ begin
         exit;
       if size + linesize >= len then
         exit;
+      
+      if (DrawY < PBMP.height) and (DrawY >= 0) then
+        Pbuf := PBMP.ScanLine[DrawY]
+      else
+        Pbuf := nil;
+
       State := 2;
       ix := dx;
       i := 0;
+      
       while i < linesize do
       begin
         if State = 2 then
@@ -1644,46 +1826,36 @@ begin
         end
         else if State > 2 then
         begin
-          temp := (Ppic + i)^;
+          { 直接输出RGB色值而不是索引 }
           try
-            // Pbuf := Pbmp.ScanLine[iy + dy];
-            // Move((Pbuf + ix), (Ppic + I), state - 2);
-            if (iy + dy < PBMP.height) and (iy + dy >= 0) then
+            if (Pbuf <> nil) and (ix + State - 2 <= PBMP.width) and (State > 2) then
             begin
-              Pbuf := PBMP.ScanLine[iy + dy];
-              if ix + State - 2 < PBMP.width then
-                Move((Ppic + i)^, (Pbuf + ix)^, State - 2)
-              else if ix < PBMP.width then
-                Move((Ppic + i)^, (Pbuf + ix)^, PBMP.width - ix);
+              for temp := 0 to State - 3 do
+              begin
+                if (ix + temp >= 0) and (ix + temp < PBMP.width) then
+                begin
+                  ColorIndex := (Ppic + i + temp)^;
+                  { 使用数组索引而非指针递增，避免写过界 }
+                  PByte(Pbuf)[((ix + temp) * 3)] := McolB[ColorIndex];
+                  PByte(Pbuf)[((ix + temp) * 3) + 1] := McolG[ColorIndex];
+                  PByte(Pbuf)[((ix + temp) * 3) + 2] := McolR[ColorIndex];
+                end;
+              end;
             end;
           except
-
           end;
+          
           Inc(ix, State - 2);
           Inc(i, State - 2);
           State := 2;
-
-          { if (iy + dy >= 0) and (iy + dy < Pbmp.Height) and (ix >=0) and (ix < Pbmp.Width) then
-            begin
-            Pbuf := Pbmp.ScanLine[iy + dy];
-            (Pbuf + ix)^ := temp;
-            //  (Pbuf + 3 * ix)^ := McolB[temp];
-            // (Pbuf + 3 * ix + 1)^ := McolG[temp];
-            // (Pbuf + 3 * ix + 2)^ := McolR[temp];
-            //PBMP.canvas.Pixels[ix, iy + dy] := (McolB[temp] shl 16) or (McolG[temp] shl 8) or McolR[temp];
-
-            end;
-            dec(state);
-            inc(ix); }
         end;
       end;
       Inc(Ppic, linesize);
     end;
   end;
-
 end;
 
-procedure TForm13.displayMmap(MmapopMap: Pmap; Mmapopbmp2: PNTbitmap);
+procedure TForm13.displayMmap(MmapopMap: Pmap; Mmapopbmp2: PNTbitmap; Scroll1Pos, Scroll2Pos: Integer);
 var
   ix, iy, i, i2, posx, posy, k: Integer;
   pointx, pointy, MX, MY, I3: Integer;
@@ -1706,15 +1878,13 @@ begin
           fillchar(MMapPNGBuf.data[i][0], MMapPNGBuf.width * 4, #0);
   end;
 
-  MX := ScrollBar1.Position + ScrollBar2.Position - MMApfile.Map[0].Y div 2;
-  MY := ScrollBar2.Position - ScrollBar1.Position + MMApfile.Map[0].Y div 2;
+  MX := Scroll1Pos + Scroll2Pos - MMApfile.Map[0].Y div 2;
+  MY := Scroll2Pos - Scroll1Pos + MMApfile.Map[0].Y div 2;
   // 绘制地面层
   for i := -(Mmapopbmp2.height div 36) to (Mmapopbmp2.height div 36) do
   begin
     for i2 := 1 to (Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1736,8 +1906,6 @@ begin
     end;
     for i2 := 0 downto -(Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1759,8 +1927,6 @@ begin
     end;
     for i2 := 1 to (Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2 + 1;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1782,8 +1948,6 @@ begin
     end;
     for i2 := 0 downto -(Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2 + 1;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1810,8 +1974,6 @@ begin
   begin
     for i2 := 1 to (Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1869,8 +2031,6 @@ begin
 
     for i2 := 0 downto -(Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1927,8 +2087,6 @@ begin
 
     for i2 := 1 to (Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2 + 1;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -1983,8 +2141,6 @@ begin
 
     for i2 := 0 downto -(Mmapopbmp2.width div 72) - 1 do
     begin
-      if needupdate then
-        exit;
       ix := i + i2 + 1;
       iy := i - i2;
       posx := ix * TileW - iy * TileW + pointx;
@@ -2118,43 +2274,120 @@ procedure TForm13.drawsquare(X, Y: Integer);
 var
   i: Integer;
   Pdata: Pbyte;
+  PixelData: Pbyte;
 begin
-  //
   if MMapEditMode = RLEMode then
   begin
-
     try
+      { pf24bit 格式：RGB 三个字节 }
       Pdata := MMApbufbmp.ScanLine[Y];
+      PixelData := Pdata + X * 3;
+      PixelData^ := 0;        { B }
+      Inc(PixelData);
+      PixelData^ := 255;      { G - 绿色 }
+      Inc(PixelData);
+      PixelData^ := 0;        { R }
 
-      (Pdata + X)^ := 23;
-
-      (Pdata + X - 1)^ := 23;
+      PixelData := Pdata + (X - 1) * 3;
+      PixelData^ := 0;
+      Inc(PixelData);
+      PixelData^ := 255;
+      Inc(PixelData);
+      PixelData^ := 0;
 
       for i := 1 to 8 do
       begin
         Pdata := MMApbufbmp.ScanLine[Y - i];
-        (Pdata + (X - 2 * i))^ := 23;
-        (Pdata + (X - 2 * i - 1))^ := 23;
-        (Pdata + (X + 2 * i))^ := 23;
-        (Pdata + (X + 2 * i + 1))^ := 23;
+        PixelData := Pdata + (X - 2 * i) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
+
+        PixelData := Pdata + (X - 2 * i - 1) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
+
+        PixelData := Pdata + (X + 2 * i) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
+
+        PixelData := Pdata + (X + 2 * i + 1) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
       end;
+
       Pdata := MMApbufbmp.ScanLine[Y - TileH];
-      (Pdata + (X - TileW))^ := 23;
-      (Pdata + (X + 17))^ := 23;
+      PixelData := Pdata + (X - TileW) * 3;
+      PixelData^ := 0;
+      Inc(PixelData);
+      PixelData^ := 255;
+      Inc(PixelData);
+      PixelData^ := 0;
+
+      PixelData := Pdata + (X + 17) * 3;
+      PixelData^ := 0;
+      Inc(PixelData);
+      PixelData^ := 255;
+      Inc(PixelData);
+      PixelData^ := 0;
 
       for i := 1 to 8 do
       begin
         Pdata := MMApbufbmp.ScanLine[Y - TileH - i];
-        (Pdata + (X - 19 + 2 * i))^ := 23;
-        (Pdata + (X - 19 + 2 * i + 1))^ := 23;
-        (Pdata + (X + 17 - 2 * i))^ := 23;
-        (Pdata + (X + 17 - 2 * i + 1))^ := 23;
+        PixelData := Pdata + (X - 19 + 2 * i) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
 
+        PixelData := Pdata + (X - 19 + 2 * i + 1) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
+
+        PixelData := Pdata + (X + 17 - 2 * i) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
+
+        PixelData := Pdata + (X + 17 - 2 * i + 1) * 3;
+        PixelData^ := 0;
+        Inc(PixelData);
+        PixelData^ := 255;
+        Inc(PixelData);
+        PixelData^ := 0;
       end;
-      Pdata := MMApbufbmp.ScanLine[Y - 17];
-      (Pdata + X)^ := 23;
-      (Pdata + X - 1)^ := 23;
 
+      Pdata := MMApbufbmp.ScanLine[Y - 17];
+      PixelData := Pdata + X * 3;
+      PixelData^ := 0;
+      Inc(PixelData);
+      PixelData^ := 255;
+      Inc(PixelData);
+      PixelData^ := 0;
+
+      PixelData := Pdata + (X - 1) * 3;
+      PixelData^ := 0;
+      Inc(PixelData);
+      PixelData^ := 255;
+      Inc(PixelData);
+      PixelData^ := 0;
     except
       exit;
     end;
@@ -2198,6 +2431,7 @@ begin
 end;
 
 end.
+
 
 
 
