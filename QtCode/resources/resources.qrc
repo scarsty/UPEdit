@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/arrow.ani</file>
+    </qresource>
+</RCC>

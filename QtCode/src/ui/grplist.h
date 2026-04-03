@@ -1,0 +1,57 @@
+#pragma once
+#include <QWidget>
+#include <QImage>
+#include <QScrollBar>
+#include <QComboBox>
+#include <QPushButton>
+#include <QLabel>
+#include <QMenu>
+#include <QProgressBar>
+#include "head.h"
+
+// GRP 组贴图浏览器 (对应 Delphi TForm3)
+class GrpList : public QWidget {
+    Q_OBJECT
+public:
+    explicit GrpList(QWidget *parent = nullptr);
+
+    void loadGrpFiles(const QString &idxPath, const QString &grpPath, const QString &colPath = {});
+
+signals:
+    void editSprite(int index);
+
+private slots:
+    void onOpenIdx();
+    void onOpenGrp();
+    void onOpenCol();
+    void onDisplay();
+    void onSave();
+    void onScroll(int value);
+    void onContextMenu(const QPoint &pos);
+    void onEditCurrent();
+    void onDeleteCurrent();
+    void onInsertBefore();
+    void onExportAllPNG();
+    void onReplacePNG();
+    void onBatchOffset();
+
+private:
+    void displayGrpList();
+    void loadPalette(const QString &path);
+    QImage decodeSprite(int index);
+
+    QLineEdit *m_idxEdit, *m_grpEdit, *m_colEdit;
+    QComboBox *m_presetCombo;
+    QLabel *m_imageLabel;
+    QScrollBar *m_scrollBar;
+    QProgressBar *m_progress;
+    QMenu *m_contextMenu;
+
+    QVector<GrpPic> m_grpPics;
+    QVector<QRgb> m_palette;     // 256色调色板
+    int m_cols = 10;             // 每行列数
+    int m_nowPic = -1;           // 当前选中
+    int m_scrollOffset = 0;
+    QColor m_bgColor = Qt::black;
+    QColor m_textColor = Qt::white;
+};
