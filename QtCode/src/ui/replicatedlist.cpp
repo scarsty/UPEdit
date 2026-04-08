@@ -7,6 +7,7 @@
 #include <QGroupBox>
 #include <QDataStream>
 #include <QMessageBox>
+#include <QFile>
 
 ReplicatedList::ReplicatedList(QWidget *parent) : QWidget(parent)
 {

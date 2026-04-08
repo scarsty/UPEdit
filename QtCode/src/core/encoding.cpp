@@ -1,17 +1,21 @@
 #include "encoding.h"
-#include <QTextCodec>
+#include <QStringEncoder>
+#include <QStringDecoder>
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#endif
 
 int Encoding::dataCode    = 1; // 默认 BIG5
 int Encoding::talkCode    = 1;
 int Encoding::talkInvert  = 0;
 int Encoding::language    = 0;
 
-static QTextCodec *codecForCode(int code)
+static const char *encodingNameForCode(int code)
 {
     switch (code) {
-    case 0: return QTextCodec::codecForName("GBK");
-    case 1: return QTextCodec::codecForName("Big5");
-    case 3: return QTextCodec::codecForName("UTF-8");
+    case 0: return "GBK";
+    case 1: return "Big5";
+    case 3: return "UTF-8";
     default: return nullptr; // UTF-16LE 需特殊处理
     }
 }
@@ -38,15 +42,18 @@ QString Encoding::readOutStrWithCode(const void *data, int len, int code)
         return result;
     }
 
-    QTextCodec *codec = codecForCode(code);
-    if (!codec)
+    const char *encName = encodingNameForCode(code);
+    if (!encName)
         return {};
 
     QByteArray ba(reinterpret_cast<const char *>(data), len);
     // 截断到第一个 \0
     int nul = ba.indexOf('\0');
     if (nul >= 0) ba.truncate(nul);
-    return codec->toUnicode(ba);
+
+    auto decoder = QStringDecoder(encName);
+    if (!decoder.isValid()) return QString::fromUtf8(ba);
+    return decoder(ba);
 }
 
 void Encoding::writeInStr(const QString &str, void *data, int len)
@@ -69,11 +76,13 @@ void Encoding::writeInStrWithCode(const QString &str, void *data, int len, int c
         return;
     }
 
-    QTextCodec *codec = codecForCode(code);
-    if (!codec) return;
+    const char *encName = encodingNameForCode(code);
+    if (!encName) return;
 
-    QByteArray encoded = codec->fromUnicode(str);
-    int copyLen = qMin(encoded.size(), len);
+    auto encoder = QStringEncoder(encName);
+    if (!encoder.isValid()) return;
+    QByteArray encoded = encoder(str);
+    int copyLen = qMin(static_cast<int>(encoded.size()), len);
     memcpy(data, encoded.constData(), copyLen);
 }
 
@@ -83,7 +92,6 @@ QString Encoding::traditionalToSimplified(const QString &s)
     // Windows: 使用 LCMapString 转简
     std::wstring ws = s.toStdWString();
     std::wstring result(ws.size(), L'\0');
-    extern int __stdcall LCMapStringW(unsigned int, unsigned int, const wchar_t *, int, wchar_t *, int);
     LCMapStringW(0x0804, 0x02000000, ws.c_str(), ws.size(), &result[0], result.size());
     return QString::fromStdWString(result);
 #else
@@ -96,7 +104,6 @@ QString Encoding::simplifiedToTraditional(const QString &s)
 #ifdef Q_OS_WIN
     std::wstring ws = s.toStdWString();
     std::wstring result(ws.size(), L'\0');
-    extern int __stdcall LCMapStringW(unsigned int, unsigned int, const wchar_t *, int, wchar_t *, int);
     LCMapStringW(0x0804, 0x04000000, ws.c_str(), ws.size(), &result[0], result.size());
     return QString::fromStdWString(result);
 #else

@@ -27,8 +27,6 @@ void IniConfig::load(const QString &iniPath)
                     && static_cast<uint8_t>(header[1]) == 0xFE);
 
     QSettings ini(iniPath, QSettings::IniFormat);
-    if (!isUtf16)
-        ini.setIniCodec("UTF-8");
 
     // [run] 节
     gamePath    = ini.value("run/gamepath", "").toString();

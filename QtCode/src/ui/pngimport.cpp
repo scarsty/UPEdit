@@ -12,6 +12,7 @@
 #include <QColorDialog>
 #include <QBuffer>
 #include <QDataStream>
+#include <QApplication>
 
 // ========= PNGImport =========
 
@@ -135,7 +136,8 @@ void PNGImport::onStartImport()
     if (m_idxEdit->text().isEmpty() || m_grpEdit->text().isEmpty()) return;
 
     // 加载现有 GRP
-    QVector<GrpPic> grpPics = GrpData::loadGrpIdx(m_idxEdit->text(), m_grpEdit->text());
+    QVector<GrpPic> grpPics;
+    GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics);
 
     m_progress->setVisible(true);
     m_progress->setRange(0, m_entries.size());
@@ -158,13 +160,19 @@ void PNGImport::onStartImport()
         } else {
             // 转 RLE8
             img = img.convertToFormat(QImage::Format_ARGB32);
-            pic.data = GrpData::encodeRLE8(img, m_palette);
+            uint8_t pr[256]{}, pg[256]{}, pb[256]{};
+            for (int j = 0; j < 256 && j < m_palette.size(); ++j) {
+                pr[j] = qRed(m_palette[j]); pg[j] = qGreen(m_palette[j]); pb[j] = qBlue(m_palette[j]);
+            }
+            pic = GrpIO::encodeRLE(img, pr, pg, pb);
+            pic.xoff = entry.xOff;
+            pic.yoff = entry.yOff;
         }
         grpPics.append(pic);
         m_progress->setValue(i + 1);
     }
 
-    GrpData::saveGrpIdx(m_idxEdit->text(), m_grpEdit->text(), grpPics);
+    GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics);
     m_progress->setVisible(false);
     QMessageBox::information(this, tr("导入"), tr("导入完成"));
 }
@@ -308,9 +316,11 @@ void PNGExport::onStart()
             QFile f(dir + "/" + QString::number(i) + ".png");
             if (f.open(QIODevice::WriteOnly)) f.write(pic.data);
         } else if (pic.width > 0 && pic.height > 0) {
-            QImage img(pic.width, pic.height, QImage::Format_ARGB32);
-            img.fill(Qt::transparent);
-            GrpData::decodeRLE8(pic.data, pic.width, pic.height, m_palette, img);
+            uint8_t pr[256]{}, pg[256]{}, pb[256]{};
+            for (int j = 0; j < 256 && j < m_palette.size(); ++j) {
+                pr[j] = qRed(m_palette[j]); pg[j] = qGreen(m_palette[j]); pb[j] = qBlue(m_palette[j]);
+            }
+            QImage img = GrpIO::decodeRLE(pic, pr, pg, pb);
             img.save(dir + "/" + QString::number(i) + ".png");
         }
 

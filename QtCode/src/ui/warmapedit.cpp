@@ -136,15 +136,14 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
 void WarMapEdit::readWarMapDef()
 {
     IniConfig &cfg = IniConfig::instance();
-    // 从 INI 中读取战斗地图定义路径
-    QString defIdxPath = cfg.gamePath + "/" + cfg.warMapIdxFile;
-    QString defGrpPath = cfg.gamePath + "/" + cfg.warMapGrpFile;
+    QString defIdxPath = cfg.gamePath + "/" + cfg.warMapIdx;
+    QString defGrpPath = cfg.gamePath + "/" + cfg.warMapGrp;
 
-    m_mapData = MapData::loadMap(defIdxPath, defGrpPath);
+    MapIO::readMap(defIdxPath, defGrpPath, m_mapData);
 
     m_mapCombo->blockSignals(true);
     m_mapCombo->clear();
-    for (int i = 0; i < m_mapData.mapCount; ++i)
+    for (int i = 0; i < m_mapData.num; ++i)
         m_mapCombo->addItem(QString::number(i));
     m_mapCombo->blockSignals(false);
 }
@@ -152,36 +151,42 @@ void WarMapEdit::readWarMapDef()
 void WarMapEdit::readWarMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
-    // 加载战斗地图贴图集
-    m_grpPics = GrpData::loadGrpIdx(cfg.warMapTileIdxFile, cfg.warMapTileGrpFile);
+    GrpIO::readGrp(cfg.gamePath + "/" + cfg.warMapTileIdx,
+                    cfg.gamePath + "/" + cfg.warMapTileGrp, m_grpPics);
 
     // 构建解码缓存
+    uint8_t pr[256]={}, pg[256]={}, pb[256]={};
+    if (!cfg.palette.isEmpty())
+        MapIO::readPalette(cfg.gamePath + cfg.palette, pr, pg, pb);
+
     m_tileCache.resize(m_grpPics.size());
     for (int i = 0; i < m_grpPics.size(); ++i) {
         const auto &pic = m_grpPics[i];
-        if (pic.data.isEmpty() || pic.width <= 0 || pic.height <= 0) continue;
-        m_tileCache[i] = QImage(pic.width, pic.height, QImage::Format_ARGB32);
-        m_tileCache[i].fill(Qt::transparent);
-        GrpData::decodeRLE8(pic.data, pic.width, pic.height, m_palette, m_tileCache[i]);
+        if (pic.data.isEmpty()) continue;
+        if (GrpIO::isPNG(pic))
+            m_tileCache[i] = GrpIO::decodePNG(pic);
+        else
+            m_tileCache[i] = GrpIO::decodeRLE(pic, pr, pg, pb);
     }
 }
 
 void WarMapEdit::onLoadMap(int index)
 {
     if (index < 0) return;
-    // 首次加载
-    if (m_mapData.mapCount == 0) {
+    if (m_mapData.num == 0) {
         readWarMapDef();
         readWarMapGrp();
     }
+    m_currentMapIndex = index;
     renderMap();
 }
 
 void WarMapEdit::renderMap()
 {
-    if (m_mapData.mapCount == 0) return;
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+    const Map &curMap = m_mapData.map[m_currentMapIndex];
+    int mapW = curMap.x, mapH = curMap.y;
 
-    int mapW = m_mapData.xSize, mapH = m_mapData.ySize;
     int imgW = (mapW + mapH) * tileW() + tilePadding() * 2;
     int imgH = (mapW + mapH) * tileH() + tilePadding() * 2;
 
@@ -191,17 +196,17 @@ void WarMapEdit::renderMap()
 
     int layer = m_layerCombo->currentIndex();
     int startLayer = (layer <= 0) ? 0 : layer - 1;
-    int endLayer = (layer <= 0 || layer == 3) ? m_mapData.layerNum : layer;
+    int endLayer = (layer <= 0 || layer == 3) ? curMap.layerNum : layer;
 
-    for (int ly = startLayer; ly < endLayer && ly < m_mapData.layers.size(); ++ly) {
-        const auto &layerData = m_mapData.layers[ly];
+    for (int ly = startLayer; ly < endLayer && ly < curMap.mapLayer.size(); ++ly) {
+        const auto &layerData = curMap.mapLayer[ly];
         for (int iy = 0; iy < mapH; ++iy) {
             for (int ix = 0; ix < mapW; ++ix) {
-                int tileId = layerData.tiles[iy * mapW + ix];
+                if (ix >= layerData.pic.size() || iy >= layerData.pic[ix].size()) continue;
+                int tileId = layerData.pic[ix][iy];
                 if (tileId < 0 || tileId >= m_tileCache.size()) continue;
                 const auto &tile = m_tileCache[tileId];
                 if (tile.isNull()) continue;
-
                 int xoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].xoff : 0;
                 int yoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].yoff : 0;
                 drawIsoTile(p, ix, iy, tile, xoff, yoff);
@@ -209,7 +214,6 @@ void WarMapEdit::renderMap()
         }
     }
 
-    // 选中指示
     if (m_selIsoX >= 0 && m_selIsoY >= 0)
         drawSelection(p, m_selIsoX, m_selIsoY);
 
@@ -220,14 +224,16 @@ void WarMapEdit::renderMap()
 void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
     int layer = m_layerCombo->currentIndex();
-    if (layer <= 0 || layer == 3) return; // 未选择或全部层：不编辑
+    if (layer <= 0 || layer == 3) return;
     int ly = layer - 1;
-
-    if (ly >= m_mapData.layers.size()) return;
-    if (ix < 0 || ix >= m_mapData.xSize || iy < 0 || iy >= m_mapData.ySize) return;
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+    Map &curMap = m_mapData.map[m_currentMapIndex];
+    if (ly >= curMap.mapLayer.size()) return;
+    if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) return;
+    if (ix >= curMap.mapLayer[ly].pic.size()) return;
 
     if (btn == Qt::LeftButton && m_selectedTileId >= 0) {
-        m_mapData.layers[ly].tiles[iy * m_mapData.xSize + ix] = m_selectedTileId;
+        curMap.mapLayer[ly].pic[ix][iy] = m_selectedTileId;
         renderMap();
     }
 }
@@ -235,24 +241,31 @@ void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 void WarMapEdit::onSaveMap()
 {
     IniConfig &cfg = IniConfig::instance();
-    MapData::saveMap(cfg.gamePath + "/" + cfg.warMapIdxFile,
-                     cfg.gamePath + "/" + cfg.warMapGrpFile, m_mapData);
+    MapIO::saveMap(cfg.gamePath + "/" + cfg.warMapIdx,
+                   cfg.gamePath + "/" + cfg.warMapGrp, m_mapData);
     QMessageBox::information(this, tr("保存"), tr("战场地图保存成功"));
 }
 
 void WarMapEdit::onNewMap()
 {
-    // 添加一个空地图
-    m_mapData.mapCount++;
-    m_mapCombo->addItem(QString::number(m_mapData.mapCount - 1));
+    Map newMap;
+    newMap.x = 64; newMap.y = 64; newMap.layerNum = 2;
+    newMap.mapLayer.resize(2);
+    for (auto &ml : newMap.mapLayer) {
+        ml.pic.resize(newMap.x);
+        for (auto &col : ml.pic) col.resize(newMap.y, 0);
+    }
+    m_mapData.map.append(newMap);
+    m_mapData.num = m_mapData.map.size();
+    m_mapCombo->addItem(QString::number(m_mapData.num - 1));
 }
 
 void WarMapEdit::onDeleteMap()
 {
-    // 删除当前地图
     int idx = m_mapCombo->currentIndex();
-    if (idx < 0) return;
-    m_mapData.mapCount--;
+    if (idx < 0 || idx >= m_mapData.num) return;
+    m_mapData.map.removeAt(idx);
+    m_mapData.num = m_mapData.map.size();
     m_mapCombo->removeItem(idx);
 }
 

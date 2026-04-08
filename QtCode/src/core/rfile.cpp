@@ -5,6 +5,7 @@
 #include <QDataStream>
 #include <QSettings>
 #include <QStringList>
+#include <QStringEncoder>
 #include <QRegularExpression>
 #include <cstring>
 
@@ -97,7 +98,6 @@ void RFileIO::copyRData(const RData &source, RData &dest)
 void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
 {
     QSettings ini(iniPath, QSettings::IniFormat);
-    ini.setIniCodec("UTF-8");
 
     g.typeNumber = ini.value("R_Modify/TypeNumber", 0).toInt();
     if (g.typeNumber <= 0) return;
@@ -332,13 +332,14 @@ void RFileIO::writeTalkStr(TalkStr &ts, const QString &str)
         const ushort *u16 = str.utf16();
         encoded = QByteArray(reinterpret_cast<const char *>(u16), str.size() * 2);
     } else {
-        QTextCodec *codec = nullptr;
+        const char *encName = "UTF-8";
         switch (code) {
-        case 0: codec = QTextCodec::codecForName("GBK"); break;
-        case 1: codec = QTextCodec::codecForName("Big5"); break;
-        default: codec = QTextCodec::codecForName("UTF-8"); break;
+        case 0: encName = "GBK"; break;
+        case 1: encName = "Big5"; break;
+        default: break;
         }
-        if (codec) encoded = codec->fromUnicode(str);
+        auto encoder = QStringEncoder(encName);
+        if (encoder.isValid()) encoded = encoder(str);
     }
 
     ts.len = encoded.size();

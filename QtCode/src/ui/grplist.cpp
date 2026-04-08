@@ -60,7 +60,8 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
 
     // 填充预设 GRP
     IniConfig &cfg = IniConfig::instance();
-    for (auto &s : cfg.grpSections) m_presetCombo->addItem(s.name);
+    for (int i = 0; i < cfg.grpListNum && i < cfg.grpListName.size(); ++i)
+        m_presetCombo->addItem(cfg.grpListName[i]);
 
     connect(btnIdx, &QPushButton::clicked, this, &GrpList::onOpenIdx);
     connect(btnGrp, &QPushButton::clicked, this, &GrpList::onOpenGrp);
@@ -117,7 +118,8 @@ void GrpList::onDisplay()
     QString grpPath = m_grpEdit->text().trimmed();
     if (idxPath.isEmpty() || grpPath.isEmpty()) return;
 
-    m_grpPics = GrpData::loadGrpIdx(idxPath, grpPath);
+    m_grpPics.clear();
+    GrpIO::readGrp(idxPath, grpPath, m_grpPics);
     m_scrollBar->setRange(0, qMax(0, (int)m_grpPics.size() / m_cols - 5));
     m_scrollOffset = 0;
     displayGrpList();
@@ -162,16 +164,15 @@ QImage GrpList::decodeSprite(int index)
     if (pic.data.isEmpty() || pic.width <= 0 || pic.height <= 0) return {};
 
     // Check PNG
-    if (pic.data.size() > 8 && (uint8_t)pic.data[1] == 'P' && (uint8_t)pic.data[2] == 'N' && (uint8_t)pic.data[3] == 'G') {
-        QImage img;
-        img.loadFromData(pic.data);
-        return img;
+    if (GrpIO::isPNG(pic)) {
+        return GrpIO::decodePNG(pic);
     }
 
-    QImage img(pic.width, pic.height, QImage::Format_ARGB32);
-    img.fill(Qt::transparent);
-    GrpData::decodeRLE8(pic.data, pic.width, pic.height, m_palette, img);
-    return img;
+    uint8_t pr[256]{}, pg[256]{}, pb[256]{};
+    for (int i = 0; i < 256 && i < m_palette.size(); ++i) {
+        pr[i] = qRed(m_palette[i]); pg[i] = qGreen(m_palette[i]); pb[i] = qBlue(m_palette[i]);
+    }
+    return GrpIO::decodeRLE(pic, pr, pg, pb);
 }
 
 void GrpList::onSave()
@@ -180,7 +181,7 @@ void GrpList::onSave()
     QString grpPath = m_grpEdit->text().trimmed();
     if (idxPath.isEmpty() || grpPath.isEmpty()) return;
 
-    GrpData::saveGrpIdx(idxPath, grpPath, m_grpPics);
+    GrpIO::saveGrp(idxPath, grpPath, m_grpPics);
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 

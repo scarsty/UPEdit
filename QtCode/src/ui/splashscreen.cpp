@@ -1,5 +1,7 @@
 #include "splashscreen.h"
 #include <QPainter>
+#include <QGuiApplication>
+#include <QScreen>
 
 SplashScreen::SplashScreen(QWidget *parent)
     : QWidget(parent, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint)

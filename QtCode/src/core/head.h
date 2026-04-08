@@ -103,8 +103,18 @@ struct RIni {
 };
 
 // ── W 文件（战斗数据）──────────────────────────────────
+struct WField {
+    QVector<int64_t> values;
+};
+
+struct WRecord {
+    QVector<WField> fields;
+};
+
 struct WFile {
     RType wType;
+    int typeCount = 0;
+    QVector<WRecord> records;
 };
 
 struct WTermini {
@@ -255,7 +265,11 @@ struct WarPos {
 
 // ── GRP 图片 ─────────────────────────────────────────────
 struct GrpPic {
-    int size = 0;
+    int size   = 0;
+    int width  = 0;
+    int height = 0;
+    int xoff   = 0;  // x 偏移
+    int yoff   = 0;  // y 偏移
     QByteArray data;
 };
 

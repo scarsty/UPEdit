@@ -1,5 +1,6 @@
 #include "takein.h"
 #include "grpdata.h"
+#include "mapdata.h"
 #include "iniconfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -19,7 +20,6 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
 {
     auto *mainLayout = new QHBoxLayout(this);
 
-    // 左侧面板
     auto *leftPanel = new QVBoxLayout;
     auto *btnOpen = new QPushButton(tr("打开图片"));
     auto *btnImport = new QPushButton(tr("导入GRP"));
@@ -35,7 +35,9 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
 
     m_grpCombo = new QComboBox;
     IniConfig &cfg = IniConfig::instance();
-    for (auto &s : cfg.grpSections) m_grpCombo->addItem(s.name);
+    // 用 grpListName 填充下拉框
+    for (int i = 0; i < cfg.grpListNum && i < cfg.grpListName.size(); ++i)
+        m_grpCombo->addItem(cfg.grpListName[i]);
 
     leftPanel->addWidget(btnOpen);
     leftPanel->addWidget(new QLabel(tr("宽:")));
@@ -55,7 +57,6 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
     leftPanel->addWidget(btnImport);
     leftPanel->addStretch();
 
-    // 右侧预览
     auto *scroll = new QScrollArea;
     m_imageLabel = new QLabel;
     scroll->setWidget(m_imageLabel);
@@ -109,7 +110,6 @@ void TakeIn::onSetTransColor()
 
 void TakeIn::onConfirmSize()
 {
-    // 裁切/调整预览
     int w = m_widthEdit->text().toInt();
     int h = m_heightEdit->text().toInt();
     if (w > 0 && h > 0 && !m_sourceImage.isNull()) {
@@ -125,33 +125,26 @@ void TakeIn::onImportToGrp()
 
     int xoff = m_xoffEdit->text().toInt();
     int yoff = m_yoffEdit->text().toInt();
-    bool useTrans = m_transCheck->isChecked();
 
-    QRect region(0, 0, m_sourceImage.width(), m_sourceImage.height());
-    QByteArray rle = picToRLE8(m_sourceImage, region, useTrans, m_transColor);
-
-    // 写入选定的 GRP
     int grpIdx = m_grpCombo->currentIndex();
     IniConfig &cfg = IniConfig::instance();
-    if (grpIdx < 0 || grpIdx >= cfg.grpSections.size()) return;
+    if (grpIdx < 0 || grpIdx >= cfg.grpListNum) return;
+    if (grpIdx >= cfg.grpListIdx.size() || grpIdx >= cfg.grpListGrp.size()) return;
 
-    const auto &section = cfg.grpSections[grpIdx];
-    QVector<GrpPic> pics = GrpData::loadGrpIdx(section.idxPath, section.grpPath);
+    QString idxPath = cfg.gamePath + "/" + cfg.grpListIdx[grpIdx];
+    QString grpPath = cfg.gamePath + "/" + cfg.grpListGrp[grpIdx];
 
-    GrpPic newPic;
-    newPic.width = m_sourceImage.width();
-    newPic.height = m_sourceImage.height();
+    // 读取已有 GRP
+    QVector<GrpPic> pics;
+    GrpIO::readGrp(idxPath, grpPath, pics);
+
+    // 用 encodeRLE 生成新精灵
+    GrpPic newPic = GrpIO::encodeRLE(m_sourceImage, m_palR, m_palG, m_palB);
     newPic.xoff = xoff;
     newPic.yoff = yoff;
-    newPic.data = rle;
     pics.append(newPic);
 
-    GrpData::saveGrpIdx(section.idxPath, section.grpPath, pics);
+    // 保存
+    GrpIO::saveGrp(idxPath, grpPath, pics);
     QMessageBox::information(this, tr("导入"), tr("导入完成，新索引: %1").arg(pics.size() - 1));
-}
-
-QByteArray TakeIn::picToRLE8(const QImage &img, const QRect &region, bool useTrans, QRgb transColor)
-{
-    // RLE8 编码: 与 GrpData::encodeRLE8 一致
-    return GrpData::encodeRLE8(img.copy(region), m_palette);
 }

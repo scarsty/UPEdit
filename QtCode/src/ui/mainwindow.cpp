@@ -20,6 +20,7 @@
 #include "rfile.h"
 #include "encoding.h"
 #include "fileio.h"
+#include "mapdata.h"
 #include "sqlite3wrapper.h"
 #include "luawrapper.h"
 #include "zipwrapper.h"

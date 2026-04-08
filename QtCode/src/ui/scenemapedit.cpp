@@ -90,47 +90,53 @@ void SceneMapEdit::readSceneData(int sceneIndex)
     IniConfig &cfg = IniConfig::instance();
     m_currentScene = sceneIndex;
 
-    // 加载场景地图
-    QString mapPath = cfg.gamePath + "/" + cfg.sceneMapPath;
-    m_mapData = MapData::loadMap(mapPath + ".idx", mapPath + ".grp");
+    // 加载场景地图 (scene idx/grp from config)
+    if (sceneIndex < cfg.sIdx.size() && sceneIndex < cfg.sGrp.size()) {
+        MapIO::readMap(cfg.gamePath + "/" + cfg.sIdx[sceneIndex],
+                       cfg.gamePath + "/" + cfg.sGrp[sceneIndex], m_mapData);
+    }
 
     // 加载事件数据 (D-file format: 200 events per scene, 11 int16_t each)
-    QString dPath = cfg.gamePath + "/" + cfg.dFilePath;
-    QFile dFile(dPath);
-    if (dFile.open(QIODevice::ReadOnly)) {
-        QDataStream ds(&dFile);
-        ds.setByteOrder(QDataStream::LittleEndian);
+    if (sceneIndex < cfg.dIdx.size()) {
+        QString dPath = cfg.gamePath + "/" + cfg.dIdx[sceneIndex];
+        QFile dFile(dPath);
+        if (dFile.open(QIODevice::ReadOnly)) {
+            QDataStream ds(&dFile);
+            ds.setByteOrder(QDataStream::LittleEndian);
 
-        int eventsPerScene = 200;
-        int eventSize = 11 * 2; // 11 int16_t fields
-        dFile.seek(sceneIndex * eventsPerScene * eventSize);
-
-        QVector<SceneEventLocal> events(eventsPerScene);
-        for (int i = 0; i < eventsPerScene; ++i) {
-            ds >> events[i].canWalk >> events[i].index
-               >> events[i].event1 >> events[i].event2 >> events[i].event3
-               >> events[i].beginPic >> events[i].endPic
-               >> events[i].animFrames
-               >> events[i].x >> events[i].y >> events[i].unused;
+            int eventsPerScene = 200;
+            QVector<SceneEventLocal> events(eventsPerScene);
+            for (int i = 0; i < eventsPerScene; ++i) {
+                ds >> events[i].canWalk >> events[i].index
+                   >> events[i].event1 >> events[i].event2 >> events[i].event3
+                   >> events[i].beginPic >> events[i].endPic
+                   >> events[i].animFrames
+                   >> events[i].x >> events[i].y >> events[i].unused;
+            }
+            if (sceneIndex >= m_sceneEvents.size()) m_sceneEvents.resize(sceneIndex + 1);
+            m_sceneEvents[sceneIndex] = events;
         }
-        if (sceneIndex >= m_sceneEvents.size()) m_sceneEvents.resize(sceneIndex + 1);
-        m_sceneEvents[sceneIndex] = events;
     }
 }
 
 void SceneMapEdit::readSceneGrp()
 {
     IniConfig &cfg = IniConfig::instance();
-    m_grpPics = GrpData::loadGrpIdx(cfg.sceneTileIdxFile, cfg.sceneTileGrpFile);
-    MapData::loadPalette(cfg.scenePalettePath, m_palette);
+    GrpIO::readGrp(cfg.gamePath + "/" + cfg.smapIdx,
+                    cfg.gamePath + "/" + cfg.smapGrp, m_grpPics);
+
+    uint8_t pr[256]={}, pg[256]={}, pb[256]={};
+    if (!cfg.palette.isEmpty())
+        MapIO::readPalette(cfg.gamePath + cfg.palette, pr, pg, pb);
 
     m_tileCache.resize(m_grpPics.size());
     for (int i = 0; i < m_grpPics.size(); ++i) {
         const auto &pic = m_grpPics[i];
-        if (pic.data.isEmpty() || pic.width <= 0 || pic.height <= 0) continue;
-        m_tileCache[i] = QImage(pic.width, pic.height, QImage::Format_ARGB32);
-        m_tileCache[i].fill(Qt::transparent);
-        GrpData::decodeRLE8(pic.data, pic.width, pic.height, m_palette, m_tileCache[i]);
+        if (pic.data.isEmpty()) continue;
+        if (GrpIO::isPNG(pic))
+            m_tileCache[i] = GrpIO::decodePNG(pic);
+        else
+            m_tileCache[i] = GrpIO::decodeRLE(pic, pr, pg, pb);
     }
 }
 
@@ -147,9 +153,10 @@ void SceneMapEdit::onLoadScene(int index)
 
 void SceneMapEdit::renderMap()
 {
-    if (m_mapData.mapCount == 0) return;
+    if (m_mapData.num == 0 || m_mapData.map.isEmpty()) return;
+    const Map &curMap = m_mapData.map[0]; // 场景只有一张地图
+    int mapW = curMap.x, mapH = curMap.y;
 
-    int mapW = m_mapData.xSize, mapH = m_mapData.ySize;
     int imgW = (mapW + mapH) * tileW() + tilePadding() * 2;
     int imgH = (mapW + mapH) * tileH() + tilePadding() * 2;
 
@@ -159,13 +166,12 @@ void SceneMapEdit::renderMap()
 
     int layer = m_layerCombo->currentIndex();
 
-    // 渲染地图层 (0=地面, 1=建筑, 2=空中, 3=事件, 4=海拔, 5=全部)
     auto drawLayer = [&](int ly) {
-        if (ly >= m_mapData.layers.size()) return;
-        const auto &layerData = m_mapData.layers[ly];
-        for (int iy = 0; iy < mapH; ++iy) {
-            for (int ix = 0; ix < mapW; ++ix) {
-                int tileId = layerData.tiles[iy * mapW + ix];
+        if (ly >= curMap.mapLayer.size()) return;
+        const auto &layerData = curMap.mapLayer[ly];
+        for (int ix = 0; ix < mapW && ix < layerData.pic.size(); ++ix) {
+            for (int iy = 0; iy < mapH && iy < layerData.pic[ix].size(); ++iy) {
+                int tileId = layerData.pic[ix][iy];
                 if (tileId < 0 || tileId >= m_tileCache.size()) continue;
                 if (m_tileCache[tileId].isNull()) continue;
                 int xoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].xoff : 0;
@@ -175,11 +181,11 @@ void SceneMapEdit::renderMap()
         }
     };
 
-    if (layer == 5 || layer == 0) drawLayer(0); // 地面
-    if (layer == 5 || layer == 1) drawLayer(1); // 建筑
-    if (layer == 5 || layer == 2) drawLayer(2); // 空中
+    if (layer == 5 || layer == 0) drawLayer(0);
+    if (layer == 5 || layer == 1) drawLayer(1);
+    if (layer == 5 || layer == 2) drawLayer(2);
 
-    // 事件层: 绘制事件标记
+    // 事件层
     if (layer == 3 || layer == 5) {
         if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size()) {
             p.setPen(QPen(Qt::yellow, 1));
@@ -203,7 +209,7 @@ void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
     int layer = m_layerCombo->currentIndex();
     if (layer >= 3) {
-        // 事件层 - 选择事件显示
+        // 事件层
         if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size()) {
             for (auto &evt : m_sceneEvents[m_currentScene]) {
                 if (evt.x == ix && evt.y == iy) {
@@ -224,15 +230,17 @@ void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
         return;
     }
 
-    if (layer < 0 || layer >= m_mapData.layers.size()) return;
-    if (ix < 0 || ix >= m_mapData.xSize || iy < 0 || iy >= m_mapData.ySize) return;
+    if (m_mapData.map.isEmpty()) return;
+    Map &curMap = m_mapData.map[0];
+    if (layer < 0 || layer >= curMap.mapLayer.size()) return;
+    if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) return;
 
     addUndoSave();
 
     if (m_deleteMode->isChecked()) {
-        m_mapData.layers[layer].tiles[iy * m_mapData.xSize + ix] = 0;
+        curMap.mapLayer[layer].pic[ix][iy] = 0;
     } else if (m_selectedTileId >= 0 && btn == Qt::LeftButton) {
-        m_mapData.layers[layer].tiles[iy * m_mapData.xSize + ix] = m_selectedTileId;
+        curMap.mapLayer[layer].pic[ix][iy] = m_selectedTileId;
     }
     renderMap();
 }
@@ -299,12 +307,16 @@ void SceneMapEdit::onRedo()
 void SceneMapEdit::onSaveScene()
 {
     IniConfig &cfg = IniConfig::instance();
-    QString mapPath = cfg.gamePath + "/" + cfg.sceneMapPath;
-    MapData::saveMap(mapPath + ".idx", mapPath + ".grp", m_mapData);
+    if (m_currentScene < 0) return;
+
+    // 保存地图
+    QString idxPath = cfg.gamePath + "/" + cfg.sIdx[m_currentScene];
+    QString grpPath = cfg.gamePath + "/" + cfg.sGrp[m_currentScene];
+    MapIO::saveMap(idxPath, grpPath, m_mapData);
 
     // 保存事件数据
-    if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size()) {
-        QString dPath = cfg.gamePath + "/" + cfg.dFilePath;
+    if (m_currentScene < m_sceneEvents.size() && m_currentScene < cfg.dIdx.size()) {
+        QString dPath = cfg.gamePath + "/" + cfg.dIdx[m_currentScene];
         QFile dFile(dPath);
         if (dFile.open(QIODevice::ReadWrite)) {
             int eventsPerScene = 200, eventSize = 11 * 2;

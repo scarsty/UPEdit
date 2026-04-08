@@ -73,18 +73,19 @@ void TxtLeadIn::onExecute()
 
     // 加载并执行主脚本库 lua.txt
     IniConfig &cfg = IniConfig::instance();
-    QString luaTxtPath = cfg.appPath + "/lua.txt";
+    QString luaTxtPath = cfg.startPath + "/lua.txt";
     QFile luaTxt(luaTxtPath);
     if (luaTxt.open(QIODevice::ReadOnly)) {
         QByteArray code = luaTxt.readAll();
-        if (lua.loadBuffer(L, code.data(), code.size(), "lua.txt") != 0) {
+        code.append('\0');
+        if (lua.loadString(L, code.data()) != 0) {
             m_logText->append(tr("加载 lua.txt 失败: %1").arg(lua.toString(L, -1)));
-            lua.close(L);
+            lua.closeState(L);
             return;
         }
         if (lua.pcall(L, 0, 0, 0) != 0) {
             m_logText->append(tr("执行 lua.txt 失败: %1").arg(lua.toString(L, -1)));
-            lua.close(L);
+            lua.closeState(L);
             return;
         }
     }
@@ -93,7 +94,7 @@ void TxtLeadIn::onExecute()
     QFile scriptFile(path);
     if (!scriptFile.open(QIODevice::ReadOnly)) {
         m_logText->append(tr("无法打开脚本文件"));
-        lua.close(L);
+        lua.closeState(L);
         return;
     }
 
@@ -106,15 +107,15 @@ void TxtLeadIn::onExecute()
         scriptData = text.toUtf8();
     }
 
-    if (lua.loadBuffer(L, scriptData.data(), scriptData.size(), path.toUtf8().data()) != 0) {
+    if (lua.loadString(L, scriptData.data()) != 0) {
         m_logText->append(tr("脚本加载失败: %1").arg(lua.toString(L, -1)));
-        lua.close(L);
+        lua.closeState(L);
         return;
     }
 
     if (lua.pcall(L, 0, 0, 0) != 0) {
         m_logText->append(tr("脚本执行失败: %1").arg(lua.toString(L, -1)));
-        lua.close(L);
+        lua.closeState(L);
         return;
     }
 
@@ -126,7 +127,7 @@ void TxtLeadIn::onExecute()
         m_logText->append(tr("脚本执行成功。"));
     }
 
-    lua.close(L);
+    lua.closeState(L);
 }
 
 void TxtLeadIn::registerLuaFunctions()

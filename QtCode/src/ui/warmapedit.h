@@ -78,5 +78,5 @@ private:
     void readWarMapGrp();
 
     QComboBox *m_mapCombo;
-    Map m_copyTile;
+    int m_currentMapIndex = -1;
 };

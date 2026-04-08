@@ -238,8 +238,8 @@ void PicEdit::onIndexChanged(int val)
 void PicEdit::onCopy()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_pics.size()) return;
-    const auto *pix = m_imageLabel->pixmap();
-    if (pix) QApplication::clipboard()->setImage(pix->toImage());
+    QPixmap pix = m_imageLabel->pixmap();
+    if (!pix.isNull()) QApplication::clipboard()->setImage(pix.toImage());
 }
 
 void PicEdit::onPaste() { /* 从剪贴板粘贴，转换后存入m_pics[m_currentIndex] */ }

@@ -95,16 +95,27 @@ void GrpEdit::decodeRLE8(const GrpPic &pic)
 {
     int w = pic.width, h = pic.height;
     if (w <= 0 || h <= 0) { m_bitmap = QImage(); return; }
-    m_bitmap = QImage(w, h, QImage::Format_ARGB32);
-    m_bitmap.fill(Qt::transparent);
 
-    GrpData::decodeRLE8(pic.data, w, h, m_pal, m_bitmap);
+    uint8_t pr[256]{}, pg[256]{}, pb[256]{};
+    for (int i = 0; i < 256 && i < m_pal.size(); ++i) {
+        pr[i] = qRed(m_pal[i]); pg[i] = qGreen(m_pal[i]); pb[i] = qBlue(m_pal[i]);
+    }
+
+    if (GrpIO::isPNG(pic))
+        m_bitmap = GrpIO::decodePNG(pic);
+    else
+        m_bitmap = GrpIO::decodeRLE(pic, pr, pg, pb);
 }
 
 QByteArray GrpEdit::encodeRLE8()
 {
     if (m_bitmap.isNull()) return {};
-    return GrpData::encodeRLE8(m_bitmap, m_pal);
+    uint8_t pr[256]{}, pg[256]{}, pb[256]{};
+    for (int i = 0; i < 256 && i < m_pal.size(); ++i) {
+        pr[i] = qRed(m_pal[i]); pg[i] = qGreen(m_pal[i]); pb[i] = qBlue(m_pal[i]);
+    }
+    GrpPic result = GrpIO::encodeRLE(m_bitmap, pr, pg, pb);
+    return result.data;
 }
 
 void GrpEdit::display()

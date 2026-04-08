@@ -16,3 +16,14 @@ Code/kdef/__history
 *.bat
 *.zip
 Code/__recovery
+QtCode/.qtc_clangd
+.vs
+QtCode/build
+QtCode/debug
+QtCode/out
+QtCode/release
+QtCode/.qmake.stash
+QtCode/Makefile
+QtCode/Makefile.Debug
+QtCode/Makefile.Release
+QtCode/UPEdit.qtvscr

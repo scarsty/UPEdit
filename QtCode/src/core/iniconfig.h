@@ -49,30 +49,38 @@ public:
 
     // KDEF 文件
     QString kdefIdx, kdefGrp;
+    QString kdefPath;  // KDEF 事件二进制文件
     QString nameIdx, nameGrp;
 
     // 战斗文件
     WIni    wIni;
     int     wTypeDataItem = 0;
     QString warData;
+    QString warFileName; // 战斗二进制文件路径
     QString headPicName;
     QString warMapGrp, warMapIdx;
     QString warMapDefGrp, warMapDefIdx;
+    QString warMapTileIdx, warMapTileGrp;
 
     // 场景地图
     QVector<QString> sIdx, sGrp, dIdx, dGrp;
     QString smapIdx, smapGrp;
     QString smapImz, mmapImz, wmapImz;
     QString smapPNGPath, mmapPNGPath, wmapPNGPath;
+    QString sceneTileIdx, sceneTileGrp;
+    QString scenePalette;
     int     sceneNum = 0;
 
     // 主地图
     QString mmapFileGrp, mmapFileIdx;
+    QString mainMapTileIdx, mainMapTileGrp;
+    QString mainMapPalette;
     QString mEarth, mSurface, mBuilding, mBuildX, mBuildY;
 
     // 其他
     QString talkIdx, talkGrp;
     QString leave, effect, match, exp_;
+    QString leaveListFile, effectListFile, matchListFile, expListFile;
     int     listBeginNum = 0;
     uint32_t usualTrans = 0x707030;
 
@@ -86,6 +94,7 @@ public:
 
     QString startPath;
     QString iniFileName = "Upedit.ini";
+    QString iniPath;  // 完整 INI 路径
 
 private:
     IniConfig() = default;

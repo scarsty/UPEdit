@@ -1,6 +1,11 @@
 #pragma once
-#include <QDialog>
+#include <QWidget>
 #include <QLineEdit>
+#include <QLabel>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QProgressBar>
+#include "head.h"
 
 // TAKEIN 图片导入到GRP (对应 Delphi TForm1)
 class TakeIn : public QWidget {
@@ -16,7 +21,6 @@ private slots:
 
 private:
     void displayImage();
-    QByteArray picToRLE8(const QImage &img, const QRect &region, bool useTrans, QRgb transColor);
 
     QLabel *m_imageLabel;
     QLineEdit *m_widthEdit, *m_heightEdit;
@@ -27,6 +31,6 @@ private:
     QProgressBar *m_progress;
 
     QImage m_sourceImage;
-    QVector<QRgb> m_palette;
+    uint8_t m_palR[256]{}, m_palG[256]{}, m_palB[256]{};
     QRgb m_transColor = 0;
 };

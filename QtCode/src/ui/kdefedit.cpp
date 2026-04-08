@@ -7,6 +7,8 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QDataStream>
+#include <QLabel>
+#include <QSettings>
 
 KDEFEdit::KDEFEdit(QWidget *parent) : QWidget(parent)
 {
@@ -100,7 +102,6 @@ void KDEFEdit::loadKDEFIni()
     // 每个指令有: code, name, param_names[]
     // 格式: code=name,param1,param2,...
     QSettings ini(cfg.iniPath, QSettings::IniFormat);
-    ini.setIniCodec("UTF-8");
     ini.beginGroup("KDEF");
 
     int count = ini.value("typenum", 0).toInt();

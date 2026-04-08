@@ -76,16 +76,16 @@ SetLanguage::SetLanguage(QWidget *parent) : QDialog(parent)
     // 初始化当前值
     IniConfig &cfg = IniConfig::instance();
     switch (cfg.dataCode) {
-        case DataCode::GBK:     m_dataGBK->setChecked(true); break;
-        case DataCode::BIG5:    m_dataBIG5->setChecked(true); break;
-        case DataCode::UTF16LE: m_dataUTF16->setChecked(true); break;
-        case DataCode::UTF8:    m_dataUTF8->setChecked(true); break;
+        case CodeGBK:     m_dataGBK->setChecked(true); break;
+        case CodeBIG5:    m_dataBIG5->setChecked(true); break;
+        case CodeUTF16LE: m_dataUTF16->setChecked(true); break;
+        case CodeUTF8:    m_dataUTF8->setChecked(true); break;
     }
     switch (cfg.talkCode) {
-        case DataCode::GBK:     m_talkGBK->setChecked(true); break;
-        case DataCode::BIG5:    m_talkBIG5->setChecked(true); break;
-        case DataCode::UTF16LE: m_talkUTF16->setChecked(true); break;
-        case DataCode::UTF8:    m_talkUTF8->setChecked(true); break;
+        case CodeGBK:     m_talkGBK->setChecked(true); break;
+        case CodeBIG5:    m_talkBIG5->setChecked(true); break;
+        case CodeUTF16LE: m_talkUTF16->setChecked(true); break;
+        case CodeUTF8:    m_talkUTF8->setChecked(true); break;
     }
     if (cfg.talkInvert) m_invertYes->setChecked(true);
     else m_invertNo->setChecked(true);
@@ -99,15 +99,15 @@ void SetLanguage::onConfirm()
 {
     IniConfig &cfg = IniConfig::instance();
 
-    if (m_dataGBK->isChecked()) cfg.dataCode = DataCode::GBK;
-    else if (m_dataBIG5->isChecked()) cfg.dataCode = DataCode::BIG5;
-    else if (m_dataUTF16->isChecked()) cfg.dataCode = DataCode::UTF16LE;
-    else if (m_dataUTF8->isChecked()) cfg.dataCode = DataCode::UTF8;
+    if (m_dataGBK->isChecked()) cfg.dataCode = CodeGBK;
+    else if (m_dataBIG5->isChecked()) cfg.dataCode = CodeBIG5;
+    else if (m_dataUTF16->isChecked()) cfg.dataCode = CodeUTF16LE;
+    else if (m_dataUTF8->isChecked()) cfg.dataCode = CodeUTF8;
 
-    if (m_talkGBK->isChecked()) cfg.talkCode = DataCode::GBK;
-    else if (m_talkBIG5->isChecked()) cfg.talkCode = DataCode::BIG5;
-    else if (m_talkUTF16->isChecked()) cfg.talkCode = DataCode::UTF16LE;
-    else if (m_talkUTF8->isChecked()) cfg.talkCode = DataCode::UTF8;
+    if (m_talkGBK->isChecked()) cfg.talkCode = CodeGBK;
+    else if (m_talkBIG5->isChecked()) cfg.talkCode = CodeBIG5;
+    else if (m_talkUTF16->isChecked()) cfg.talkCode = CodeUTF16LE;
+    else if (m_talkUTF8->isChecked()) cfg.talkCode = CodeUTF8;
 
     cfg.talkInvert = m_invertYes->isChecked();
     cfg.tileScale = m_tileScaleEdit->text().toInt();
@@ -116,7 +116,6 @@ void SetLanguage::onConfirm()
 
     // 保存到 INI
     QSettings ini(cfg.iniPath, QSettings::IniFormat);
-    ini.setIniCodec("UTF-8");
     ini.beginGroup("run");
     ini.setValue("datacode", (int)cfg.dataCode);
     ini.setValue("talkcode", (int)cfg.talkCode);

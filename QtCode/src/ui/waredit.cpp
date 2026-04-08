@@ -10,6 +10,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QDataStream>
+#include <QSettings>
 
 WarEdit::WarEdit(QWidget *parent) : QWidget(parent)
 {
@@ -80,7 +81,6 @@ void WarEdit::readWIni()
     IniConfig &cfg = IniConfig::instance();
     // Read W_Modify section from INI
     QSettings ini(cfg.iniPath, QSettings::IniFormat);
-    ini.setIniCodec("UTF-8");
     ini.beginGroup("W_Modify");
 
     m_wIni.wTerm.clear();
@@ -96,12 +96,13 @@ void WarEdit::readWIni()
         wt.datanum = parts[0].toInt();
         wt.incnum = parts[1].toInt();
         wt.datalen = parts[2].toInt();
-        wt.isStr = parts[3].toInt();
-        wt.isMapNum = parts[4].toInt();
-        wt.labelType = parts[5].toInt();
-        wt.labelNum = parts[6].toInt();
-        if (parts.size() > 7) wt.name = parts[7];
-        if (parts.size() > 8) wt.note = parts[8];
+        wt.isstr = parts[3].toInt();
+        wt.isname = parts[4].toInt();
+        wt.quote = parts[5].toInt();
+        wt.labeltype = parts[6].toInt();
+        if (parts.size() > 7) wt.labelnum = parts[7].toInt();
+        if (parts.size() > 8) wt.name = parts[8];
+        if (parts.size() > 9) wt.note = parts[9];
         m_wIni.wTerm.append(wt);
     }
 
@@ -111,7 +112,7 @@ void WarEdit::readWIni()
 void WarEdit::readW()
 {
     IniConfig &cfg = IniConfig::instance();
-    QString warPath = cfg.gamePath + "/" + cfg.warFileName;
+    QString warPath = cfg.gamePath + "/" + cfg.warData;
 
     QFile file(warPath);
     if (!file.open(QIODevice::ReadOnly)) return;
@@ -210,13 +211,12 @@ void WarEdit::countWarPos()
     const auto &rec = m_warFile.records[m_currentWar];
     for (int f = 0; f < m_wIni.wTerm.size() && f < rec.fields.size(); ++f) {
         const auto &wt = m_wIni.wTerm[f];
-        if (wt.isMapNum > 0 && wt.labelType >= 0) {
-            // 查找对应位置数据
+        if (wt.ismapnum > 0 && wt.labeltype >= 0) {
             for (int d = 0; d < rec.fields[f].values.size(); ++d) {
                 WarPos wp;
-                wp.id = rec.fields[f].values[d];
-                wp.x = 0; wp.y = 0; // 需要从labelType/labelNum引用查找
-                if (wt.labelType == 0) m_warFriend.append(wp);
+                wp.personNum = (int)rec.fields[f].values[d];
+                wp.x = 0; wp.y = 0;
+                if (wt.labeltype == 0) m_warFriend.append(wp);
                 else m_warEnemy.append(wp);
             }
         }
@@ -239,20 +239,18 @@ void WarEdit::drawWarPos()
         return {sx, sy};
     };
 
-    // Draw friend positions (blue)
     p.setPen(QPen(Qt::blue, 2));
     for (const auto &wp : m_warFriend) {
         QPoint sp = isoToScreen(wp.x, wp.y);
         p.drawEllipse(sp, 8, 8);
-        p.drawText(sp.x() - 4, sp.y() + 4, QString::number(wp.id));
+        p.drawText(QPoint(sp.x() - 4, sp.y() + 4), QString::number(wp.personNum));
     }
 
-    // Draw enemy positions (red)
     p.setPen(QPen(Qt::red, 2));
     for (const auto &wp : m_warEnemy) {
         QPoint sp = isoToScreen(wp.x, wp.y);
         p.drawEllipse(sp, 8, 8);
-        p.drawText(sp.x() - 4, sp.y() + 4, QString::number(wp.id));
+        p.drawText(QPoint(sp.x() - 4, sp.y() + 4), QString::number(wp.personNum));
     }
 
     m_posImage->setPixmap(QPixmap::fromImage(img));
@@ -275,7 +273,7 @@ void WarEdit::onSave()
 
     // 写入二进制文件
     IniConfig &cfg = IniConfig::instance();
-    QString warPath = cfg.gamePath + "/" + cfg.warFileName;
+    QString warPath = cfg.gamePath + "/" + cfg.warData;
     QFile file(warPath);
     if (!file.open(QIODevice::WriteOnly)) return;
 

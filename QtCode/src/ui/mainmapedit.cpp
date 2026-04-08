@@ -17,7 +17,6 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     auto *btnExport = new QPushButton(tr("导出图片"));
     leftLayout->addWidget(btnExport);
 
-    // 添加滚动条
     auto *mainArea = static_cast<QHBoxLayout*>(layout());
     auto *mapPanel = new QWidget;
     auto *mapLayout = new QVBoxLayout(mapPanel);
@@ -32,7 +31,6 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     mapLayout->addLayout(innerLayout, 1);
     mapLayout->addWidget(m_hScroll);
 
-    // 替换原来的scroll
     mainArea->removeWidget(m_scroll);
     mainArea->addWidget(mapPanel, 1);
 
@@ -44,12 +42,12 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(m_hScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onHScroll);
     connect(m_vScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onVScroll);
 
-    // 初始化
     readMainMapFile();
     readMainMapGrp();
-    if (m_mapData.mapCount > 0) {
-        m_hScroll->setRange(0, qMax(0, m_mapData.xSize - m_viewW));
-        m_vScroll->setRange(0, qMax(0, m_mapData.ySize - m_viewH));
+    if (m_mapData.num > 0 && !m_mapData.map.isEmpty()) {
+        const Map &curMap = m_mapData.map[0];
+        m_hScroll->setRange(0, qMax(0, curMap.x - m_viewW));
+        m_vScroll->setRange(0, qMax(0, curMap.y - m_viewH));
         renderMap();
     }
 }
@@ -57,29 +55,34 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
 void MainMapEdit::readMainMapFile()
 {
     IniConfig &cfg = IniConfig::instance();
-    m_mapData = MapData::loadMap(cfg.gamePath + "/" + cfg.mainMapIdxFile,
-                                 cfg.gamePath + "/" + cfg.mainMapGrpFile);
+    MapIO::readMap(cfg.gamePath + "/" + cfg.mmapFileIdx,
+                   cfg.gamePath + "/" + cfg.mmapFileGrp, m_mapData);
 }
 
 void MainMapEdit::readMainMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
-    m_grpPics = GrpData::loadGrpIdx(cfg.mainMapTileIdxFile, cfg.mainMapTileGrpFile);
-    MapData::loadPalette(cfg.mainMapPalettePath, m_palette);
+    GrpIO::readGrp(cfg.gamePath + "/" + cfg.mainMapTileIdx,
+                    cfg.gamePath + "/" + cfg.mainMapTileGrp, m_grpPics);
+
+    uint8_t pr[256], pg[256], pb[256];
+    MapIO::readPalette(cfg.gamePath + "/" + cfg.mainMapPalette, pr, pg, pb);
 
     m_tileCache.resize(m_grpPics.size());
     for (int i = 0; i < m_grpPics.size(); ++i) {
-        const auto &pic = m_grpPics[i];
-        if (pic.data.isEmpty() || pic.width <= 0 || pic.height <= 0) continue;
-        m_tileCache[i] = QImage(pic.width, pic.height, QImage::Format_ARGB32);
-        m_tileCache[i].fill(Qt::transparent);
-        GrpData::decodeRLE8(pic.data, pic.width, pic.height, m_palette, m_tileCache[i]);
+        if (m_grpPics[i].data.isEmpty()) continue;
+        if (GrpIO::isPNG(m_grpPics[i])) {
+            m_tileCache[i] = GrpIO::decodePNG(m_grpPics[i]);
+        } else {
+            m_tileCache[i] = GrpIO::decodeRLE(m_grpPics[i], pr, pg, pb);
+        }
     }
 }
 
 void MainMapEdit::renderMap()
 {
-    if (m_mapData.mapCount == 0) return;
+    if (m_mapData.num == 0 || m_mapData.map.isEmpty()) return;
+    const Map &curMap = m_mapData.map[0];
 
     int tw = tileW(), th = tileH(), pad = tilePadding();
     int imgW = (m_viewW + m_viewH) * tw + pad * 2;
@@ -91,24 +94,25 @@ void MainMapEdit::renderMap()
 
     int layer = m_layerCombo->currentIndex();
     int startLayer = (layer == 4) ? 0 : layer;
-    int endLayer = (layer == 4) ? qMin(m_mapData.layerNum, (int)m_mapData.layers.size()) : layer + 1;
+    int endLayer = (layer == 4) ? qMin(curMap.layerNum, (int)curMap.mapLayer.size()) : layer + 1;
 
     for (int ly = startLayer; ly < endLayer; ++ly) {
-        if (ly >= m_mapData.layers.size()) break;
-        const auto &layerData = m_mapData.layers[ly];
+        if (ly >= curMap.mapLayer.size()) break;
+        const auto &layerData = curMap.mapLayer[ly];
         for (int vy = 0; vy < m_viewH; ++vy) {
             for (int vx = 0; vx < m_viewW; ++vx) {
                 int ix = m_viewX + vx, iy = m_viewY + vy;
-                if (ix >= m_mapData.xSize || iy >= m_mapData.ySize) continue;
+                if (ix >= curMap.x || iy >= curMap.y) continue;
+                if (ix >= layerData.pic.size()) continue;
+                if (iy >= layerData.pic[ix].size()) continue;
 
-                int tileId = layerData.tiles[iy * m_mapData.xSize + ix];
+                int tileId = layerData.pic[ix][iy];
                 if (tileId < 0 || tileId >= m_tileCache.size()) continue;
                 if (m_tileCache[tileId].isNull()) continue;
 
                 int xoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].xoff : 0;
                 int yoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].yoff : 0;
 
-                // 使用相对视口坐标计算屏幕位置
                 int sx = (vx - vy) * tw / 2 + pad;
                 int sy = (vx + vy) * th / 2 + pad;
                 p.drawImage(sx - xoff, sy - yoff, m_tileCache[tileId]);
@@ -133,18 +137,19 @@ void MainMapEdit::renderMap()
 
 void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
-    // 将屏幕坐标转为世界坐标
     ix += m_viewX;
     iy += m_viewY;
 
     int layer = m_layerCombo->currentIndex();
-    if (layer >= 4) return; // "全部"层不编辑
+    if (layer >= 4) return;
 
-    if (layer >= m_mapData.layers.size()) return;
-    if (ix < 0 || ix >= m_mapData.xSize || iy < 0 || iy >= m_mapData.ySize) return;
+    if (m_mapData.map.isEmpty()) return;
+    Map &curMap = m_mapData.map[0];
+    if (layer < 0 || layer >= curMap.mapLayer.size()) return;
+    if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) return;
 
     if (m_selectedTileId >= 0 && btn == Qt::LeftButton) {
-        m_mapData.layers[layer].tiles[iy * m_mapData.xSize + ix] = m_selectedTileId;
+        curMap.mapLayer[layer].pic[ix][iy] = m_selectedTileId;
         renderMap();
     }
 }
@@ -155,8 +160,8 @@ void MainMapEdit::onVScroll(int value) { m_viewY = value; renderMap(); }
 void MainMapEdit::onSaveMap()
 {
     IniConfig &cfg = IniConfig::instance();
-    MapData::saveMap(cfg.gamePath + "/" + cfg.mainMapIdxFile,
-                     cfg.gamePath + "/" + cfg.mainMapGrpFile, m_mapData);
+    MapIO::saveMap(cfg.gamePath + "/" + cfg.mmapFileIdx,
+                   cfg.gamePath + "/" + cfg.mmapFileGrp, m_mapData);
     QMessageBox::information(this, tr("保存"), tr("主地图保存成功"));
 }
 

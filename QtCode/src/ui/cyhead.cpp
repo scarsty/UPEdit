@@ -79,14 +79,14 @@ void CYHead::onOpenGrp()
 
 void CYHead::onLoad()
 {
-    m_heads = GrpData::loadGrpIdx(m_idxEdit->text(), m_grpEdit->text());
+    GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), m_heads);
     m_currentIndex = 0;
     drawPNG();
 }
 
 void CYHead::onSave()
 {
-    GrpData::saveGrpIdx(m_idxEdit->text(), m_grpEdit->text(), m_heads);
+    GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), m_heads);
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -103,11 +103,9 @@ void CYHead::drawPNG()
     } else {
         // RLE8 解码（无palette→黑白）
         if (pic.width > 0 && pic.height > 0) {
-            QVector<QRgb> grayPal(256);
-            for (int i = 0; i < 256; ++i) grayPal[i] = qRgb(i, i, i);
-            img = QImage(pic.width, pic.height, QImage::Format_ARGB32);
-            img.fill(Qt::transparent);
-            GrpData::decodeRLE8(pic.data, pic.width, pic.height, grayPal, img);
+            uint8_t gr[256], gg[256], gb[256];
+            for (int i = 0; i < 256; ++i) { gr[i] = gg[i] = gb[i] = (uint8_t)i; }
+            img = GrpIO::decodeRLE(pic, gr, gg, gb);
         }
     }
 
@@ -152,11 +150,9 @@ void CYHead::onExportAll()
             QFile f(fname);
             if (f.open(QIODevice::WriteOnly)) f.write(pic.data);
         } else if (pic.width > 0 && pic.height > 0) {
-            QVector<QRgb> grayPal(256);
-            for (int j = 0; j < 256; ++j) grayPal[j] = qRgb(j, j, j);
-            QImage img(pic.width, pic.height, QImage::Format_ARGB32);
-            img.fill(Qt::transparent);
-            GrpData::decodeRLE8(pic.data, pic.width, pic.height, grayPal, img);
+            uint8_t gr[256], gg[256], gb[256];
+            for (int j = 0; j < 256; ++j) { gr[j] = gg[j] = gb[j] = (uint8_t)j; }
+            QImage img = GrpIO::decodeRLE(pic, gr, gg, gb);
             img.save(fname);
         }
         progress.setValue(i + 1);

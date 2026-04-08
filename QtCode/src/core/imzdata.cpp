@@ -143,7 +143,7 @@ bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
         if (pngFile.open(QIODevice::ReadOnly)) {
             QByteArray pngData = pngFile.readAll();
             ip.frame = 1;
-            ip.frameLen = {pngData.size()};
+            ip.frameLen = {static_cast<int>(pngData.size())};
             ip.frameData.resize(1);
             ip.frameData[0].data = pngData;
             ip.len = pngData.size();

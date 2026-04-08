@@ -9,6 +9,7 @@
 #ifdef Q_OS_WIN
 #include <QSettings>
 #include <windows.h>
+#include <shlobj.h>
 #endif
 
 FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
