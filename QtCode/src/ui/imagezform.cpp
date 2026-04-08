@@ -1,6 +1,5 @@
 #include "imagezform.h"
 #include "imzdata.h"
-#include "zipwrapper.h"
 #include "iniconfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -12,6 +11,11 @@
 #include <QClipboard>
 #include <QApplication>
 #include <QBuffer>
+#include <QDialog>
+#include <QSpinBox>
+
+#include <QResizeEvent>
+#include <QMouseEvent>
 
 ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
 {
@@ -27,8 +31,8 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
     auto *btnSave = new QPushButton(tr("保存"));
     m_animCheck = new QCheckBox(tr("动画"));
 
-    m_modeImz = new QRadioButton(tr("IMZ")); m_modeImz->setChecked(true);
-    m_modePngFolder = new QRadioButton(tr("PNG文件夹"));
+    m_modeImz = new QRadioButton(tr("IMZ")); m_modeImz->setVisible(false);
+    m_modePngFolder = new QRadioButton(tr("PNG文件夹")); m_modePngFolder->setChecked(true);
     m_modePngZip = new QRadioButton(tr("PNG压缩包"));
 
     topLayout->addWidget(m_fileEdit, 1);
@@ -45,8 +49,8 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
     // 打包/解包
     auto *packGroup = new QGroupBox(tr("打包/解包"));
     auto *packLayout = new QHBoxLayout(packGroup);
-    auto *btnPack = new QPushButton(tr("打包IMZ"));
-    auto *btnUnpack = new QPushButton(tr("解包IMZ"));
+    auto *btnPack = new QPushButton(tr("打包ZIP"));
+    auto *btnUnpack = new QPushButton(tr("解包ZIP"));
     packLayout->addWidget(btnPack);
     packLayout->addWidget(btnUnpack);
     packLayout->addStretch();
@@ -101,18 +105,18 @@ void ImagezForm::openImzFile(const QString &path)
 void ImagezForm::readImzFromFile(const QString &path)
 {
     ImzIO::readImz(path, m_imz);
-    m_scrollBar->setRange(0, qMax(0, m_imz.pngNum / m_cols - 5));
+    updateScrollRange();
 }
 
 void ImagezForm::readImzFromFolder(const QString &dir)
 {
     ImzIO::readImzFromFolder(dir, m_imz);
-    m_scrollBar->setRange(0, qMax(0, m_imz.pngNum / m_cols - 5));
+    updateScrollRange();
 }
 
 void ImagezForm::onRead()
 {
-    QString f = QFileDialog::getOpenFileName(this, tr("打开IMZ"), {}, "IMZ (*.imz);;ZIP (*.zip);;All (*.*)");
+    QString f = QFileDialog::getOpenFileName(this, tr("打开PNG压缩包"), {}, "ZIP (*.zip);;All (*.*)");
     if (f.isEmpty()) return;
     m_fileEdit->setText(f);
     m_currentPath = f;
@@ -136,35 +140,101 @@ void ImagezForm::drawImz()
 {
     if (m_imz.pngNum <= 0) return;
 
-    int cellW = 80, cellH = 80;
-    int visRows = m_imageLabel->height() / cellH + 1;
-    int startRow = m_scrollOffset;
+    static const int SQUARE_H = 100;
+    static const int TITLE_H  = 10;
 
-    QImage canvas(m_cols * cellW, visRows * cellH, QImage::Format_ARGB32);
+    int labelW = m_imageLabel->width();
+    int labelH = m_imageLabel->height();
+    if (labelW <= 0 || labelH <= 0) return;
+
+    int squareW = labelW / m_cols;
+    if (squareW < 10) squareW = 10;
+
+    int visRows = labelH / SQUARE_H + 1;
+    int startIdx = m_scrollOffset * m_cols;
+
+    QImage canvas(m_cols * squareW, visRows * SQUARE_H, QImage::Format_ARGB32);
     canvas.fill(Qt::black);
     QPainter p(&canvas);
     p.setPen(Qt::white);
+    p.setFont(QFont("SimSun", 8));
 
-    for (int i = 0; i < visRows * m_cols; ++i) {
-        int idx = startRow * m_cols + i;
-        if (idx >= m_imz.pngNum) break;
+    for (int row = 0; row < visRows; ++row) {
+        for (int col = 0; col < m_cols; ++col) {
+            int idx = startIdx + row * m_cols + col;
+            if (idx >= m_imz.pngNum) break;
 
-        int cx = (i % m_cols) * cellW, cy = (i / m_cols) * cellH;
-        QImage sprite = drawImzPNG(idx);
-        if (!sprite.isNull()) {
-            QImage scaled = sprite.scaled(cellW - 4, cellH - 16, Qt::KeepAspectRatio, Qt::FastTransformation);
-            p.drawImage(cx + 2, cy + 2, scaled);
-        }
-        p.drawText(cx + 2, cy + cellH - 4, QString::number(idx));
+            int cx = col * squareW;
+            int cy = row * SQUARE_H;
 
-        if (idx == m_currentIndex) {
-            p.setPen(QPen(Qt::red, 2));
-            p.drawRect(cx, cy, cellW - 1, cellH - 1);
-            p.setPen(Qt::white);
+            // 显示原始文件编号 (对应 GRP 列表的编号显示)
+            p.drawText(cx + 2, cy + TITLE_H, QString::number(m_imz.imzPng[idx].fileNum));
+
+            // 绘制边框
+            p.drawRect(cx, cy, squareW - 1, SQUARE_H - 1);
+
+            // 解码精灵
+            QImage sprite = drawImzPNG(idx);
+            if (!sprite.isNull()) {
+                int drawAreaW = squareW - 4;
+                int drawAreaH = SQUARE_H - TITLE_H - 4;
+                if (sprite.width() <= drawAreaW && sprite.height() <= drawAreaH) {
+                    p.drawImage(cx + 2, cy + TITLE_H + 2, sprite);
+                } else {
+                    QImage scaled = sprite.scaled(drawAreaW, drawAreaH, Qt::KeepAspectRatio, Qt::FastTransformation);
+                    p.drawImage(cx + 2, cy + TITLE_H + 2, scaled);
+                }
+            }
+
+            // 高亮选中
+            if (idx == m_currentIndex) {
+                p.save();
+                p.setPen(QPen(Qt::red, 2));
+                p.drawRect(cx + 1, cy + 1, squareW - 3, SQUARE_H - 3);
+                p.restore();
+            }
         }
     }
 
     m_imageLabel->setPixmap(QPixmap::fromImage(canvas));
+}
+
+void ImagezForm::updateScrollRange()
+{
+    int totalRows = (m_imz.pngNum + m_cols - 1) / m_cols;
+    int visRows = m_imageLabel->height() / 100 + 1;
+    m_scrollBar->setRange(0, qMax(0, totalRows - visRows));
+}
+
+void ImagezForm::resizeEvent(QResizeEvent *e)
+{
+    QWidget::resizeEvent(e);
+    if (m_imz.pngNum > 0) {
+        updateScrollRange();
+        drawImz();
+    }
+}
+
+void ImagezForm::mousePressEvent(QMouseEvent *e)
+{
+    QPoint pos = m_imageLabel->mapFrom(this, e->pos());
+    if (!m_imageLabel->rect().contains(pos)) {
+        QWidget::mousePressEvent(e);
+        return;
+    }
+
+    int squareW = m_imageLabel->width() / m_cols;
+    if (squareW < 10) squareW = 10;
+    static const int SQUARE_H = 100;
+
+    int col = pos.x() / squareW;
+    int row = pos.y() / SQUARE_H;
+    int idx = (m_scrollOffset + row) * m_cols + col;
+    if (idx >= 0 && idx < m_imz.pngNum) {
+        m_currentIndex = idx;
+        drawImz();
+    }
+    QWidget::mousePressEvent(e);
 }
 
 QImage ImagezForm::drawImzPNG(int index)
@@ -217,7 +287,60 @@ void ImagezForm::onContextMenu(const QPoint &pos)
 
 void ImagezForm::onEditSprite()
 {
-    // 打开单帧编辑器 (TODO: 打开 ImzPNGEdit 对话框)
+    if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
+    ImzPng &ip = m_imz.imzPng[m_currentIndex];
+
+    QImage img = drawImzPNG(m_currentIndex);
+    if (img.isNull()) return;
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("编辑偏移 - %1").arg(ip.fileNum));
+    auto *lay = new QVBoxLayout(&dlg);
+
+    auto *imgLabel = new QLabel;
+    auto *formLay = new QHBoxLayout;
+    auto *xSpin = new QSpinBox; xSpin->setRange(-9999, 9999); xSpin->setValue(ip.x);
+    auto *ySpin = new QSpinBox; ySpin->setRange(-9999, 9999); ySpin->setValue(ip.y);
+    formLay->addWidget(new QLabel(tr("X偏移:")));
+    formLay->addWidget(xSpin);
+    formLay->addWidget(new QLabel(tr("Y偏移:")));
+    formLay->addWidget(ySpin);
+
+    auto *btnBox = new QHBoxLayout;
+    auto *btnOk = new QPushButton(tr("确定"));
+    auto *btnCancel = new QPushButton(tr("取消"));
+    btnBox->addStretch();
+    btnBox->addWidget(btnOk);
+    btnBox->addWidget(btnCancel);
+
+    lay->addWidget(imgLabel, 1);
+    lay->addLayout(formLay);
+    lay->addLayout(btnBox);
+
+    // 绘制带红色十字的预览
+    auto updatePreview = [&]() {
+        QImage preview = img.copy();
+        QPainter p(&preview);
+        int ox = xSpin->value(), oy = ySpin->value();
+        p.setPen(QPen(Qt::red, 1));
+        p.drawLine(ox - 10, oy, ox + 10, oy);
+        p.drawLine(ox, oy - 10, ox, oy + 10);
+        p.end();
+        imgLabel->setPixmap(QPixmap::fromImage(preview));
+    };
+    updatePreview();
+
+    connect(xSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](int) { updatePreview(); });
+    connect(ySpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](int) { updatePreview(); });
+    connect(btnOk, &QPushButton::clicked, &dlg, &QDialog::accept);
+    connect(btnCancel, &QPushButton::clicked, &dlg, &QDialog::reject);
+
+    dlg.resize(qMax(400, img.width() + 40), qMax(300, img.height() + 120));
+    if (dlg.exec() == QDialog::Accepted) {
+        ip.x = (int16_t)xSpin->value();
+        ip.y = (int16_t)ySpin->value();
+        drawImz();
+    }
 }
 
 void ImagezForm::onCopySprite()
@@ -293,7 +416,7 @@ void ImagezForm::onPack()
 {
     QString src = QFileDialog::getExistingDirectory(this, tr("选择PNG文件夹"));
     if (src.isEmpty()) return;
-    QString dst = QFileDialog::getSaveFileName(this, tr("保存IMZ"), {}, "IMZ (*.imz)");
+    QString dst = QFileDialog::getSaveFileName(this, tr("保存ZIP"), {}, "ZIP (*.zip);;IMZ (*.imz)");
     if (dst.isEmpty()) return;
 
     Imz imz;
@@ -304,7 +427,7 @@ void ImagezForm::onPack()
 
 void ImagezForm::onUnpack()
 {
-    QString src = QFileDialog::getOpenFileName(this, tr("打开IMZ"), {}, "IMZ (*.imz)");
+    QString src = QFileDialog::getOpenFileName(this, tr("打开ZIP/IMZ"), {}, "ZIP (*.zip);;IMZ (*.imz)");
     if (src.isEmpty()) return;
     QString dst = QFileDialog::getExistingDirectory(this, tr("选择输出目录"));
     if (dst.isEmpty()) return;

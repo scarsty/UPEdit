@@ -1,9 +1,11 @@
 #include "warmapedit.h"
 #include "grpdata.h"
 #include "mapdata.h"
+#include "fileio.h"
 #include "iniconfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGroupBox>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QFileDialog>
@@ -44,18 +46,18 @@ IsoMapEditor::IsoMapEditor(QWidget *parent) : QWidget(parent)
 QPoint IsoMapEditor::isoToScreen(int ix, int iy) const
 {
     int tw = tileW(), th = tileH();
-    int sx = (ix - iy) * tw / 2 + tilePadding();
-    int sy = (ix + iy) * th / 2 + tilePadding();
+    int sx = (ix - iy) * tw + m_renderCenterX;
+    int sy = (ix + iy) * th + m_renderCenterY;
     return {sx, sy};
 }
 
 QPoint IsoMapEditor::screenToIso(int sx, int sy) const
 {
     int tw = tileW(), th = tileH();
-    sx -= tilePadding();
-    sy -= tilePadding();
-    double ix = (double)sx / tw + (double)sy / th;
-    double iy = (double)sy / th - (double)sx / tw;
+    double dx = sx - m_renderCenterX;
+    double dy = sy - m_renderCenterY;
+    double ix = (dx / tw + dy / th) / 2.0;
+    double iy = (dy / th - dx / tw) / 2.0;
     return {(int)ix, (int)iy};
 }
 
@@ -113,6 +115,7 @@ void IsoMapEditor::handleMouseMove(QMouseEvent *event)
 WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
 {
     m_layerCombo->addItems({tr("未选择"), tr("地面"), tr("建筑"), tr("全部")});
+    m_layerCombo->setCurrentIndex(3);  // 默认全部
 
     auto *leftLayout = static_cast<QVBoxLayout*>(layout()->itemAt(0)->layout());
     m_mapCombo = new QComboBox;
@@ -126,20 +129,81 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
     leftLayout->insertWidget(5, btnDel);
     leftLayout->insertWidget(6, btnExport);
 
+    // 贴图预览 GroupBox
+    auto *tileGroup = new QGroupBox(tr("当前贴图"));
+    auto *tileLayout = new QVBoxLayout(tileGroup);
+    auto addTileRow = [&](const QString &label, QLabel *&valLabel, QLabel *&imgLabel) {
+        auto *h = new QHBoxLayout;
+        auto *lbl = new QLabel(label);
+        valLabel = new QLabel;
+        h->addWidget(lbl);
+        h->addWidget(valLabel);
+        tileLayout->addLayout(h);
+        imgLabel = new QLabel;
+        imgLabel->setFixedSize(85, 50);
+        imgLabel->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        imgLabel->setAlignment(Qt::AlignCenter);
+        tileLayout->addWidget(imgLabel);
+    };
+    addTileRow(tr("地面"), m_lblGroundVal, m_imgGround);
+    addTileRow(tr("建筑"), m_lblBuildingVal, m_imgBuilding);
+    tileGroup->setFixedWidth(200);
+    leftLayout->addWidget(tileGroup);
+
+    // 缩略图
+    m_thumbLabel = new QLabel;
+    m_thumbLabel->setFixedSize(256, 128);
+    m_thumbLabel->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+    m_thumbLabel->setAlignment(Qt::AlignCenter);
+    m_thumbLabel->setScaledContents(true);
+    leftLayout->addWidget(new QLabel(tr("缩略图")));
+    leftLayout->addWidget(m_thumbLabel);
+
     connect(m_mapCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WarMapEdit::onLoadMap);
     connect(m_btnSave, &QPushButton::clicked, this, &WarMapEdit::onSaveMap);
     connect(btnNew, &QPushButton::clicked, this, &WarMapEdit::onNewMap);
     connect(btnDel, &QPushButton::clicked, this, &WarMapEdit::onDeleteMap);
     connect(btnExport, &QPushButton::clicked, this, &WarMapEdit::onExportImage);
+
+    // 初始加载数据
+    readWarMapDef();
+    readWarMapGrp();
+    if (m_mapData.num > 0) {
+        m_mapCombo->setCurrentIndex(0);
+        onLoadMap(0);
+    }
 }
 
 void WarMapEdit::readWarMapDef()
 {
     IniConfig &cfg = IniConfig::instance();
-    QString defIdxPath = cfg.gamePath + "/" + cfg.warMapIdx;
-    QString defGrpPath = cfg.gamePath + "/" + cfg.warMapGrp;
+    QString defIdxPath = cfg.gamePath + "/" + cfg.warMapDefIdx;
+    QString defGrpPath = cfg.gamePath + "/" + cfg.warMapDefGrp;
 
-    MapIO::readMap(defIdxPath, defGrpPath, m_mapData);
+    QByteArray idxData = FileIO::readFileAll(defIdxPath);
+    QByteArray grpData = FileIO::readFileAll(defGrpPath);
+    if (idxData.isEmpty() || grpData.isEmpty()) return;
+
+    // idx: cumulative END offsets, each 4 bytes
+    int totalEntries = idxData.size() / 4;
+    const uint32_t *offsets = reinterpret_cast<const uint32_t *>(idxData.constData());
+
+    // Count non-zero offsets (Delphi: stop at first zero)
+    int num = 0;
+    for (int i = 0; i < totalEntries; ++i) {
+        if (offsets[i] > 0) ++num;
+        else break;
+    }
+
+    m_mapData.num = num;
+    m_mapData.map.resize(num);
+
+    // War maps: no header, hardcoded layerNum=2, x=64, y=64 (matching Delphi readwardef)
+    const int layerNum = 2, mapW = 64, mapH = 64;
+    for (int i = 0; i < num; ++i) {
+        int startOff = (i == 0) ? 0 : static_cast<int>(offsets[i - 1]);
+        MapIO::readSingleMap(grpData, startOff, m_mapData.map[i], layerNum, mapW, mapH);
+    }
 
     m_mapCombo->blockSignals(true);
     m_mapCombo->clear();
@@ -151,8 +215,8 @@ void WarMapEdit::readWarMapDef()
 void WarMapEdit::readWarMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
-    GrpIO::readGrp(cfg.gamePath + "/" + cfg.warMapTileIdx,
-                    cfg.gamePath + "/" + cfg.warMapTileGrp, m_grpPics);
+    GrpIO::readGrp(cfg.gamePath + "/" + cfg.warMapIdx,
+                    cfg.gamePath + "/" + cfg.warMapGrp, m_grpPics);
 
     // 构建解码缓存
     uint8_t pr[256]={}, pg[256]={}, pb[256]={};
@@ -176,7 +240,10 @@ void WarMapEdit::onLoadMap(int index)
     if (m_mapData.num == 0) {
         readWarMapDef();
         readWarMapGrp();
+        if (index >= m_mapData.num) return;
     }
+    if (m_tileCache.isEmpty())
+        readWarMapGrp();
     m_currentMapIndex = index;
     renderMap();
 }
@@ -186,30 +253,64 @@ void WarMapEdit::renderMap()
     if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
     const Map &curMap = m_mapData.map[m_currentMapIndex];
     int mapW = curMap.x, mapH = curMap.y;
+    int tw = tileW(), th = tileH(), pad = tilePadding();
 
-    int imgW = (mapW + mapH) * tileW() + tilePadding() * 2;
-    int imgH = (mapW + mapH) * tileH() + tilePadding() * 2;
+    int imgW = (mapW + mapH) * tw + pad * 2;
+    int imgH = (mapW + mapH) * th + pad * 2;
+
+    // Delphi: pointx = width/2, pointy = height/2 - 31*18
+    m_renderCenterX = imgW / 2;
+    m_renderCenterY = imgH / 2 - 31 * tw;
 
     m_mapImage = QImage(imgW, imgH, QImage::Format_ARGB32);
-    m_mapImage.fill(QColor(0, 50, 0));
+    m_mapImage.fill(Qt::black);
     QPainter p(&m_mapImage);
 
     int layer = m_layerCombo->currentIndex();
-    int startLayer = (layer <= 0) ? 0 : layer - 1;
+    int startLayer = (layer <= 0 || layer == 3) ? 0 : layer - 1;
     int endLayer = (layer <= 0 || layer == 3) ? curMap.layerNum : layer;
 
-    for (int ly = startLayer; ly < endLayer && ly < curMap.mapLayer.size(); ++ly) {
-        const auto &layerData = curMap.mapLayer[ly];
-        for (int iy = 0; iy < mapH; ++iy) {
-            for (int ix = 0; ix < mapW; ++ix) {
+    // 对角线遍历 (匹配 Delphi displaywareditmap)
+    for (int i = 0; i < qMin(mapW, mapH); ++i) {
+        // 行扫描: ix from i to mapW-1, iy = i
+        for (int ix = i; ix < mapW; ++ix) {
+            int iy = i;
+            QPoint sp = isoToScreen(ix, iy);
+            for (int ly = startLayer; ly < endLayer && ly < curMap.mapLayer.size(); ++ly) {
+                const auto &layerData = curMap.mapLayer[ly];
                 if (ix >= layerData.pic.size() || iy >= layerData.pic[ix].size()) continue;
-                int tileId = layerData.pic[ix][iy];
-                if (tileId < 0 || tileId >= m_tileCache.size()) continue;
+                int tileId = layerData.pic[ix][iy] / 2;
+                // 地面层(0): tileId>=0 均绘制; 其他层: tileId>0 才绘制
+                if (ly == 0) {
+                    if (tileId < 0 || tileId >= m_tileCache.size()) continue;
+                } else {
+                    if (tileId <= 0 || tileId >= m_tileCache.size()) continue;
+                }
                 const auto &tile = m_tileCache[tileId];
                 if (tile.isNull()) continue;
                 int xoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].xoff : 0;
                 int yoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].yoff : 0;
-                drawIsoTile(p, ix, iy, tile, xoff, yoff);
+                p.drawImage(sp.x() - xoff, sp.y() - yoff, tile);
+            }
+        }
+        // 列扫描: ix = i, iy from i+1 to mapH-1
+        for (int iy = i + 1; iy < mapH; ++iy) {
+            int ix = i;
+            QPoint sp = isoToScreen(ix, iy);
+            for (int ly = startLayer; ly < endLayer && ly < curMap.mapLayer.size(); ++ly) {
+                const auto &layerData = curMap.mapLayer[ly];
+                if (ix >= layerData.pic.size() || iy >= layerData.pic[ix].size()) continue;
+                int tileId = layerData.pic[ix][iy] / 2;
+                if (ly == 0) {
+                    if (tileId < 0 || tileId >= m_tileCache.size()) continue;
+                } else {
+                    if (tileId <= 0 || tileId >= m_tileCache.size()) continue;
+                }
+                const auto &tile = m_tileCache[tileId];
+                if (tile.isNull()) continue;
+                int xoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].xoff : 0;
+                int yoff = (tileId < m_grpPics.size()) ? m_grpPics[tileId].yoff : 0;
+                p.drawImage(sp.x() - xoff, sp.y() - yoff, tile);
             }
         }
     }
@@ -219,6 +320,8 @@ void WarMapEdit::renderMap()
 
     m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
     m_mapLabel->resize(m_mapImage.size());
+
+    updateThumbnail();
 }
 
 void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
@@ -233,7 +336,7 @@ void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
     if (ix >= curMap.mapLayer[ly].pic.size()) return;
 
     if (btn == Qt::LeftButton && m_selectedTileId >= 0) {
-        curMap.mapLayer[ly].pic[ix][iy] = m_selectedTileId;
+        curMap.mapLayer[ly].pic[ix][iy] = m_selectedTileId * 2;
         renderMap();
     }
 }
@@ -241,8 +344,32 @@ void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 void WarMapEdit::onSaveMap()
 {
     IniConfig &cfg = IniConfig::instance();
-    MapIO::saveMap(cfg.gamePath + "/" + cfg.warMapIdx,
-                   cfg.gamePath + "/" + cfg.warMapGrp, m_mapData);
+    QString defIdxPath = cfg.gamePath + "/" + cfg.warMapDefIdx;
+    QString defGrpPath = cfg.gamePath + "/" + cfg.warMapDefGrp;
+
+    QByteArray grpData;
+    QByteArray idxData(m_mapData.num * 4, '\0');
+    uint32_t *offsets = reinterpret_cast<uint32_t *>(idxData.data());
+
+    for (int i = 0; i < m_mapData.num; ++i) {
+        const Map &m = m_mapData.map[i];
+        // War maps: no header, write tile data directly
+        for (int l = 0; l < m.layerNum && l < m.mapLayer.size(); ++l) {
+            const MapLayer &layer = m.mapLayer[l];
+            for (int y = 0; y < m.y; ++y) {
+                for (int x = 0; x < m.x; ++x) {
+                    int16_t v = (x < layer.pic.size() && y < layer.pic[x].size())
+                                ? layer.pic[x][y] : 0;
+                    grpData.append(reinterpret_cast<const char *>(&v), 2);
+                }
+            }
+        }
+        // Cumulative END offset
+        offsets[i] = static_cast<uint32_t>(grpData.size());
+    }
+
+    FileIO::writeFileAll(defGrpPath, grpData);
+    FileIO::writeFileAll(defIdxPath, idxData);
     QMessageBox::information(this, tr("保存"), tr("战场地图保存成功"));
 }
 
@@ -274,4 +401,42 @@ void WarMapEdit::onExportImage()
     if (m_mapImage.isNull()) return;
     QString f = QFileDialog::getSaveFileName(this, tr("导出地图图片"), {}, "PNG (*.png);;BMP (*.bmp)");
     if (!f.isEmpty()) m_mapImage.save(f);
+}
+
+void WarMapEdit::handleMouseMove(QMouseEvent *event)
+{
+    IsoMapEditor::handleMouseMove(event);
+    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
+    updateTilePreview(iso.x(), iso.y());
+}
+
+void WarMapEdit::updateTilePreview(int ix, int iy)
+{
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+    const Map &curMap = m_mapData.map[m_currentMapIndex];
+    if (ix < 0 || iy < 0 || ix >= curMap.x || iy >= curMap.y) return;
+
+    auto showTile = [&](int layerIdx, QLabel *valLbl, QLabel *imgLbl) {
+        if (layerIdx >= (int)curMap.mapLayer.size()) return;
+        const auto &layer = curMap.mapLayer[layerIdx];
+        if (ix >= layer.pic.size() || iy >= layer.pic[ix].size()) return;
+        int tileId = layer.pic[ix][iy] / 2;
+        valLbl->setText(QString::number(tileId));
+        if (tileId >= 0 && tileId < m_tileCache.size() && !m_tileCache[tileId].isNull()) {
+            imgLbl->setPixmap(QPixmap::fromImage(m_tileCache[tileId]).scaled(
+                imgLbl->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        } else {
+            imgLbl->clear();
+        }
+    };
+
+    showTile(0, m_lblGroundVal, m_imgGround);
+    showTile(1, m_lblBuildingVal, m_imgBuilding);
+}
+
+void WarMapEdit::updateThumbnail()
+{
+    if (m_mapImage.isNull() || !m_thumbLabel) return;
+    m_thumbLabel->setPixmap(QPixmap::fromImage(m_mapImage).scaled(
+        m_thumbLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 }

@@ -164,6 +164,10 @@ void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
                 term.name    = parts[6];
                 term.note    = parts[7] + QString("(%1)").arg(diff);
                 diff += term.datalen / 2 * term.datanum;
+
+                // 供 DB 模式检测名称列
+                if (term.isname == 1)
+                    g.typeNameName[t] = term.name;
             }
         }
     }
@@ -445,12 +449,10 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
                             int value = stmtData.columnInt(i3);
                             writeRDataInt(ds, value);
                         } else {
-                            // 文本列: 直接复制 UTF-8 原始字节 (对应 Delphi move)
+                            // 文本列: 从 UTF-8 转换为原生 dataCode 编码存储
                             ds.data.fill(0, ds.dataLen);
                             QString str = stmtData.columnText(i3);
-                            QByteArray utf8 = str.toUtf8();
-                            int copyLen = qMin(utf8.size(), ds.dataLen);
-                            memcpy(ds.data.data(), utf8.constData(), copyLen);
+                            Encoding::writeInStr(str, ds.data.data(), ds.dataLen);
                         }
                     }
                 }
@@ -518,7 +520,7 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
 
                         int termIdx = i3;
                         if (termIdx < g.rIni[i1].rTerm.size() && g.rIni[i1].rTerm[termIdx].isstr != 0) {
-                            // 文本列: data[] → 按 dataCode 解码 → UTF-8 给 SQLite
+                            // 文本列: 从原生 dataCode 编码解码 → 给 SQLite
                             QString str = Encoding::readOutStr(ds.data.constData(), ds.dataLen);
                             // 转义双引号
                             str.replace('"', "\"\"");

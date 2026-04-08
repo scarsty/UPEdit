@@ -3,6 +3,7 @@
 #include "rfile.h"
 #include "encoding.h"
 #include <QHeaderView>
+#include <QInputDialog>
 
 REditForm::REditForm(QWidget *parent)
     : QWidget(parent)
@@ -21,6 +22,7 @@ REditForm::REditForm(QWidget *parent)
     layout->addWidget(m_table);
 
     connect(m_table, &QTableWidget::cellChanged, this, &REditForm::onCellChanged);
+    connect(m_table, &QTableWidget::cellDoubleClicked, this, &REditForm::onCellDoubleClicked);
 }
 
 void REditForm::displayRecord(int typeIndex, int recordIndex)
@@ -146,6 +148,97 @@ void REditForm::onCellChanged(int row, int column)
                 }
                 curRow++;
             }
+        }
+    }
+}
+
+REditForm::RowInfo REditForm::rowToInfo(int row) const
+{
+    RowInfo info;
+    if (!m_pRFile || m_typeIndex < 0 || m_recordIndex < 0) return info;
+    const auto &rt = m_pRFile->rType[m_typeIndex];
+    if (m_recordIndex >= rt.rData.size()) return info;
+    const auto &rd = rt.rData[m_recordIndex];
+
+    IniConfig &cfg = IniConfig::instance();
+    int curRow = 0;
+    int temp2 = 0;
+    for (int d = 0; d < rd.rDataLine.size(); ++d) {
+        const auto &line = rd.rDataLine[d];
+        int incNum = (!line.rArray.isEmpty()) ? line.rArray[0].incNum : 1;
+        for (int dn = 0; dn < line.rArray.size(); ++dn) {
+            for (int inc = 0; inc < line.rArray[dn].dataArray.size(); ++inc) {
+                if (curRow == row) {
+                    info.dataLineIdx = d;
+                    info.arrayIdx = dn;
+                    info.dataIdx = inc;
+                    int termIdx = temp2 + inc;
+                    if (m_typeIndex < cfg.rGlobals.rIni.size() &&
+                        termIdx < cfg.rGlobals.rIni[m_typeIndex].rTerm.size())
+                        info.quote = cfg.rGlobals.rIni[m_typeIndex].rTerm[termIdx].quote;
+                    return info;
+                }
+                curRow++;
+            }
+        }
+        temp2 += incNum;
+    }
+    return info;
+}
+
+void REditForm::onCellDoubleClicked(int row, int /*column*/)
+{
+    if (!m_pRFile || m_typeIndex < 0 || m_recordIndex < 0) return;
+    auto &rt = m_pRFile->rType[m_typeIndex];
+    if (m_recordIndex >= rt.rData.size()) return;
+    auto &rd = rt.rData[m_recordIndex];
+
+    RowInfo info = rowToInfo(row);
+    if (info.dataLineIdx < 0) return;
+
+    auto &single = rd.rDataLine[info.dataLineIdx].rArray[info.arrayIdx].dataArray[info.dataIdx];
+
+    if (info.quote >= 0 && single.dataType == 0) {
+        // 引用字段: 弹出选择对话框 (匹配 Delphi Form6)
+        if (info.quote >= m_pRFile->rType.size()) return;
+        const RType &refType = m_pRFile->rType[info.quote];
+
+        QStringList items;
+        items << "-1";
+        for (int i = 0; i < refType.rData.size(); ++i) {
+            QString name;
+            if (refType.namePos >= 0 && refType.namePos < refType.rData[i].rDataLine.size()) {
+                const auto &nl = refType.rData[i].rDataLine[refType.namePos];
+                if (!nl.rArray.isEmpty() && !nl.rArray[0].dataArray.isEmpty())
+                    name = Encoding::displayStr(RFileIO::readRDataStr(nl.rArray[0].dataArray[0]));
+            }
+            items << QString("%1 %2").arg(i).arg(name);
+        }
+
+        int curVal = static_cast<int>(RFileIO::readRDataInt(single));
+        int curIdx = curVal + 1; // Delphi: ComboBox index = value + 1 (because "-1" is at index 0)
+        if (curIdx < 0 || curIdx >= items.size()) curIdx = 0;
+
+        IniConfig &cfg = IniConfig::instance();
+        QString typeName = (info.quote < cfg.rGlobals.typeName.size())
+                           ? cfg.rGlobals.typeName[info.quote] : QString::number(info.quote);
+
+        bool ok;
+        QString selected = QInputDialog::getItem(this, tr("选择引用"), typeName, items, curIdx, false, &ok);
+        if (ok) {
+            int idx = items.indexOf(selected);
+            RFileIO::writeRDataInt(single, idx - 1);
+            displayRecord(m_typeIndex, m_recordIndex);
+        }
+    } else {
+        // 非引用字段: 弹出编辑对话框 (匹配 Delphi InputBox)
+        QString curVal = RFileIO::readRDataStr(single);
+        bool ok;
+        QString title = (single.dataType == 0) ? tr("修改数值") : tr("修改字符串");
+        QString newVal = QInputDialog::getText(this, title, tr("修改此项:"), QLineEdit::Normal, curVal, &ok);
+        if (ok && !newVal.isEmpty()) {
+            RFileIO::writeRDataStr(single, newVal);
+            displayRecord(m_typeIndex, m_recordIndex);
         }
     }
 }

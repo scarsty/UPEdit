@@ -10,6 +10,9 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QMessageBox>
+#include <QColorDialog>
+#include <QGroupBox>
+#include <QSettings>
 
 static const int SQUARE_H = 100;
 static const int TITLE_H  = 10;
@@ -40,6 +43,44 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
     topBar->addWidget(btnCol);
     topBar->addWidget(btnDisplay);
     topBar->addWidget(btnSave);
+
+    // 背景和字体颜色选择 (对应 Delphi GroupBox1)
+    {
+        IniConfig &cfg = IniConfig::instance();
+        // 从 INI 读取保存的颜色
+        QSettings ini(cfg.iniPath, QSettings::IniFormat);
+        int bgVal = ini.value("file/GRPListBackGround", -1).toInt();
+        int txtVal = ini.value("file/GRPListTextCol", -1).toInt();
+        if (bgVal >= 0) m_bgColor = QColor::fromRgb(bgVal & 0xFF, (bgVal >> 8) & 0xFF, (bgVal >> 16) & 0xFF);
+        if (txtVal >= 0) m_textColor = QColor::fromRgb(txtVal & 0xFF, (txtVal >> 8) & 0xFF, (txtVal >> 16) & 0xFF);
+    }
+
+    auto *colorGroup = new QGroupBox(tr("背景和字体颜色"));
+    auto *colorLayout = new QVBoxLayout(colorGroup);
+    auto *btnBgColor = new QPushButton(tr("更改背景色"));
+    m_bgColorPanel = new QLabel;
+    m_bgColorPanel->setFixedSize(60, 18);
+    m_bgColorPanel->setAutoFillBackground(true);
+    {
+        QPalette pal = m_bgColorPanel->palette();
+        pal.setColor(QPalette::Window, m_bgColor);
+        m_bgColorPanel->setPalette(pal);
+    }
+    auto *btnTextColor = new QPushButton(tr("更改字体色"));
+    m_textColorPanel = new QLabel;
+    m_textColorPanel->setFixedSize(60, 18);
+    m_textColorPanel->setAutoFillBackground(true);
+    {
+        QPalette pal = m_textColorPanel->palette();
+        pal.setColor(QPalette::Window, m_textColor);
+        m_textColorPanel->setPalette(pal);
+    }
+    colorLayout->addWidget(btnBgColor);
+    colorLayout->addWidget(m_bgColorPanel);
+    colorLayout->addWidget(btnTextColor);
+    colorLayout->addWidget(m_textColorPanel);
+    topBar->addWidget(colorGroup);
+
     mainLayout->addLayout(topBar);
     mainLayout->addWidget(m_progress);
 
@@ -68,6 +109,9 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
     IniConfig &cfg = IniConfig::instance();
     for (int i = 0; i < cfg.grpListNum && i < cfg.grpListName.size(); ++i)
         m_presetCombo->addItem(cfg.grpListName[i]);
+    // 战斗帧 GRP (对应 Delphi fightgrpnum)
+    for (int i = 0; i < cfg.fightGrpNum; ++i)
+        m_presetCombo->addItem(cfg.fightName + QString::number(i));
 
     // 加载调色板
     if (!cfg.palette.isEmpty()) {
@@ -87,6 +131,10 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
     connect(m_imageLabel, &QLabel::customContextMenuRequested, this, &GrpList::onContextMenu);
     connect(m_presetCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GrpList::onPresetChanged);
     connect(m_sectionCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GrpList::onSectionChanged);
+    connect(btnBgColor, &QPushButton::clicked, this, &GrpList::onBgColorPick);
+    connect(btnTextColor, &QPushButton::clicked, this, &GrpList::onTextColorPick);
+    connect(m_bgColorPanel, &QLabel::linkActivated, this, &GrpList::onBgColorPick);
+    connect(m_textColorPanel, &QLabel::linkActivated, this, &GrpList::onTextColorPick);
 }
 
 void GrpList::onOpenIdx()
@@ -158,12 +206,26 @@ void GrpList::onPresetChanged(int index)
 {
     if (index < 0) return;
     IniConfig &cfg = IniConfig::instance();
-    if (index >= cfg.grpListNum) return;
 
-    QString idxPath = cfg.gamePath + "/" + cfg.grpListIdx[index];
-    QString grpPath = cfg.gamePath + "/" + cfg.grpListGrp[index];
-    m_idxEdit->setText(idxPath);
-    m_grpEdit->setText(grpPath);
+    if (index < cfg.grpListNum) {
+        // 常规 GRP 文件
+        QString idxPath = cfg.gamePath + "/" + cfg.grpListIdx[index];
+        QString grpPath = cfg.gamePath + "/" + cfg.grpListGrp[index];
+        m_idxEdit->setText(idxPath);
+        m_grpEdit->setText(grpPath);
+    } else {
+        // 战斗帧 GRP (对应 Delphi fightidx/fightgrp with *** replacement)
+        int fightIndex = index - cfg.grpListNum;
+        QString nameStr;
+        if (fightIndex < 10) nameStr = "00" + QString::number(fightIndex);
+        else if (fightIndex < 100) nameStr = "0" + QString::number(fightIndex);
+        else nameStr = QString::number(fightIndex);
+
+        QString idxPath = cfg.gamePath + "/" + QString(cfg.fightIdx).replace("***", nameStr);
+        QString grpPath = cfg.gamePath + "/" + QString(cfg.fightGrp).replace("***", nameStr);
+        m_idxEdit->setText(idxPath);
+        m_grpEdit->setText(grpPath);
+    }
 
     onDisplay();
 }
@@ -422,3 +484,38 @@ void GrpList::onExportAllPNG()
 }
 
 void GrpList::onBatchOffset() { /* 批量偏移设置 */ }
+
+void GrpList::onBgColorPick()
+{
+    QColor color = QColorDialog::getColor(m_bgColor, this, tr("选择背景色"));
+    if (color.isValid()) {
+        m_bgColor = color;
+        QPalette pal = m_bgColorPanel->palette();
+        pal.setColor(QPalette::Window, m_bgColor);
+        m_bgColorPanel->setPalette(pal);
+        displayGrpList();
+        // 保存到 INI (对应 Delphi Button6Click)
+        // Delphi 颜色格式: BBGGRR
+        int iniColor = m_bgColor.red() | (m_bgColor.green() << 8) | (m_bgColor.blue() << 16);
+        IniConfig &cfg = IniConfig::instance();
+        QSettings ini(cfg.iniPath, QSettings::IniFormat);
+        ini.setValue("file/GRPListBackGround", iniColor);
+    }
+}
+
+void GrpList::onTextColorPick()
+{
+    QColor color = QColorDialog::getColor(m_textColor, this, tr("选择字体色"));
+    if (color.isValid()) {
+        m_textColor = color;
+        QPalette pal = m_textColorPanel->palette();
+        pal.setColor(QPalette::Window, m_textColor);
+        m_textColorPanel->setPalette(pal);
+        displayGrpList();
+        // 保存到 INI (对应 Delphi Button7Click)
+        int iniColor = m_textColor.red() | (m_textColor.green() << 8) | (m_textColor.blue() << 16);
+        IniConfig &cfg = IniConfig::instance();
+        QSettings ini(cfg.iniPath, QSettings::IniFormat);
+        ini.setValue("file/GRPListTextCol", iniColor);
+    }
+}

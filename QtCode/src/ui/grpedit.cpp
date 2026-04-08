@@ -71,6 +71,8 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
     connect(btnFlipV, &QPushButton::clicked, this, &GrpEdit::onFlipV);
     connect(btnRot90, &QPushButton::clicked, this, &GrpEdit::onRotate90);
     connect(btnRot270, &QPushButton::clicked, this, &GrpEdit::onRotate270);
+    connect(m_xoffSpin, QOverload<int>::of(&QSpinBox::valueChanged), [this](int) { display(); });
+    connect(m_yoffSpin, QOverload<int>::of(&QSpinBox::valueChanged), [this](int) { display(); });
 }
 
 void GrpEdit::setPalette(const QVector<QRgb> &pal)
@@ -122,9 +124,18 @@ void GrpEdit::display()
 {
     if (m_bitmap.isNull()) return;
     int z = 1 << m_zoomCombo->currentIndex();
-    QImage scaled = m_bitmap.scaled(m_bitmap.width() * z, m_bitmap.height() * z, Qt::KeepAspectRatio, Qt::FastTransformation);
-    m_imageLabel->setPixmap(QPixmap::fromImage(scaled));
-    m_imageLabel->resize(scaled.size());
+
+    // 绘制带红色十字偏移指示的预览
+    QImage preview = m_bitmap.scaled(m_bitmap.width() * z, m_bitmap.height() * z, Qt::KeepAspectRatio, Qt::FastTransformation);
+    QPainter p(&preview);
+    int ox = m_xoffSpin->value() * z, oy = m_yoffSpin->value() * z;
+    p.setPen(QPen(Qt::red, 1));
+    p.drawLine(ox - 10, oy, ox + 10, oy);
+    p.drawLine(ox, oy - 10, ox, oy + 10);
+    p.end();
+
+    m_imageLabel->setPixmap(QPixmap::fromImage(preview));
+    m_imageLabel->resize(preview.size());
 }
 
 void GrpEdit::drawPalette()

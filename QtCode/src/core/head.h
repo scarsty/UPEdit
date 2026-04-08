@@ -105,6 +105,7 @@ struct RIni {
 // ── W 文件（战斗数据）──────────────────────────────────
 struct WField {
     QVector<int64_t> values;
+    QVector<QByteArray> rawBytes;  // 用于 isstr==1 的字符串字段
 };
 
 struct WRecord {
@@ -341,6 +342,7 @@ struct PNGBuf {
 
 struct ImzPng {
     int len     = 0;
+    int fileNum = 0;     // 原始文件编号 ("5.png" → 5)
     int16_t x   = 0;
     int16_t y   = 0;
     int frame   = 0;

@@ -40,7 +40,12 @@ private:
     void readImzFromFile(const QString &path);
     void readImzFromFolder(const QString &dir);
     void drawImz();
+    void updateScrollRange();
     QImage drawImzPNG(int index);
+
+protected:
+    void resizeEvent(QResizeEvent *e) override;
+    void mousePressEvent(QMouseEvent *e) override;
 
     QLineEdit *m_fileEdit;
     QRadioButton *m_modeImz, *m_modePngFolder, *m_modePngZip;

@@ -37,9 +37,13 @@ bool MapIO::readMap(const QString &idxFile, const QString &grpFile, MapStruct &m
         for (int l = 0; l < m.layerNum; ++l) {
             MapLayer &layer = m.mapLayer[l];
             layer.pic.resize(m.x);
-            for (int x = 0; x < m.x; ++x) {
-                layer.pic[x].resize(m.y);
-                for (int y = 0; y < m.y; ++y) {
+            for (int x = 0; x < m.x; ++x)
+                layer.pic[x].resize(m.y, 0);
+
+            // Delphi 按行(y)连续读取: for iy := 0 to y-1 do fileread(pic[iy][0], x*2)
+            // Qt pic[x][y]，需要转置读取
+            for (int y = 0; y < m.y; ++y) {
+                for (int x = 0; x < m.x; ++x) {
                     if (p + 2 <= reinterpret_cast<const uint8_t *>(grpData.constData()) + grpData.size()) {
                         layer.pic[x][y] = *reinterpret_cast<const int16_t *>(p);
                         p += 2;
@@ -68,12 +72,13 @@ void MapIO::saveMap(const QString &idxFile, const QString &grpFile, const MapStr
                               static_cast<int16_t>(m.y) };
         grpData.append(reinterpret_cast<const char *>(header), 6);
 
-        // 写入图层数据
+        // 写入图层数据 (按行写入，匹配 Delphi: for iy := 0 to y-1)
         for (int l = 0; l < m.layerNum && l < m.mapLayer.size(); ++l) {
             const MapLayer &layer = m.mapLayer[l];
-            for (int x = 0; x < m.x && x < layer.pic.size(); ++x) {
-                for (int y = 0; y < m.y && y < layer.pic[x].size(); ++y) {
-                    int16_t v = layer.pic[x][y];
+            for (int y = 0; y < m.y; ++y) {
+                for (int x = 0; x < m.x; ++x) {
+                    int16_t v = (x < layer.pic.size() && y < layer.pic[x].size())
+                                ? layer.pic[x][y] : 0;
                     grpData.append(reinterpret_cast<const char *>(&v), 2);
                 }
             }
@@ -97,9 +102,12 @@ bool MapIO::readSingleMap(const QByteArray &data, int offset, Map &m, int layerN
 
     for (int l = 0; l < layerNum; ++l) {
         m.mapLayer[l].pic.resize(width);
-        for (int x = 0; x < width; ++x) {
-            m.mapLayer[l].pic[x].resize(height);
-            for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x)
+            m.mapLayer[l].pic[x].resize(height, 0);
+
+        // 按行(y)读取，匹配 Delphi
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
                 if (idx < maxIdx)
                     m.mapLayer[l].pic[x][y] = p[idx++];
             }

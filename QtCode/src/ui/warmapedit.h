@@ -21,7 +21,7 @@ protected:
     QPoint isoToScreen(int ix, int iy) const;
     QPoint screenToIso(int sx, int sy) const;
     int tileW() const { return 18 * m_tileScale; }
-    int tileH() const { return 9 * m_tileScale; }
+    int tileH() const { return  9 * m_tileScale; }
     int tilePadding() const { return 150 * m_tileScale; }
 
     void drawIsoTile(QPainter &p, int ix, int iy, const QImage &sprite, int xoff = 0, int yoff = 0);
@@ -48,12 +48,15 @@ protected:
     int m_selIsoX = -1, m_selIsoY = -1;
     QImage m_mapImage;             // 渲染缓冲
 
+    // 渲染坐标原点 (isoToScreen 使用)
+    int m_renderCenterX = 0, m_renderCenterY = 0;
+
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
+    virtual void handleMouseMove(QMouseEvent *event);
 
 private:
     void handleMousePress(QMouseEvent *event);
-    void handleMouseMove(QMouseEvent *event);
 };
 
 // 战斗地图编辑器 (对应 Delphi TForm11)
@@ -72,11 +75,23 @@ private slots:
 protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
+    void handleMouseMove(QMouseEvent *event) override;
 
 private:
     void readWarMapDef();
     void readWarMapGrp();
+    void updateTilePreview(int ix, int iy);
+    void updateThumbnail();
 
     QComboBox *m_mapCombo;
     int m_currentMapIndex = -1;
+
+    // 贴图预览
+    QLabel *m_imgGround = nullptr;
+    QLabel *m_imgBuilding = nullptr;
+    QLabel *m_lblGroundVal = nullptr;
+    QLabel *m_lblBuildingVal = nullptr;
+
+    // 缩略图
+    QLabel *m_thumbLabel = nullptr;
 };

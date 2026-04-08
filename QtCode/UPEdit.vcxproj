@@ -194,6 +194,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\libs\PotConv.cpp" />
+    <ClCompile Include="src\libs\ZipFile.cpp" />
     <ClCompile Include="src\ui\aboutdialog.cpp" />
     <ClCompile Include="src\ui\cyhead.cpp" />
     <ClCompile Include="src\core\encoding.cpp" />

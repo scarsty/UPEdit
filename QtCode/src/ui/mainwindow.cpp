@@ -23,7 +23,6 @@
 #include "mapdata.h"
 #include "sqlite3wrapper.h"
 #include "luawrapper.h"
-#include "zipwrapper.h"
 #include "xlsxiowrapper.h"
 
 #include <QApplication>
@@ -80,7 +79,7 @@ void MainWindow::createMenus()
     // ── 编辑器菜单 ──────────────────────────────────────
     QMenu *editMenu = menuBar()->addMenu(tr("编辑器(&E)"));
     editMenu->addAction(tr("R-数据编辑(&R)"), this, &MainWindow::onOpenREdit);
-    editMenu->addAction(tr("GRP-贴图编辑(&G)"), this, &MainWindow::onOpenGrpEdit);
+    //editMenu->addAction(tr("GRP-贴图编辑(&G)"), this, &MainWindow::onOpenGrpEdit);
     editMenu->addAction(tr("GRP-贴图列表(&L)"), this, &MainWindow::onOpenGrpList);
     editMenu->addAction(tr("单图编辑(&P)"), this, &MainWindow::onOpenPicEdit);
     editMenu->addSeparator();
@@ -91,13 +90,14 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
     editMenu->addAction(tr("KDEF-事件编辑(&K)"), this, &MainWindow::onOpenKDEFEdit);
     editMenu->addSeparator();
-    editMenu->addAction(tr("IMZ-精灵编辑(&I)"), this, &MainWindow::onOpenImzEdit);
-    editMenu->addAction(tr("PNG批量导出"), this, &MainWindow::onOpenPNGExport);
-    editMenu->addAction(tr("PNG批量导入"), this, &MainWindow::onOpenPNGImport);
-    editMenu->addAction(tr("苍炎头像(&C)"), this, &MainWindow::onOpenCYHead);
-    editMenu->addSeparator();
-    editMenu->addAction(tr("文本/Lua脚本(&T)"), this, &MainWindow::onOpenTxtLeadIn);
-    editMenu->addAction(tr("关键值关联"), this, &MainWindow::onOpenReplicatedList);
+    editMenu->addAction(tr("PNG-图像编辑(&I)"), this, &MainWindow::onOpenImzEdit);
+    // PNG批量导入导出已整合到PNG-图像编辑中
+    //editMenu->addAction(tr("PNG批量导出"), this, &MainWindow::onOpenPNGExport);
+    //editMenu->addAction(tr("PNG批量导入"), this, &MainWindow::onOpenPNGImport);
+    //editMenu->addAction(tr("苍炎头像(&C)"), this, &MainWindow::onOpenCYHead);
+    //editMenu->addSeparator();
+    //editMenu->addAction(tr("文本/Lua脚本(&T)"), this, &MainWindow::onOpenTxtLeadIn);
+    //editMenu->addAction(tr("关键值关联"), this, &MainWindow::onOpenReplicatedList);
 
     // ── 设置菜单 ────────────────────────────────────────
     QMenu *settingsMenu = menuBar()->addMenu(tr("设置(&S)"));
@@ -132,7 +132,7 @@ void MainWindow::initializeData()
 {
     // 加载外部库
     SQLite3Database::loadLibrary("sqlite3");
-    ZipWrapper::loadLibrary("zip");
+    // ZipFile 静态链接 libzip, 无需 loadLibrary
     XlsxReader::loadLibrary("libxlsxio_read");
     XlsxWriter::loadLibrary("xlsxwriter");
 }
@@ -146,6 +146,8 @@ void MainWindow::loadGameData()
         QString grpFile = cfg.gamePath + cfg.rFileName[0];
         QString idxFile = cfg.gamePath + cfg.rIdxFileName[0];
 
+        // 先恢复 INI 定义，避免 readDB 残留破坏字段结构
+        RFileIO::readIni(cfg.rGlobals, cfg.iniPath);
         if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
             RFileIO::readDB(grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
         } else {
@@ -203,14 +205,30 @@ void MainWindow::onExit()     { close(); }
 
 void MainWindow::onOpenREdit()      { showOrCreateMdi(m_rEdit, m_mdiArea, tr("R-数据编辑")); }
 void MainWindow::onOpenGrpEdit()    { showOrCreateMdi(m_grpEdit, m_mdiArea, tr("GRP-贴图编辑")); }
-void MainWindow::onOpenGrpList()    { showOrCreateMdi(m_grpList, m_mdiArea, tr("GRP-贴图列表")); }
+void MainWindow::onOpenGrpList()    {
+    showOrCreateMdi(m_grpList, m_mdiArea, tr("GRP-贴图列表"));
+    // 连接右键"编辑"信号 → 打开 GrpEdit
+    static bool connected = false;
+    if (!connected && m_grpList) {
+        connect(m_grpList, &GrpList::editSprite, this, [this](int index) {
+            onOpenGrpEdit();
+            if (m_grpEdit && m_grpList) {
+                auto pics = m_grpList->grpPics();
+                auto pal  = m_grpList->palette();
+                if (index >= 0 && index < pics.size())
+                    m_grpEdit->setSprite(pics[index], pal);
+            }
+        });
+        connected = true;
+    }
+}
 void MainWindow::onOpenPicEdit()    { showOrCreateMdi(m_picEdit, m_mdiArea, tr("单图编辑")); }
 void MainWindow::onOpenWarEdit()    { showOrCreateMdi(m_warEdit, m_mdiArea, tr("战斗数据编辑")); }
 void MainWindow::onOpenWarMapEdit() { showOrCreateMdi(m_warMap, m_mdiArea, tr("战斗地图编辑")); }
 void MainWindow::onOpenSceneMapEdit() { showOrCreateMdi(m_sceneMap, m_mdiArea, tr("场景地图编辑")); }
 void MainWindow::onOpenMainMapEdit()  { showOrCreateMdi(m_mainMap, m_mdiArea, tr("主地图编辑")); }
 void MainWindow::onOpenKDEFEdit()   { showOrCreateMdi(m_kdefEdit, m_mdiArea, tr("KDEF-事件编辑")); }
-void MainWindow::onOpenImzEdit()    { showOrCreateMdi(m_imagez, m_mdiArea, tr("IMZ-精灵编辑")); }
+void MainWindow::onOpenImzEdit()    { showOrCreateMdi(m_imagez, m_mdiArea, tr("PNG-图像编辑")); }
 void MainWindow::onOpenPNGExport()  { showOrCreateMdi(m_pngExport, m_mdiArea, tr("PNG批量导出")); }
 void MainWindow::onOpenPNGImport()  { showOrCreateMdi(m_pngImport, m_mdiArea, tr("PNG批量导入")); }
 void MainWindow::onOpenCYHead()     { showOrCreateMdi(m_cyHead, m_mdiArea, tr("苍炎头像")); }

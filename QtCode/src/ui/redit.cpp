@@ -161,6 +161,10 @@ void REditWidget::loadProgress(int index)
     QString grpFile = cfg.gamePath + cfg.rFileName[index];
     QString idxFile = cfg.gamePath + cfg.rIdxFileName[index];
 
+    // readDB 会修改 rGlobals.rIni / typeDataItem，
+    // 每次加载前从 INI 重新读取，保证字段定义回归原始状态
+    RFileIO::readIni(cfg.rGlobals, cfg.iniPath);
+
     bool ok;
     if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
         ok = RFileIO::readDB(grpFile, &m_rFile, cfg.rGlobals);
@@ -288,6 +292,8 @@ void REditWidget::onSave()
 
     // 若保存的是进度 0，同步到全局 useR (cfg.rGlobals.rFile)
     if (slot == 0) {
+        // 先恢复 INI 定义，避免 readDB 残留的修改影响后续 readR
+        RFileIO::readIni(cfg.rGlobals, cfg.iniPath);
         if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
             RFileIO::readDB(grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
         } else {
@@ -391,53 +397,97 @@ void REditWidget::onBatchEdit()
 
 void REditWidget::onExportXlsx()
 {
+    if (!XlsxWriter::loadLibrary("xlsxwriter")) {
+        QMessageBox::warning(this, tr("错误"), tr("无法加载 xlsxwriter.dll，请将该文件放入程序目录"));
+        return;
+    }
+
     QString filename = QFileDialog::getSaveFileName(this, tr("导出 XLSX"), {}, "XLSX (*.xlsx)");
     if (filename.isEmpty()) return;
 
     IniConfig &cfg = IniConfig::instance();
-    if (m_currentType < 0) return;
+    RFileGlobals &g = cfg.rGlobals;
 
     XlsxWriter writer;
     if (!writer.create(filename)) {
         QMessageBox::warning(this, tr("错误"), tr("无法创建文件"));
         return;
     }
-    writer.addWorksheet(cfg.rGlobals.typeName[m_currentType]);
 
-    // 写表头 (遵循 rDataLine 结构: 仅 datanum > 0 的 term)
-    auto &rini = cfg.rGlobals.rIni[m_currentType];
-    int col = 0;
-    for (int d = 0; d < rini.rTerm.size(); ++d) {
-        if (rini.rTerm[d].datanum <= 0) continue;
-        for (int dn = 0; dn < rini.rTerm[d].datanum; ++dn) {
-            for (int inc = 0; inc < rini.rTerm[d].incnum; ++inc) {
-                int termIdx = d + inc;
-                QString header;
-                if (termIdx < rini.rTerm.size())
-                    header = rini.rTerm[termIdx].name;
-                else
-                    header = QString("col%1").arg(col);
-                if (rini.rTerm[d].datanum > 1)
-                    header += QString::number(dn);
-                writer.writeString(0, col++, header);
+    // 遍历所有类型，每个类型一个 sheet (对应 Delphi Button11Click)
+    for (int i1 = 0; i1 < m_rFile.typeNumber && i1 < g.rIni.size(); ++i1) {
+        writer.addWorksheet(g.typeName[i1]);
+        auto &rini = g.rIni[i1];
+        auto &rt = m_rFile.rType[i1];
+
+        if (i1 == 0) {
+            // Type 0 转置布局: 字段名写在列0, 每条记录占一列
+            int row = 0;
+            for (int i2 = 0; i2 < g.typeDataItem[i1] && i2 < rini.rTerm.size(); ++i2) {
+                if (rini.rTerm[i2].datanum <= 0) continue;
+                for (int i3 = 0; i3 < rini.rTerm[i2].datanum; ++i3) {
+                    for (int i4 = 0; i4 < rini.rTerm[i2].incnum; ++i4) {
+                        int termIdx = i2 + i4;
+                        QString header;
+                        if (termIdx < rini.rTerm.size())
+                            header = Encoding::displayStr(rini.rTerm[termIdx].name);
+                        else
+                            header = QString("col%1").arg(row);
+                        if (i3 > 0) header += QString::number(i3);
+                        writer.writeString(row, 0, header);
+                        row++;
+                    }
+                }
             }
-        }
-    }
-
-    // 写数据
-    auto &rt = m_rFile.rType[m_currentType];
-    for (int r = 0; r < rt.rData.size(); ++r) {
-        col = 0;
-        for (int d = 0; d < rt.rData[r].rDataLine.size(); ++d) {
-            auto &line = rt.rData[r].rDataLine[d];
-            for (int dn = 0; dn < line.rArray.size(); ++dn) {
-                for (int inc = 0; inc < line.rArray[dn].dataArray.size(); ++inc) {
-                    auto &single = line.rArray[dn].dataArray[inc];
-                    if (single.dataType == 0)
-                        writer.writeNumber(r + 1, col, RFileIO::readRDataInt(single));
-                    else
-                        writer.writeString(r + 1, col, RFileIO::readRDataStr(single));
-                    col++;
+            // 数据: worksheet_write(row=fieldIdx, col=recordIdx+1)
+            for (int i2 = 0; i2 < rt.rData.size(); ++i2) {
+                int row2 = 0;
+                for (int i3 = 0; i3 < rt.rData[i2].rDataLine.size(); ++i3) {
+                    for (int i4 = 0; i4 < rt.rData[i2].rDataLine[i3].rArray.size(); ++i4) {
+                        for (int i5 = 0; i5 < rt.rData[i2].rDataLine[i3].rArray[i4].dataArray.size(); ++i5) {
+                            auto &ds = rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5];
+                            if (ds.dataType == 1)
+                                writer.writeString(row2, i2 + 1, RFileIO::readRDataStr(ds));
+                            else
+                                writer.writeNumber(row2, i2 + 1, RFileIO::readRDataInt(ds));
+                            row2++;
+                        }
+                    }
+                }
+            }
+        } else {
+            // 其他类型: 标准布局 — 字段名在行0, 每条记录占一行
+            int col = 0;
+            for (int i2 = 0; i2 < g.typeDataItem[i1] && i2 < rini.rTerm.size(); ++i2) {
+                if (rini.rTerm[i2].datanum <= 0) continue;
+                for (int i3 = 0; i3 < rini.rTerm[i2].datanum; ++i3) {
+                    for (int i4 = 0; i4 < rini.rTerm[i2].incnum; ++i4) {
+                        int termIdx = i2 + i4;
+                        QString header;
+                        if (termIdx < rini.rTerm.size())
+                            header = rini.rTerm[termIdx].name;
+                        else
+                            header = QString("col%1").arg(col);
+                        if (i3 > 0) header += QString::number(i3);
+                        writer.writeString(0, col, header);
+                        col++;
+                    }
+                }
+            }
+            // 数据: worksheet_write(row=recordIdx+1, col=fieldIdx)
+            for (int i2 = 0; i2 < rt.rData.size(); ++i2) {
+                int col2 = 0;
+                for (int i3 = 0; i3 < rt.rData[i2].rDataLine.size(); ++i3) {
+                    for (int i4 = 0; i4 < rt.rData[i2].rDataLine[i3].rArray.size(); ++i4) {
+                        for (int i5 = 0; i5 < rt.rData[i2].rDataLine[i3].rArray[i4].dataArray.size(); ++i5) {
+                            auto &ds = rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5];
+                            if (ds.dataType == 1)
+                                writer.writeString(i2 + 1, col2, Encoding::displayStr(RFileIO::readRDataStr(ds)));
+                            else
+                                writer.writeNumber(i2 + 1, col2, RFileIO::readRDataInt(ds));
+                            col2++;
+                        }
+                    }
                 }
             }
         }
@@ -448,8 +498,16 @@ void REditWidget::onExportXlsx()
 
 void REditWidget::onImportXlsx()
 {
+    if (!XlsxReader::loadLibrary("libxlsxio_read")) {
+        QMessageBox::warning(this, tr("错误"), tr("无法加载 libxlsxio_read.dll，请将该文件放入程序目录"));
+        return;
+    }
+
     QString filename = QFileDialog::getOpenFileName(this, tr("导入 XLSX"), {}, "XLSX (*.xlsx)");
     if (filename.isEmpty()) return;
+
+    IniConfig &cfg = IniConfig::instance();
+    RFileGlobals &g = cfg.rGlobals;
 
     XlsxReader reader;
     if (!reader.open(filename)) {
@@ -457,28 +515,80 @@ void REditWidget::onImportXlsx()
         return;
     }
 
-    auto rows = reader.readAll();
-    if (rows.size() <= 1) return; // 仅表头或空
+    m_rFile.typeNumber = g.typeNumber;
+    m_rFile.rType.resize(g.typeNumber);
 
-    if (m_currentType < 0) return;
-    auto &rt = m_rFile.rType[m_currentType];
+    // 遍历所有类型，从对应名称的 sheet 导入 (对应 Delphi Button12Click)
+    for (int i1 = 0; i1 < g.typeNumber; ++i1) {
+        auto rows = reader.readAll(g.typeName[i1]);
+        if (rows.isEmpty()) continue;
 
-    for (int r = 1; r < rows.size() && (r - 1) < rt.rData.size(); ++r) {
-        int col = 0;
-        auto &rd = rt.rData[r - 1];
-        for (int d = 0; d < rd.rDataLine.size(); ++d) {
-            for (int dn = 0; dn < rd.rDataLine[d].rArray.size(); ++dn) {
-                for (int inc = 0; inc < rd.rDataLine[d].rArray[dn].dataArray.size(); ++inc) {
-                    if (col < rows[r].size()) {
-                        RFileIO::writeRDataStr(rd.rDataLine[d].rArray[dn].dataArray[inc], rows[r][col]);
+        auto &rini = g.rIni[i1];
+        auto &rt = m_rFile.rType[i1];
+
+        // 清空已有记录
+        rt.dataNum = 0;
+        rt.rData.clear();
+
+        if (i1 == 0) {
+            // Type 0: 转置 — 列是记录，行是字段。固定创建 1 条记录
+            RFileIO::addNewRData(&m_rFile, i1, g);
+
+            for (int i2 = 0; i2 < rt.dataNum; ++i2) {
+                int temp = 0;
+                for (int i3 = 0; i3 < g.typeDataItem[i1] && i3 < rini.rTerm.size(); ++i3) {
+                    if (rini.rTerm[i3].datanum <= 0) continue;
+                    for (int i4 = 0; i4 < rini.rTerm[i3].datanum; ++i4) {
+                        for (int i5 = 0; i5 < rini.rTerm[i3].incnum; ++i5) {
+                            // transposed: strings[row=temp][col=i2+1]
+                            if (temp < rows.size() && (i2 + 1) < rows[temp].size()) {
+                                int lineIdx = -1, arrIdx = i4, dsIdx = i5;
+                                // 找到对应 rDataLine 索引 (只有 datanum>0 的 term 产生 rDataLine)
+                                int cnt = -1;
+                                for (int t = 0; t <= i3; ++t)
+                                    if (rini.rTerm[t].datanum > 0) cnt++;
+                                lineIdx = cnt;
+                                if (lineIdx >= 0 && lineIdx < rt.rData[i2].rDataLine.size()
+                                    && arrIdx < rt.rData[i2].rDataLine[lineIdx].rArray.size()
+                                    && dsIdx < rt.rData[i2].rDataLine[lineIdx].rArray[arrIdx].dataArray.size()) {
+                                    RFileIO::writeRDataStr(
+                                        rt.rData[i2].rDataLine[lineIdx].rArray[arrIdx].dataArray[dsIdx],
+                                        rows[temp][i2 + 1]);
+                                }
+                            }
+                            temp++;
+                        }
                     }
-                    col++;
+                }
+            }
+        } else {
+            // 其他类型: 标准 — 行是记录(skip header), 列是字段
+            int recordCount = rows.size() - 1; // 减去表头
+            for (int r = 0; r < recordCount; ++r)
+                RFileIO::addNewRData(&m_rFile, i1, g);
+
+            for (int i2 = 0; i2 < rt.dataNum; ++i2) {
+                int temp = 0;
+                for (int i3 = 0; i3 < rt.rData[i2].rDataLine.size(); ++i3) {
+                    for (int i4 = 0; i4 < rt.rData[i2].rDataLine[i3].rArray.size(); ++i4) {
+                        for (int i5 = 0; i5 < rt.rData[i2].rDataLine[i3].rArray[i4].dataArray.size(); ++i5) {
+                            // standard: strings[row=i2+1][col=temp]
+                            if ((i2 + 1) < rows.size() && temp < rows[i2 + 1].size()) {
+                                RFileIO::writeRDataStr(
+                                    rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5],
+                                    rows[i2 + 1][temp]);
+                            }
+                            temp++;
+                        }
+                    }
                 }
             }
         }
     }
 
-    populateRecords();
+    RFileIO::calcNamePos(&m_rFile, g);
+    m_editForm->setRFile(&m_rFile);
+    populateTypes();
     m_statusBar->showMessage(tr("导入完成"), 5000);
 }
 

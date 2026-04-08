@@ -12,6 +12,7 @@ public:
     explicit SceneMapEdit(QWidget *parent = nullptr);
 
 private slots:
+    void onSaveSlotChanged(int index);
     void onLoadScene(int index);
     void onSaveScene();
     void onNewScene();
@@ -26,8 +27,10 @@ private slots:
 protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
+    void handleMouseMove(QMouseEvent *event) override;
 
 private:
+    void loadSceneGrpFile(int saveSlot);
     void readSceneData(int sceneIndex);
     void readSceneGrp();
     void addUndoSave();
@@ -64,4 +67,18 @@ private:
     int m_undoLimit = 20;
 
     int m_currentScene = -1;
+    int m_currentSave  = 0;
+    QByteArray m_sceneRawData;   // 当前存档的场景 grp 原始数据
+    int m_sceneCount = 0;        // 文件中场景数
+
+    // 贴图预览
+    void updateTilePreview(int ix, int iy);
+    QLabel *m_imgGround = nullptr;
+    QLabel *m_imgBuilding = nullptr;
+    QLabel *m_imgSky = nullptr;
+    QLabel *m_imgEvent = nullptr;
+    QLabel *m_lblGroundVal = nullptr;
+    QLabel *m_lblBuildingVal = nullptr;
+    QLabel *m_lblSkyVal = nullptr;
+    QLabel *m_lblEventVal = nullptr;
 };

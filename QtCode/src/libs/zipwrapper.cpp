@@ -80,15 +80,18 @@ int ZipWrapper::entryCount() const
     return static_cast<int>(fn_get_num_entries(m_zip, 0));
 }
 
-// zip_stat 结构: 前 8 bytes valid标志, 接着各字段
-// 简化实现: 使用 8+8+8+8=32 的偏移取 size
-struct zip_stat_simple {
-    uint64_t valid;
-    uint64_t reserved1; // name
-    uint64_t index;
-    uint64_t size;      // 解压后大小
-    uint64_t comp_size;
-    // ...
+// zip_stat 结构: 必须与 libzip 的 zip_stat 完整匹配, 否则写越界导致崩溃
+struct zip_stat_compat {
+    uint64_t    valid;
+    const char *name;           // 64-bit pointer
+    uint64_t    index;
+    uint64_t    size;           // 解压后大小
+    uint64_t    comp_size;
+    int64_t     mtime;          // time_t on 64-bit MSVC
+    uint32_t    crc;
+    uint16_t    comp_method;
+    uint16_t    encryption_method;
+    uint32_t    flags;
 };
 
 QByteArray ZipWrapper::readEntry(const QString &name) const
@@ -101,7 +104,7 @@ QByteArray ZipWrapper::readEntry(const QString &name) const
     int idx = findEntry(name);
     if (idx < 0) return {};
 
-    zip_stat_simple stat = {};
+    zip_stat_compat stat = {};
     if (fn_stat_index)
         fn_stat_index(m_zip, idx, &stat, 0);
 
@@ -109,7 +112,7 @@ QByteArray ZipWrapper::readEntry(const QString &name) const
     if (!zf) return {};
 
     int64_t size = static_cast<int64_t>(stat.size);
-    if (size <= 0) size = 1024 * 1024; // 默认 1MB 上限
+    if (size <= 0 || size > 100 * 1024 * 1024) size = 1024 * 1024; // 默认 1MB, 上限 100MB
 
     QByteArray data(static_cast<int>(size), '\0');
     int64_t bytesRead = fn_fread(zf, data.data(), size);
@@ -127,7 +130,7 @@ QByteArray ZipWrapper::readEntry(int index) const
 {
     if (!m_zip || !fn_fopen_index || !fn_fread || !fn_fclose) return {};
 
-    zip_stat_simple stat = {};
+    zip_stat_compat stat = {};
     if (fn_stat_index)
         fn_stat_index(m_zip, index, &stat, 0);
 
@@ -135,7 +138,7 @@ QByteArray ZipWrapper::readEntry(int index) const
     if (!zf) return {};
 
     int64_t size = static_cast<int64_t>(stat.size);
-    if (size <= 0) size = 1024 * 1024;
+    if (size <= 0 || size > 100 * 1024 * 1024) size = 1024 * 1024;
 
     QByteArray data(static_cast<int>(size), '\0');
     int64_t bytesRead = fn_fread(zf, data.data(), size);
@@ -153,7 +156,7 @@ int ZipWrapper::entrySize(const QString &name) const
 {
     int idx = findEntry(name);
     if (idx < 0) return -1;
-    zip_stat_simple stat = {};
+    zip_stat_compat stat = {};
     if (fn_stat_index)
         fn_stat_index(m_zip, idx, &stat, 0);
     return static_cast<int>(stat.size);

@@ -17,6 +17,9 @@ public:
 
     void loadGrpFiles(const QString &idxPath, const QString &grpPath, const QString &colPath = {});
 
+    const QVector<GrpPic> &grpPics() const { return m_grpPics; }
+    const QVector<QRgb> &palette() const { return m_palette; }
+
 signals:
     void editSprite(int index);
 
@@ -36,6 +39,8 @@ private slots:
     void onBatchOffset();
     void onPresetChanged(int index);
     void onSectionChanged(int index);
+    void onBgColorPick();
+    void onTextColorPick();
 
 protected:
     void resizeEvent(QResizeEvent *e) override;
@@ -54,6 +59,8 @@ private:
     QScrollBar *m_scrollBar;
     QProgressBar *m_progress;
     QMenu *m_contextMenu;
+    QLabel *m_bgColorPanel;
+    QLabel *m_textColorPanel;
 
     QVector<GrpPic> m_grpPics;
     QVector<QRgb> m_palette;     // 256色调色板
@@ -62,6 +69,6 @@ private:
     int m_scrollOffset = 0;
     int m_beginPic = 0;          // 当前显示范围起始
     int m_endPic = -1;           // 当前显示范围结束 (-1 = 全部)
-    QColor m_bgColor = Qt::black;
-    QColor m_textColor = Qt::white;
+    QColor m_bgColor = Qt::white;
+    QColor m_textColor = Qt::red;
 };

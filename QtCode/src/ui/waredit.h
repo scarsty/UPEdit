@@ -26,8 +26,11 @@ private slots:
     void onImportExcel();
     void onWarChanged(int index);
     void onDrawPosition();
+    void onCellDoubleClicked(int row, int column);
 
 private:
+    struct WarRowInfo { int fieldIdx = -1; int valueIdx = -1; };
+    QVector<WarRowInfo> m_rowMap;
     void readWIni();
     void readW();
     void displayW();

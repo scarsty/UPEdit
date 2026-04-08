@@ -22,8 +22,16 @@ public:
 
 private slots:
     void onCellChanged(int row, int column);
+    void onCellDoubleClicked(int row, int column);
 
 private:
+    // 获取指定行对应的 quote 值和数据定位信息
+    struct RowInfo {
+        int dataLineIdx = -1, arrayIdx = -1, dataIdx = -1;
+        int16_t quote = -1;
+    };
+    RowInfo rowToInfo(int row) const;
+
     QTableWidget *m_table = nullptr;
     RFile *m_pRFile       = nullptr; // 指向 REditWidget::m_rFile
     int m_typeIndex   = -1;
