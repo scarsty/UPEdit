@@ -22,10 +22,12 @@ public:
 
     // 将 QString 编码回游戏数据格式，写入 data 指向的缓冲区 (最多 len 字节)
     static void writeInStr(const QString &str, void *data, int len);
+    static int encodedByteLength(const QString &str);
 
     // 有指定编码的版本
     static QString readOutStrWithCode(const void *data, int len, int code);
     static void writeInStrWithCode(const QString &str, void *data, int len, int code);
+    static int encodedByteLengthWithCode(const QString &str, int code);
 
     // 繁简转换
     static QString traditionalToSimplified(const QString &s);

@@ -18,13 +18,13 @@ int (*SQLite3Database::fn_column_type)(sqlite3_stmt *, int) = nullptr;
 int (*SQLite3Database::fn_column_int)(sqlite3_stmt *, int) = nullptr;
 int64_t (*SQLite3Database::fn_column_int64)(sqlite3_stmt *, int) = nullptr;
 double (*SQLite3Database::fn_column_double)(sqlite3_stmt *, int) = nullptr;
-const void *(*SQLite3Database::fn_column_text16)(sqlite3_stmt *, int) = nullptr;
+const unsigned char *(*SQLite3Database::fn_column_text)(sqlite3_stmt *, int) = nullptr;
 const void *(*SQLite3Database::fn_column_blob)(sqlite3_stmt *, int) = nullptr;
 int (*SQLite3Database::fn_column_bytes)(sqlite3_stmt *, int) = nullptr;
 const char *(*SQLite3Database::fn_column_name)(sqlite3_stmt *, int) = nullptr;
 int (*SQLite3Database::fn_bind_int)(sqlite3_stmt *, int, int) = nullptr;
 int (*SQLite3Database::fn_bind_int64)(sqlite3_stmt *, int, int64_t) = nullptr;
-int (*SQLite3Database::fn_bind_text16)(sqlite3_stmt *, int, const void *, int, void (*)(void *)) = nullptr;
+int (*SQLite3Database::fn_bind_text)(sqlite3_stmt *, int, const char *, int, void (*)(void *)) = nullptr;
 int (*SQLite3Database::fn_bind_blob)(sqlite3_stmt *, int, const void *, int, void (*)(void *)) = nullptr;
 int (*SQLite3Database::fn_bind_null)(sqlite3_stmt *, int) = nullptr;
 int (*SQLite3Database::fn_clear_bindings)(sqlite3_stmt *) = nullptr;
@@ -51,13 +51,13 @@ bool SQLite3Database::loadLibrary(const QString &dllPath)
     fn_column_int       = RESOLVE(column_int);
     fn_column_int64     = RESOLVE(column_int64);
     fn_column_double    = RESOLVE(column_double);
-    fn_column_text16    = RESOLVE(column_text16);
+    fn_column_text      = RESOLVE(column_text);
     fn_column_blob      = RESOLVE(column_blob);
     fn_column_bytes     = RESOLVE(column_bytes);
     fn_column_name      = RESOLVE(column_name);
     fn_bind_int         = RESOLVE(bind_int);
     fn_bind_int64       = RESOLVE(bind_int64);
-    fn_bind_text16      = RESOLVE(bind_text16);
+    fn_bind_text        = RESOLVE(bind_text);
     fn_bind_blob        = RESOLVE(bind_blob);
     fn_bind_null        = RESOLVE(bind_null);
     fn_clear_bindings   = RESOLVE(clear_bindings);
@@ -137,10 +137,11 @@ void SQLite3Statement::bindInt64(int i, int64_t v) { if (m_stmt && SQLite3Databa
 
 void SQLite3Statement::bindText(int i, const QString &v)
 {
-    if (!m_stmt || !SQLite3Database::fn_bind_text16) return;
+    if (!m_stmt || !SQLite3Database::fn_bind_text) return;
+    QByteArray utf8 = v.toUtf8();
     // SQLITE_TRANSIENT = -1 → 让 SQLite 复制
-    SQLite3Database::fn_bind_text16(m_stmt, i, v.utf16(), v.size() * 2,
-                                    reinterpret_cast<void (*)(void *)>(-1));
+    SQLite3Database::fn_bind_text(m_stmt, i, utf8.constData(), utf8.size(),
+                                  reinterpret_cast<void (*)(void *)>(-1));
 }
 
 void SQLite3Statement::bindBlob(int i, const void *data, int size)
@@ -173,10 +174,11 @@ int64_t SQLite3Statement::columnInt64(int i) { return (m_stmt && SQLite3Database
 
 QString SQLite3Statement::columnText(int i)
 {
-    if (!m_stmt || !SQLite3Database::fn_column_text16) return {};
-    const void *p = SQLite3Database::fn_column_text16(m_stmt, i);
+    if (!m_stmt || !SQLite3Database::fn_column_text || !SQLite3Database::fn_column_bytes) return {};
+    const unsigned char *p = SQLite3Database::fn_column_text(m_stmt, i);
     if (!p) return {};
-    return QString::fromUtf16(static_cast<const char16_t *>(p));
+    int bytes = SQLite3Database::fn_column_bytes(m_stmt, i);
+    return QString::fromUtf8(reinterpret_cast<const char *>(p), bytes);
 }
 
 QByteArray SQLite3Statement::columnBlob(int i)

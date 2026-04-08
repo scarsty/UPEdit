@@ -31,8 +31,8 @@ void RFileIO::writeRDataStr(RDataSingle &rds, const QString &data)
         bool ok;
         int64_t v = data.toLongLong(&ok);
         if (ok) writeRDataInt(rds, v);
-    } else if (rds.dataType == 1 && rds.dataLen > 0) {
-        Encoding::writeInStr(data, rds.data.data(), rds.dataLen);
+    } else if (rds.dataType == 1) {
+        rds.data = data.toUtf8();
     }
 }
 
@@ -78,7 +78,7 @@ QString RFileIO::readRDataStr(const RDataSingle &rds)
     if (rds.dataType == 0) {
         return QString::number(readRDataInt(rds));
     } else {
-        return Encoding::readOutStr(rds.data.constData(), rds.dataLen);
+        return QString::fromUtf8(rds.data.constData(), rds.data.size());
     }
 }
 
@@ -261,9 +261,14 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
                                 if (dl > 0 && temp < rt.rData[i2].rDataLine.size()
                                     && i4 < rt.rData[i2].rDataLine[temp].rArray.size()
                                     && i5 < rt.rData[i2].rDataLine[temp].rArray[i4].dataArray.size()) {
-                                    fgrp.read(
-                                        rt.rData[i2].rDataLine[temp].rArray[i4].dataArray[i5].data.data(),
-                                        dl);
+                                    auto &ds = rt.rData[i2].rDataLine[temp].rArray[i4].dataArray[i5];
+                                    if (ds.dataType == 1) {
+                                        QByteArray raw(dl, '\0');
+                                        fgrp.read(raw.data(), dl);
+                                        writeRDataStr(ds, Encoding::readOutStr(raw.constData(), dl));
+                                    } else {
+                                        fgrp.read(ds.data.data(), dl);
+                                    }
                                 }
                             }
                         }
@@ -304,7 +309,14 @@ void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
                     for (int i5 = 0; i5 < arr.dataArray.size(); ++i5) {
                         const RDataSingle &ds = arr.dataArray[i5];
                         if (ds.dataLen > 0) {
-                            grpData.append(ds.data);
+                            if (ds.dataType == 1) {
+                                QByteArray encoded(ds.dataLen, '\0');
+                                QString str = readRDataStr(ds);
+                                Encoding::writeInStr(str, encoded.data(), ds.dataLen);
+                                grpData.append(encoded);
+                            } else {
+                                grpData.append(ds.data);
+                            }
                         }
                         offsets[i1] += ds.dataLen;
                     }
@@ -325,6 +337,10 @@ void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
 bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
 {
     if (!SQLite3Database::isLibraryLoaded()) return false;
+
+    auto textStorageBytes = [](const QString &str) {
+        return str.toUtf8().size() + 1;
+    };
 
     SQLite3Database db;
     if (!db.open(dbFile)) return false;
@@ -371,7 +387,7 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
             RTermini &term = g.rIni[i1].rTerm[j];
             term.name    = stmtStruct.columnText(1); // 列名
             term.isstr   = 0;
-            QString colType = stmtStruct.columnText(2); // 列类型
+            QString colType = stmtStruct.columnText(2).trimmed().toUpper(); // 列类型
             term.datanum = 1;
             term.incnum  = 1;
             term.datalen = 4;
@@ -379,7 +395,7 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
             term.quote   = -1;
             term.note.clear();
 
-            if (colType == "TEXT") {
+            if (colType.contains("TEXT") || colType.contains("CHAR") || colType.contains("CLOB")) {
                 term.isstr   = 1;
                 term.datalen = 100;
             }
@@ -410,6 +426,17 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
         SQLite3Statement stmtData = db.prepare(
             QStringLiteral("select * from %1").arg(tname));
         if (!stmtData.isValid()) { ++i1; continue; }
+
+        // DB 文本列长度按实际内容推断，避免中文被固定 100 字节截断。
+        while (stmtData.step() == SQLite3Statement::SQLITE_ROW) {
+            for (int col = 0; col < g.typeDataItem[i1] && col < g.rIni[i1].rTerm.size(); ++col) {
+                auto &term = g.rIni[i1].rTerm[col];
+                if (term.isstr == 0)
+                    continue;
+                term.datalen = qMax(term.datalen, textStorageBytes(stmtData.columnText(col)));
+            }
+        }
+        stmtData.reset();
 
         // 计数行数
         int rowCount = 0;
@@ -449,10 +476,8 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
                             int value = stmtData.columnInt(i3);
                             writeRDataInt(ds, value);
                         } else {
-                            // 文本列: 从 UTF-8 转换为原生 dataCode 编码存储
-                            ds.data.fill(0, ds.dataLen);
                             QString str = stmtData.columnText(i3);
-                            Encoding::writeInStr(str, ds.data.data(), ds.dataLen);
+                            writeRDataStr(ds, str);
                         }
                     }
                 }
@@ -520,8 +545,8 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
 
                         int termIdx = i3;
                         if (termIdx < g.rIni[i1].rTerm.size() && g.rIni[i1].rTerm[termIdx].isstr != 0) {
-                            // 文本列: 从原生 dataCode 编码解码 → 给 SQLite
-                            QString str = Encoding::readOutStr(ds.data.constData(), ds.dataLen);
+                            // 文本列: 内存中统一为 UTF-8，写 DB 时不做额外编码转换
+                            QString str = readRDataStr(ds);
                             // 转义双引号
                             str.replace('"', "\"\"");
                             sql += QStringLiteral("\"%1\",").arg(str);
@@ -611,7 +636,10 @@ void RFileIO::addNewRData(RFile *prf, int crType, const RFileGlobals &g, const R
                     ds.dataLen  = 0;
                 }
                 if (ds.dataLen < 0) ds.dataLen = 0;
-                ds.data.fill(0, ds.dataLen);
+                if (ds.dataType == 1)
+                    ds.data.clear();
+                else
+                    ds.data.fill(0, ds.dataLen);
             }
         }
     }

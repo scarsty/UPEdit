@@ -59,13 +59,13 @@ public:
     static int (*fn_column_int)(sqlite3_stmt *, int);
     static int64_t (*fn_column_int64)(sqlite3_stmt *, int);
     static double (*fn_column_double)(sqlite3_stmt *, int);
-    static const void *(*fn_column_text16)(sqlite3_stmt *, int);
+    static const unsigned char *(*fn_column_text)(sqlite3_stmt *, int);
     static const void *(*fn_column_blob)(sqlite3_stmt *, int);
     static int (*fn_column_bytes)(sqlite3_stmt *, int);
     static const char *(*fn_column_name)(sqlite3_stmt *, int);
     static int (*fn_bind_int)(sqlite3_stmt *, int, int);
     static int (*fn_bind_int64)(sqlite3_stmt *, int, int64_t);
-    static int (*fn_bind_text16)(sqlite3_stmt *, int, const void *, int, void (*)(void *));
+    static int (*fn_bind_text)(sqlite3_stmt *, int, const char *, int, void (*)(void *));
     static int (*fn_bind_blob)(sqlite3_stmt *, int, const void *, int, void (*)(void *));
     static int (*fn_bind_null)(sqlite3_stmt *, int);
     static int (*fn_clear_bindings)(sqlite3_stmt *);

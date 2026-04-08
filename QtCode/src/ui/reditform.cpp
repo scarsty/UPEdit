@@ -90,7 +90,9 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
 
                 // 值
                 QString value = RFileIO::readRDataStr(single);
-                m_table->setItem(row, 1, new QTableWidgetItem(value));
+                auto *valueItem = new QTableWidgetItem(value);
+                valueItem->setToolTip(value);
+                m_table->setItem(row, 1, valueItem);
 
                 // 备注
                 auto *noteItem = new QTableWidgetItem(noteStr);
@@ -113,6 +115,7 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
                 }
                 auto *refItem = new QTableWidgetItem(ref);
                 refItem->setFlags(refItem->flags() & ~Qt::ItemIsEditable);
+                refItem->setToolTip(ref);
                 m_table->setItem(row, 3, refItem);
 
                 row++;

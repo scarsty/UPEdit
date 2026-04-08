@@ -61,6 +61,11 @@ void Encoding::writeInStr(const QString &str, void *data, int len)
     writeInStrWithCode(str, data, len, dataCode);
 }
 
+int Encoding::encodedByteLength(const QString &str)
+{
+    return encodedByteLengthWithCode(str, dataCode);
+}
+
 void Encoding::writeInStrWithCode(const QString &str, void *data, int len, int code)
 {
     if (!data || len <= 0)
@@ -83,6 +88,23 @@ void Encoding::writeInStrWithCode(const QString &str, void *data, int len, int c
     std::string encoded = PotConv::conv(utf8, "utf-8", encName);
     int copyLen = qMin(static_cast<int>(encoded.size()), len);
     memcpy(data, encoded.c_str(), copyLen);
+}
+
+int Encoding::encodedByteLengthWithCode(const QString &str, int code)
+{
+    if (str.isEmpty())
+        return 0;
+
+    if (code == 2)
+        return str.size() * 2;
+
+    const char *encName = iconvNameForCode(code);
+    if (!encName)
+        return 0;
+
+    std::string utf8 = str.toUtf8().toStdString();
+    std::string encoded = PotConv::conv(utf8, "utf-8", encName);
+    return static_cast<int>(encoded.size());
 }
 
 QString Encoding::traditionalToSimplified(const QString &s)

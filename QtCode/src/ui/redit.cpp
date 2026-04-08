@@ -231,7 +231,9 @@ void REditWidget::populateRecords()
             }
         }
         m_recordCombo->addItem(name);
-        m_recordList->addItem(name);
+        auto *item = new QListWidgetItem(name);
+        item->setToolTip(name);
+        m_recordList->addItem(item);
     }
 
     if (rt.rData.size() > 0) {
