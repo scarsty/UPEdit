@@ -47,13 +47,19 @@ HEADERS += \
     src/libs/luawrapper.h \
     src/libs/sqlite3wrapper.h \
     src/libs/zipwrapper.h \
-    src/libs/xlsxiowrapper.h
+    src/libs/xlsxiowrapper.h \
+    src/libs/PotConv.h
 
 SOURCES += \
     src/libs/luawrapper.cpp \
     src/libs/sqlite3wrapper.cpp \
     src/libs/zipwrapper.cpp \
-    src/libs/xlsxiowrapper.cpp
+    src/libs/xlsxiowrapper.cpp \
+    src/libs/PotConv.cpp
+
+# libiconv (vcpkg x64-windows)
+INCLUDEPATH += D:/project/vcpkg/installed/x64-windows/include
+LIBS += -LD:/project/vcpkg/installed/x64-windows/lib -liconv
 
 # ── UI 模块 ──────────────────────────────────────────────
 

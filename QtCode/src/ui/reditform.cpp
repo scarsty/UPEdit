@@ -34,8 +34,9 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
 
     m_table->setRowCount(0);
 
-    if (typeIndex < 0 || typeIndex >= g.rFile.rType.size()) { m_updating = false; return; }
-    const RType &rt = g.rFile.rType[typeIndex];
+    if (!m_pRFile) { m_updating = false; return; }
+    if (typeIndex < 0 || typeIndex >= m_pRFile->rType.size()) { m_updating = false; return; }
+    const RType &rt = m_pRFile->rType[typeIndex];
     if (recordIndex < 0 || recordIndex >= rt.rData.size()) { m_updating = false; return; }
     const RData &rd = rt.rData[recordIndex];
 
@@ -48,20 +49,38 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
     }
     m_table->setRowCount(totalRows);
 
+    // Delphi displayR 中使用 temp2 跟踪 rDataLine 对应的 rTerm 基索引
     int row = 0;
-    for (int d = 0; d < rd.rDataLine.size() && d < g.rIni[typeIndex].rTerm.size(); ++d) {
+    int temp2 = 0; // 当前 rTerm 基索引
+
+    for (int d = 0; d < rd.rDataLine.size(); ++d) {
         const auto &line = rd.rDataLine[d];
-        const RTermini &term = g.rIni[typeIndex].rTerm[d];
+
+        // 找到该 rDataLine 对应的 rTerm 基索引
+        // temp2 在外层循环中自增 incnum
+        int incNum = (!line.rArray.isEmpty()) ? line.rArray[0].incNum : 1;
 
         for (int dn = 0; dn < line.rArray.size(); ++dn) {
             const RArray &arr = line.rArray[dn];
             for (int inc = 0; inc < arr.dataArray.size(); ++inc) {
                 const RDataSingle &single = arr.dataArray[inc];
 
-                // 字段名
-                QString fieldName = term.name;
-                if (term.datanum > 1 || term.incnum > 1)
-                    fieldName += QString("[%1,%2]").arg(dn).arg(inc);
+                // 用 temp2 + inc 获取对应 rTerm
+                int termIdx = temp2 + inc;
+                QString fieldName;
+                QString noteStr;
+                int16_t quote = -1;
+
+                if (typeIndex < g.rIni.size() && termIdx < g.rIni[typeIndex].rTerm.size()) {
+                    const RTermini &term = g.rIni[typeIndex].rTerm[termIdx];
+                    fieldName = term.name;
+                    noteStr = term.note;
+                    quote = term.quote;
+                    if (line.len > 1)
+                        fieldName += QString::number(dn);
+                } else {
+                    fieldName = QString("field_%1_%2").arg(d).arg(inc);
+                }
 
                 auto *nameItem = new QTableWidgetItem(fieldName);
                 nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
@@ -72,17 +91,18 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
                 m_table->setItem(row, 1, new QTableWidgetItem(value));
 
                 // 备注
-                auto *noteItem = new QTableWidgetItem(term.note);
+                auto *noteItem = new QTableWidgetItem(noteStr);
                 noteItem->setFlags(noteItem->flags() & ~Qt::ItemIsEditable);
                 m_table->setItem(row, 2, noteItem);
 
                 // 引用
                 QString ref;
-                if (term.quote >= 0 && single.dataType == 0) {
+                if (quote >= 0 && single.dataType == 0) {
                     int64_t refIdx = RFileIO::readRDataInt(single);
-                    if (term.quote < g.rFile.rType.size()) {
-                        const RType &refType = g.rFile.rType[term.quote];
-                        if (refIdx >= 0 && refIdx < refType.rData.size() && refType.namePos >= 0) {
+                    if (quote < m_pRFile->rType.size()) {
+                        const RType &refType = m_pRFile->rType[quote];
+                        if (refIdx >= 0 && refIdx < refType.rData.size() && refType.namePos >= 0
+                            && refType.namePos < refType.rData[refIdx].rDataLine.size()) {
                             const auto &refLine = refType.rData[refIdx].rDataLine[refType.namePos];
                             if (!refLine.rArray.isEmpty() && !refLine.rArray[0].dataArray.isEmpty())
                                 ref = Encoding::displayStr(RFileIO::readRDataStr(refLine.rArray[0].dataArray[0]));
@@ -96,6 +116,8 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
                 row++;
             }
         }
+
+        temp2 += incNum;
     }
 
     m_updating = false;
@@ -104,12 +126,10 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
 void REditForm::onCellChanged(int row, int column)
 {
     if (m_updating || column != 1) return;
-
-    IniConfig &cfg = IniConfig::instance();
-    RFileGlobals &g = cfg.rGlobals;
+    if (!m_pRFile) return;
 
     if (m_typeIndex < 0 || m_recordIndex < 0) return;
-    auto &rt = g.rFile.rType[m_typeIndex];
+    auto &rt = m_pRFile->rType[m_typeIndex];
     if (m_recordIndex >= rt.rData.size()) return;
     auto &rd = rt.rData[m_recordIndex];
 

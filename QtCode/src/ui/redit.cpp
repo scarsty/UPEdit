@@ -13,7 +13,16 @@ REditWidget::REditWidget(QWidget *parent)
     : QWidget(parent)
 {
     setupUI();
-    populateTypes();
+
+    // 填充进度下拉
+    IniConfig &cfg = IniConfig::instance();
+    for (int i = 0; i < cfg.rFileNum; ++i)
+        m_progressCombo->addItem(Encoding::displayStr(cfg.rFileNote[i]));
+
+    if (cfg.rFileNum > 0) {
+        m_progressCombo->setCurrentIndex(0);
+        // loadProgress 会在 onProgressChanged 中触发
+    }
 }
 
 REditWidget::~REditWidget() {}
@@ -24,6 +33,10 @@ void REditWidget::setupUI()
 
     // 顶部工具栏
     auto *topLayout = new QHBoxLayout;
+    topLayout->addWidget(new QLabel(tr("进度:"), this));
+    m_progressCombo = new QComboBox(this);
+    topLayout->addWidget(m_progressCombo);
+
     topLayout->addWidget(new QLabel(tr("类型:"), this));
     m_typeCombo = new QComboBox(this);
     topLayout->addWidget(m_typeCombo);
@@ -112,6 +125,8 @@ void REditWidget::setupUI()
     mainLayout->addWidget(m_statusBar);
 
     // 信号连接
+    connect(m_progressCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &REditWidget::onProgressChanged);
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &REditWidget::onTypeChanged);
     connect(m_recordCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
@@ -130,6 +145,45 @@ void REditWidget::setupUI()
     connect(m_btnImport, &QPushButton::clicked, this, &REditWidget::onImportXlsx);
     connect(m_btnSearch, &QPushButton::clicked, this, &REditWidget::onSearch);
     connect(btnApply,    &QPushButton::clicked, this, &REditWidget::onBatchEdit);
+}
+
+void REditWidget::onProgressChanged(int index)
+{
+    if (index < 0) return;
+    loadProgress(index);
+}
+
+void REditWidget::loadProgress(int index)
+{
+    IniConfig &cfg = IniConfig::instance();
+    if (index < 0 || index >= cfg.rFileNum) return;
+
+    QString grpFile = cfg.gamePath + cfg.rFileName[index];
+    QString idxFile = cfg.gamePath + cfg.rIdxFileName[index];
+
+    bool ok;
+    if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
+        ok = RFileIO::readDB(grpFile, &m_rFile, cfg.rGlobals);
+    } else {
+        ok = RFileIO::readR(idxFile, grpFile, &m_rFile, cfg.rGlobals);
+    }
+
+    if (ok) {
+        RFileIO::calcNamePos(&m_rFile, cfg.rGlobals);
+    } else {
+        // 读取失败: 初始化空结构
+        m_rFile.typeNumber = cfg.rGlobals.typeNumber;
+        m_rFile.rType.resize(m_rFile.typeNumber);
+        for (int i = 0; i < m_rFile.typeNumber; ++i) {
+            m_rFile.rType[i].dataNum = 0;
+            m_rFile.rType[i].rData.clear();
+        }
+        RFileIO::calcNamePos(&m_rFile, cfg.rGlobals);
+    }
+
+    // 通知 editForm 使用本地 rFile
+    m_editForm->setRFile(&m_rFile);
+    populateTypes();
 }
 
 void REditWidget::populateTypes()
@@ -159,9 +213,9 @@ void REditWidget::populateRecords()
     m_recordCombo->clear();
     m_recordList->clear();
 
-    if (m_currentType < 0 || m_currentType >= g.rFile.rType.size()) return;
+    if (m_currentType < 0 || m_currentType >= m_rFile.rType.size()) return;
 
-    const RType &rt = g.rFile.rType[m_currentType];
+    const RType &rt = m_rFile.rType[m_currentType];
     for (int i = 0; i < rt.rData.size(); ++i) {
         // 获取名称
         QString name = QString::number(i);
@@ -180,11 +234,13 @@ void REditWidget::populateRecords()
         m_recordCombo->setCurrentIndex(0);
     }
 
-    // 填充字段下拉
+    // 填充字段下拉 (仅 datanum > 0 的 term，对应 rDataLine 索引)
     m_fieldCombo->clear();
     if (m_currentType < g.rIni.size()) {
-        for (int d = 0; d < g.rIni[m_currentType].rTerm.size(); ++d)
-            m_fieldCombo->addItem(g.rIni[m_currentType].rTerm[d].name);
+        for (int d = 0; d < g.rIni[m_currentType].rTerm.size(); ++d) {
+            if (g.rIni[m_currentType].rTerm[d].datanum > 0)
+                m_fieldCombo->addItem(g.rIni[m_currentType].rTerm[d].name);
+        }
     }
 }
 
@@ -196,12 +252,9 @@ void REditWidget::onRecordChanged(int index)
 
 void REditWidget::populateFields()
 {
-    IniConfig &cfg = IniConfig::instance();
-    RFileGlobals &g = cfg.rGlobals;
-
     if (m_currentType < 0 || m_currentRecord < 0) return;
-    if (m_currentType >= g.rFile.rType.size()) return;
-    const RType &rt = g.rFile.rType[m_currentType];
+    if (m_currentType >= m_rFile.rType.size()) return;
+    const RType &rt = m_rFile.rType[m_currentType];
     if (m_currentRecord >= rt.rData.size()) return;
 
     m_editForm->displayRecord(m_currentType, m_currentRecord);
@@ -221,34 +274,36 @@ void REditWidget::onFieldDoubleClicked(int row)
 void REditWidget::onSave()
 {
     IniConfig &cfg = IniConfig::instance();
-    if (cfg.rFileName.isEmpty()) return;
+    int slot = m_progressCombo->currentIndex();
+    if (slot < 0 || slot >= cfg.rFileNum) return;
 
-    QString grpFile = cfg.gamePath + cfg.rFileName[0];
-    QString idxFile = cfg.gamePath + cfg.rIdxFileName[0];
+    QString grpFile = cfg.gamePath + cfg.rFileName[slot];
+    QString idxFile = cfg.gamePath + cfg.rIdxFileName[slot];
 
     if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        RFileIO::saveDB(grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
+        RFileIO::saveDB(grpFile, &m_rFile, cfg.rGlobals);
     } else {
-        RFileIO::saveR(idxFile, grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
+        RFileIO::saveR(idxFile, grpFile, &m_rFile, cfg.rGlobals);
     }
+
+    // 若保存的是进度 0，同步到全局 useR (cfg.rGlobals.rFile)
+    if (slot == 0) {
+        if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
+            RFileIO::readDB(grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
+        } else {
+            RFileIO::readR(idxFile, grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
+        }
+        RFileIO::calcNamePos(&cfg.rGlobals.rFile, cfg.rGlobals);
+    }
+
     m_statusBar->showMessage(tr("保存成功"), 3000);
 }
 
 void REditWidget::onReload()
 {
-    IniConfig &cfg = IniConfig::instance();
-    if (cfg.rFileName.isEmpty()) return;
-
-    QString grpFile = cfg.gamePath + cfg.rFileName[0];
-    QString idxFile = cfg.gamePath + cfg.rIdxFileName[0];
-
-    if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        RFileIO::readDB(grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
-    } else {
-        RFileIO::readR(idxFile, grpFile, &cfg.rGlobals.rFile, cfg.rGlobals);
-    }
-    RFileIO::calcNamePos(&cfg.rGlobals.rFile, cfg.rGlobals);
-    populateRecords();
+    int slot = m_progressCombo->currentIndex();
+    if (slot < 0) return;
+    loadProgress(slot);
     m_statusBar->showMessage(tr("重新载入完成"), 3000);
 }
 
@@ -257,35 +312,14 @@ void REditWidget::onNewRecord()
     IniConfig &cfg = IniConfig::instance();
     if (m_currentType < 0) return;
 
-    RData newRd;
-    int fieldCount = cfg.rGlobals.typeDataItem[m_currentType];
-    newRd.num = fieldCount;
-    newRd.rDataLine.resize(fieldCount);
-    for (int d = 0; d < fieldCount && d < cfg.rGlobals.rIni[m_currentType].rTerm.size(); ++d) {
-        const RTermini &term = cfg.rGlobals.rIni[m_currentType].rTerm[d];
-        RDataLine &line = newRd.rDataLine[d];
-        line.len = term.datanum;
-        line.rArray.resize(term.datanum);
-        for (int dn = 0; dn < term.datanum; ++dn) {
-            RArray &arr = line.rArray[dn];
-            arr.incNum = term.incnum;
-            arr.dataArray.resize(term.incnum);
-            for (int inc = 0; inc < term.incnum; ++inc) {
-                arr.dataArray[inc].dataType = term.isstr;
-                arr.dataArray[inc].dataLen  = term.datalen;
-                arr.dataArray[inc].data.fill(0, term.datalen);
-            }
-        }
-    }
-    RFileIO::addNewRData(&cfg.rGlobals.rFile, m_currentType, newRd);
+    RFileIO::addNewRData(&m_rFile, m_currentType, cfg.rGlobals);
     populateRecords();
 }
 
 void REditWidget::onDeleteRecord()
 {
-    IniConfig &cfg = IniConfig::instance();
     if (m_currentType < 0 || m_currentRecord < 0) return;
-    auto &rtype = cfg.rGlobals.rFile.rType[m_currentType];
+    auto &rtype = m_rFile.rType[m_currentType];
     if (m_currentRecord >= rtype.rData.size()) return;
 
     if (QMessageBox::question(this, tr("确认"), tr("确定删除记录 %1?").arg(m_currentRecord))
@@ -310,7 +344,6 @@ void REditWidget::onPasteRecord()
 
 void REditWidget::onBatchEdit()
 {
-    IniConfig &cfg = IniConfig::instance();
     if (m_currentType < 0) return;
 
     int fieldIdx = m_fieldCombo->currentIndex();
@@ -319,7 +352,7 @@ void REditWidget::onBatchEdit()
     bool ok;
     int64_t val = valStr.toLongLong(&ok);
 
-    auto &rtype = cfg.rGlobals.rFile.rType[m_currentType];
+    auto &rtype = m_rFile.rType[m_currentType];
 
     auto applyOp = [&](int recordIdx) {
         if (recordIdx < 0 || recordIdx >= rtype.rData.size()) return;
@@ -371,20 +404,28 @@ void REditWidget::onExportXlsx()
     }
     writer.addWorksheet(cfg.rGlobals.typeName[m_currentType]);
 
-    // 写表头
+    // 写表头 (遵循 rDataLine 结构: 仅 datanum > 0 的 term)
     auto &rini = cfg.rGlobals.rIni[m_currentType];
     int col = 0;
     for (int d = 0; d < rini.rTerm.size(); ++d) {
-        for (int inc = 0; inc < rini.rTerm[d].incnum; ++inc) {
-            QString header = rini.rTerm[d].name;
-            if (rini.rTerm[d].incnum > 1)
-                header += QString::number(inc);
-            writer.writeString(0, col++, header);
+        if (rini.rTerm[d].datanum <= 0) continue;
+        for (int dn = 0; dn < rini.rTerm[d].datanum; ++dn) {
+            for (int inc = 0; inc < rini.rTerm[d].incnum; ++inc) {
+                int termIdx = d + inc;
+                QString header;
+                if (termIdx < rini.rTerm.size())
+                    header = rini.rTerm[termIdx].name;
+                else
+                    header = QString("col%1").arg(col);
+                if (rini.rTerm[d].datanum > 1)
+                    header += QString::number(dn);
+                writer.writeString(0, col++, header);
+            }
         }
     }
 
     // 写数据
-    auto &rt = cfg.rGlobals.rFile.rType[m_currentType];
+    auto &rt = m_rFile.rType[m_currentType];
     for (int r = 0; r < rt.rData.size(); ++r) {
         col = 0;
         for (int d = 0; d < rt.rData[r].rDataLine.size(); ++d) {
@@ -419,9 +460,8 @@ void REditWidget::onImportXlsx()
     auto rows = reader.readAll();
     if (rows.size() <= 1) return; // 仅表头或空
 
-    IniConfig &cfg = IniConfig::instance();
     if (m_currentType < 0) return;
-    auto &rt = cfg.rGlobals.rFile.rType[m_currentType];
+    auto &rt = m_rFile.rType[m_currentType];
 
     for (int r = 1; r < rows.size() && (r - 1) < rt.rData.size(); ++r) {
         int col = 0;

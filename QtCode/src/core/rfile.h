@@ -44,8 +44,8 @@ namespace RFileIO {
     // 计算 name 在哪个字段
     void calcNamePos(RFile *prf, const RFileGlobals &g);
 
-    // 添加新记录
-    void addNewRData(RFile *prf, int crType, const RData &rd);
+    // 添加新记录 (prd 非空时从 prd 复制数据)
+    void addNewRData(RFile *prf, int crType, const RFileGlobals &g, const RData *prd = nullptr);
 
     // 整数/字符串 读写
     void writeRDataStr(RDataSingle &rds, const QString &data);

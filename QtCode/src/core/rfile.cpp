@@ -1,7 +1,21 @@
 #include "rfile.h"
 #include "encoding.h"
 #include "fileio.h"
+#include "iniconfig.h"
+#include "sqlite3wrapper.h"
 #include <QFile>
+#include <QSettings>
+
+// QSettings IniFormat 将含逗号的值拆为 QStringList，
+// toString() 将返回空串。此辅助函数统一还原原始字符串。
+static QString iniStr(QSettings &ini, const QString &key, const QString &defVal = {})
+{
+    QVariant v = ini.value(key);
+    if (!v.isValid()) return defVal;
+    if (v.typeId() == QMetaType::QStringList)
+        return v.toStringList().join(',');
+    return v.toString();
+}
 #include <QDataStream>
 #include <QSettings>
 #include <QStringList>
@@ -102,38 +116,45 @@ void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
     g.typeNumber = ini.value("R_Modify/TypeNumber", 0).toInt();
     if (g.typeNumber <= 0) return;
 
-    // 读取类型名列表
-    QString typesStr = ini.value("R_Modify/types", "").toString();
-    QStringList typeNames = typesStr.split(' ', Qt::SkipEmptyParts);
-
     g.typeName.resize(g.typeNumber);
     g.typeNameName.resize(g.typeNumber);
     g.typeRefString.resize(g.typeNumber);
     g.typeDataItem.resize(g.typeNumber);
     g.rIni.resize(g.typeNumber);
 
-    QString nameNameStr = ini.value("R_Modify/TypeNameName", "").toString();
-    QStringList nameNames = nameNameStr.split(' ', Qt::SkipEmptyParts);
+    // 短格式: types = "base role item ..." → 仅设置名称后退出(供 DB 模式)
+    QString typesStr = iniStr(ini, "R_Modify/types");
+    if (!typesStr.isEmpty()) {
+        QStringList typeNames = typesStr.split(' ', Qt::SkipEmptyParts);
+        QString nameNameStr = iniStr(ini, "R_Modify/TypeNameName");
+        QStringList nameNames = nameNameStr.split(' ', Qt::SkipEmptyParts);
+        for (int t = 0; t < g.typeNumber && t < typeNames.size(); ++t) {
+            g.typeName[t] = typeNames[t];
+            if (t < nameNames.size())
+                g.typeNameName[t] = nameNames[t];
+            g.typeRefString[t] = iniStr(ini, QString("R_Modify/Typeref%1").arg(t));
+        }
+        g.initialized = true;
+        return; // Delphi 中此处 exit
+    }
 
+    // 长格式: typename0, typedataitem0, data(0,0)...
     for (int t = 0; t < g.typeNumber; ++t) {
-        g.typeName[t] = (t < typeNames.size()) ? typeNames[t] : QString("type%1").arg(t);
-        g.typeNameName[t] = (t < nameNames.size()) ? nameNames[t] : "";
-        g.typeRefString[t] = ini.value(QString("R_Modify/Typeref%1").arg(t), "").toString();
-
-        QString key = QString("R_Modify/typename%1").arg(t);
-        g.typeName[t] = ini.value(key, g.typeName[t]).toString();
-
+        g.typeName[t] = iniStr(ini, QString("R_Modify/typename%1").arg(t));
         int dataItemCount = ini.value(QString("R_Modify/typedataitem%1").arg(t), 0).toInt();
         g.typeDataItem[t] = dataItemCount;
 
+        if (dataItemCount <= 0) continue;
+
         g.rIni[t].rTerm.resize(dataItemCount);
+        int diff = 0;
         for (int d = 0; d < dataItemCount; ++d) {
             QString dataKey = QString("R_Modify/data(%1,%2)").arg(t).arg(d);
-            QString line = ini.value(dataKey, "").toString();
+            QString line = iniStr(ini, dataKey);
             QStringList parts = line.split(' ', Qt::SkipEmptyParts);
 
             RTermini &term = g.rIni[t].rTerm[d];
-            if (parts.size() >= 7) {
+            if (parts.size() >= 8) {
                 term.datanum = parts[0].toShort();
                 term.incnum  = parts[1].toShort();
                 term.datalen = parts[2].toShort();
@@ -141,8 +162,8 @@ void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
                 term.isname  = parts[4].toShort();
                 term.quote   = parts[5].toShort();
                 term.name    = parts[6];
-                if (parts.size() >= 8)
-                    term.note = parts[7];
+                term.note    = parts[7] + QString("(%1)").arg(diff);
+                diff += term.datalen / 2 * term.datanum;
             }
         }
     }
@@ -154,11 +175,8 @@ void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
 
 bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, const RFileGlobals &g)
 {
-    // 检测是否是 .db 文件
-    if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        // 委托给 readDB
-        return false; // 由调用者处理
-    }
+    if (grpFile.endsWith(".db", Qt::CaseInsensitive))
+        return false;
 
     QFile fidx(idxFile);
     QFile fgrp(grpFile);
@@ -168,73 +186,90 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
     prf->typeNumber = g.typeNumber;
     prf->rType.resize(prf->typeNumber);
 
-    // 读取 idx 偏移数组
-    QVector<uint32_t> offsets(prf->typeNumber + 1);
+    // 初始化
+    for (int i = 0; i < prf->typeNumber; ++i) {
+        prf->rType[i].dataNum = 0;
+        prf->rType[i].namePos = -1;
+        prf->rType[i].mapPos  = -1;
+        prf->rType[i].rData.clear();
+    }
+
+    // Delphi 约定: offset[i] = 前 i+1 个类型的累积字节数末尾位置
+    // type 0 数据: [0, offset[0])
+    // type 1 数据: [offset[0], offset[1])
+    QVector<int32_t> offsets(prf->typeNumber);
     fidx.read(reinterpret_cast<char *>(offsets.data()), prf->typeNumber * 4);
-    offsets[prf->typeNumber] = static_cast<uint32_t>(fgrp.size());
     fidx.close();
 
-    QByteArray grpData = fgrp.readAll();
-    fgrp.close();
+    for (int i1 = 0; i1 < prf->typeNumber; ++i1) {
+        RType &rt = prf->rType[i1];
+        if (i1 >= g.typeDataItem.size()) break;
 
-    for (int t = 0; t < prf->typeNumber; ++t) {
-        RType &rt = prf->rType[t];
-        if (t >= g.typeDataItem.size()) break;
-
-        int fieldCount = g.typeDataItem[t];
+        int fieldCount = g.typeDataItem[i1];
         if (fieldCount <= 0) continue;
 
-        // 计算单条记录大小
+        // 计算单条记录大小 (与 Delphi 一致)
         int recordSize = 0;
-        for (int d = 0; d < fieldCount && d < g.rIni[t].rTerm.size(); ++d) {
-            const RTermini &term = g.rIni[t].rTerm[d];
-            recordSize += term.datanum * term.incnum * term.datalen;
+        for (int i2 = 0; i2 < fieldCount && i2 < g.rIni[i1].rTerm.size(); ++i2) {
+            const RTermini &term = g.rIni[i1].rTerm[i2];
+            if (term.datanum > 0) {
+                for (int i3 = 0; i3 < term.incnum; ++i3) {
+                    int termIdx = i2 + i3;
+                    if (termIdx < g.rIni[i1].rTerm.size())
+                        recordSize += term.datanum * g.rIni[i1].rTerm[termIdx].datalen;
+                }
+            }
         }
-
         if (recordSize <= 0) continue;
 
-        uint32_t startOff = offsets[t];
-        uint32_t endOff   = offsets[t + 1];
-        int dataSize = static_cast<int>(endOff - startOff);
-        int recordCount = dataSize / recordSize;
+        // 计算记录数
+        int dataSize;
+        if (i1 == 0)
+            dataSize = offsets[i1];
+        else
+            dataSize = offsets[i1] - offsets[i1 - 1];
+        int recordCount = qMax(dataSize / recordSize, 1);
 
-        rt.dataNum = recordCount;
-        rt.rData.resize(recordCount);
+        // 预分配记录 (使用 addNewRData 的逻辑)
+        for (int i2 = 0; i2 < recordCount; ++i2)
+            addNewRData(prf, i1, g);
 
-        int pos = static_cast<int>(startOff);
+        // 定位到正确偏移
+        if (i1 != 0)
+            fgrp.seek(offsets[i1 - 1]);
 
-        for (int r = 0; r < recordCount; ++r) {
-            RData &rd = rt.rData[r];
-            rd.num = fieldCount;
-            rd.rDataLine.resize(fieldCount);
+        // 读数据
+        for (int i2 = 0; i2 < rt.dataNum; ++i2) {
+            int temp = -1;
+            for (int i3 = 0; i3 < fieldCount && i3 < g.rIni[i1].rTerm.size(); ++i3) {
+                const RTermini &term = g.rIni[i1].rTerm[i3];
+                if (term.datanum > 0) {
+                    ++temp;
 
-            for (int d = 0; d < fieldCount && d < g.rIni[t].rTerm.size(); ++d) {
-                const RTermini &term = g.rIni[t].rTerm[d];
-                RDataLine &line = rd.rDataLine[d];
-                line.len = term.datanum;
-                line.rArray.resize(term.datanum);
+                    if (i3 == 0 && term.isname == 1)
+                        rt.namePos = temp;
 
-                for (int dn = 0; dn < term.datanum; ++dn) {
-                    RArray &arr = line.rArray[dn];
-                    arr.incNum = term.incnum;
-                    arr.dataArray.resize(term.incnum);
-
-                    for (int inc = 0; inc < term.incnum; ++inc) {
-                        RDataSingle &single = arr.dataArray[inc];
-                        single.dataType = term.isstr;
-                        single.dataLen  = term.datalen;
-                        single.data.resize(term.datalen);
-
-                        if (pos + term.datalen <= grpData.size()) {
-                            memcpy(single.data.data(), grpData.constData() + pos, term.datalen);
+                    for (int i4 = 0; i4 < term.datanum; ++i4) {
+                        for (int i5 = 0; i5 < term.incnum; ++i5) {
+                            int termIdx = i3 + i5;
+                            if (termIdx < g.rIni[i1].rTerm.size()) {
+                                int dl = g.rIni[i1].rTerm[termIdx].datalen;
+                                if (dl > 0 && temp < rt.rData[i2].rDataLine.size()
+                                    && i4 < rt.rData[i2].rDataLine[temp].rArray.size()
+                                    && i5 < rt.rData[i2].rDataLine[temp].rArray[i4].dataArray.size()) {
+                                    fgrp.read(
+                                        rt.rData[i2].rDataLine[temp].rArray[i4].dataArray[i5].data.data(),
+                                        dl);
+                                }
+                            }
                         }
-                        pos += term.datalen;
                     }
                 }
             }
         }
     }
 
+    fgrp.close();
     return true;
 }
 
@@ -242,21 +277,32 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
 
 void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile *prf, const RFileGlobals &g)
 {
+    if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
+        saveDB(grpFile, prf, g);
+        return;
+    }
+
+    // Delphi 约定: offset[i] 为累积末尾偏移
+    QVector<int32_t> offsets(prf->typeNumber, 0);
     QByteArray grpData;
-    QVector<uint32_t> offsets(prf->typeNumber);
 
-    for (int t = 0; t < prf->typeNumber; ++t) {
-        offsets[t] = static_cast<uint32_t>(grpData.size());
-        const RType &rt = prf->rType[t];
+    for (int i1 = 0; i1 < prf->typeNumber; ++i1) {
+        if (i1 > 0)
+            offsets[i1] = offsets[i1 - 1];
 
-        for (int r = 0; r < rt.rData.size(); ++r) {
-            const RData &rd = rt.rData[r];
-            for (int d = 0; d < rd.rDataLine.size(); ++d) {
-                const RDataLine &line = rd.rDataLine[d];
-                for (int dn = 0; dn < line.rArray.size(); ++dn) {
-                    const RArray &arr = line.rArray[dn];
-                    for (int inc = 0; inc < arr.dataArray.size(); ++inc) {
-                        grpData.append(arr.dataArray[inc].data);
+        const RType &rt = prf->rType[i1];
+        for (int i2 = 0; i2 < rt.rData.size(); ++i2) {
+            const RData &rd = rt.rData[i2];
+            for (int i3 = 0; i3 < rd.rDataLine.size(); ++i3) {
+                const RDataLine &line = rd.rDataLine[i3];
+                for (int i4 = 0; i4 < line.rArray.size(); ++i4) {
+                    const RArray &arr = line.rArray[i4];
+                    for (int i5 = 0; i5 < arr.dataArray.size(); ++i5) {
+                        const RDataSingle &ds = arr.dataArray[i5];
+                        if (ds.dataLen > 0) {
+                            grpData.append(ds.data);
+                        }
+                        offsets[i1] += ds.dataLen;
                     }
                 }
             }
@@ -274,32 +320,239 @@ void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
 
 bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
 {
-    // SQLite 读取会在 sqlite3wrapper 模块中实现
-    // 此处预留接口
-    Q_UNUSED(dbFile);
-    Q_UNUSED(prf);
-    Q_UNUSED(g);
-    return false;
+    if (!SQLite3Database::isLibraryLoaded()) return false;
+
+    SQLite3Database db;
+    if (!db.open(dbFile)) return false;
+
+    int tableNum = g.typeNumber;
+    g.rIni.resize(tableNum);
+    g.typeName.resize(tableNum);
+    g.typeDataItem.resize(tableNum);
+    prf->typeNumber = tableNum;
+    prf->rType.resize(tableNum);
+
+    // 枚举表名 (实际使用 INI 中的 typeName)
+    SQLite3Statement stmtTables = db.prepare("select name from sqlite_master where type='table'");
+    if (!stmtTables.isValid()) return false;
+
+    int i1 = 0;
+    while (stmtTables.step() == SQLite3Statement::SQLITE_ROW && i1 < tableNum) {
+        // Delphi: tname := typename[i1] — 用 INI 类型名作为表名
+        QString tname = g.typeName[i1];
+        if (tname == "bindata") continue;
+
+        // 获取表结构
+        SQLite3Statement stmtStruct = db.prepare(
+            QStringLiteral("PRAGMA table_info(%1)").arg(tname));
+        if (!stmtStruct.isValid()) { ++i1; continue; }
+
+        // 计数列数
+        int termNum = 0;
+        while (stmtStruct.step() == SQLite3Statement::SQLITE_ROW)
+            ++termNum;
+        stmtStruct.reset();
+
+        g.rIni[i1].rTerm.resize(termNum);
+        g.typeDataItem[i1] = termNum;
+
+        prf->rType[i1].dataNum = 0;
+        prf->rType[i1].namePos = -1;
+        prf->rType[i1].mapPos  = -1;
+        prf->rType[i1].rData.clear();
+
+        // 填充 RIni 的 term 信息
+        int j = 0;
+        while (stmtStruct.step() == SQLite3Statement::SQLITE_ROW) {
+            RTermini &term = g.rIni[i1].rTerm[j];
+            term.name    = stmtStruct.columnText(1); // 列名
+            term.isstr   = 0;
+            QString colType = stmtStruct.columnText(2); // 列类型
+            term.datanum = 1;
+            term.incnum  = 1;
+            term.datalen = 4;
+            term.isname  = 0;
+            term.quote   = -1;
+            term.note.clear();
+
+            if (colType == "TEXT") {
+                term.isstr   = 1;
+                term.datalen = 100;
+            }
+
+            // 检测 name 字段
+            if (i1 < g.typeNameName.size() && term.name == g.typeNameName[i1])
+                term.isname = 1;
+
+            // 引用检测: 去掉尾部数字, 用 |name| 匹配 typeRefString
+            QString name1 = term.name;
+            for (int c = 0; c < name1.size(); ++c) {
+                if (name1[c].isDigit()) {
+                    name1 = name1.left(c);
+                    break;
+                }
+            }
+            name1 = "|" + name1 + "|";
+            for (int i2 = 0; i2 < g.typeNumber && i2 < g.typeRefString.size(); ++i2) {
+                if (g.typeRefString[i2].contains(name1)) {
+                    term.quote = i2;
+                    break;
+                }
+            }
+            ++j;
+        }
+
+        // 读取数据行
+        SQLite3Statement stmtData = db.prepare(
+            QStringLiteral("select * from %1").arg(tname));
+        if (!stmtData.isValid()) { ++i1; continue; }
+
+        // 计数行数
+        int rowCount = 0;
+        while (stmtData.step() == SQLite3Statement::SQLITE_ROW)
+            ++rowCount;
+        stmtData.reset();
+
+        // 创建空记录
+        for (int r = 0; r < rowCount; ++r)
+            addNewRData(prf, i1, g);
+
+        // 填充数据
+        for (int i2 = 0; i2 < prf->rType[i1].dataNum; ++i2) {
+            stmtData.step();
+            int temp = -1;
+            for (int i3 = 0; i3 < g.typeDataItem[i1] && i3 < g.rIni[i1].rTerm.size(); ++i3) {
+                if (g.rIni[i1].rTerm[i3].datanum <= 0) continue;
+                ++temp;
+
+                if (i3 == 0 && g.rIni[i1].rTerm[i3].isname == 1)
+                    prf->rType[i1].namePos = temp;
+
+                if (temp >= prf->rType[i1].rData[i2].rDataLine.size()) continue;
+
+                for (int i4 = 0; i4 < g.rIni[i1].rTerm[i3].datanum; ++i4) {
+                    if (i4 >= prf->rType[i1].rData[i2].rDataLine[temp].rArray.size()) continue;
+                    for (int i5 = 0; i5 < g.rIni[i1].rTerm[i3].incnum; ++i5) {
+                        int termIdx = i3 + i5;
+                        if (termIdx >= g.rIni[i1].rTerm.size()) continue;
+                        if (i5 >= prf->rType[i1].rData[i2].rDataLine[temp].rArray[i4].dataArray.size()) continue;
+
+                        auto &ds = prf->rType[i1].rData[i2].rDataLine[temp].rArray[i4].dataArray[i5];
+                        if (ds.dataLen <= 0) continue;
+
+                        if (g.rIni[i1].rTerm[termIdx].isstr == 0) {
+                            // 整数列
+                            int value = stmtData.columnInt(i3);
+                            writeRDataInt(ds, value);
+                        } else {
+                            // 文本列: 直接复制 UTF-8 原始字节 (对应 Delphi move)
+                            ds.data.fill(0, ds.dataLen);
+                            QString str = stmtData.columnText(i3);
+                            QByteArray utf8 = str.toUtf8();
+                            int copyLen = qMin(utf8.size(), ds.dataLen);
+                            memcpy(ds.data.data(), utf8.constData(), copyLen);
+                        }
+                    }
+                }
+            }
+        }
+        ++i1;
+    }
+
+    return true;
 }
 
 // ── 保存到 SQLite ───────────────────────────────────────
 
 void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals &g)
 {
-    Q_UNUSED(dbFile);
-    Q_UNUSED(prf);
-    Q_UNUSED(g);
+    if (!SQLite3Database::isLibraryLoaded()) return;
+
+    // 对应 Delphi: DeleteFile(dbfile) 后重新创建
+    QFile::remove(dbFile);
+
+    SQLite3Database db;
+    if (!db.open(dbFile)) return;
+
+    db.beginTransaction();
+
+    for (int i1 = 0; i1 < prf->typeNumber && i1 < g.rIni.size(); ++i1) {
+        if (i1 >= g.typeName.size()) break;
+        QString tname = g.typeName[i1];
+        if (tname.isEmpty()) continue;
+
+        // ── CREATE TABLE ──
+        QString sql = QStringLiteral("create table %1(").arg(tname);
+        for (int j = 0; j < g.rIni[i1].rTerm.size(); ++j) {
+            const RTermini &term = g.rIni[i1].rTerm[j];
+            for (int j1 = 0; j1 < term.datanum; ++j1) {
+                for (int j2 = 0; j2 < term.incnum; ++j2) {
+                    int termIdx = j + j2;
+                    if (termIdx >= g.rIni[i1].rTerm.size()) continue;
+                    QString colName = g.rIni[i1].rTerm[termIdx].name;
+                    if (term.datanum > 1)
+                        colName += QString::number(j1 + IniConfig::instance().listBeginNum);
+                    if (term.isstr != 0)
+                        sql += QStringLiteral("\"%1\" text,").arg(colName);
+                    else
+                        sql += QStringLiteral("\"%1\" integer,").arg(colName);
+                }
+            }
+        }
+        // 末尾逗号替换为空格 (对应 Delphi sql[length(sql)] := ' ')
+        if (sql.endsWith(','))
+            sql.chop(1);
+        sql += ")";
+        db.execute(sql);
+
+        // ── INSERT DATA ──
+        for (int i2 = 0; i2 < prf->rType[i1].dataNum; ++i2) {
+            sql = QStringLiteral("insert into %1 values(").arg(tname);
+            const RData &rd = prf->rType[i1].rData[i2];
+            for (int i3 = 0; i3 < rd.rDataLine.size(); ++i3) {
+                for (int i4 = 0; i4 < rd.rDataLine[i3].rArray.size(); ++i4) {
+                    const RArray &arr = rd.rDataLine[i3].rArray[i4];
+                    for (int i5 = 0; i5 < arr.dataArray.size(); ++i5) {
+                        const RDataSingle &ds = arr.dataArray[i5];
+                        if (ds.dataLen <= 0) continue;
+
+                        int termIdx = i3;
+                        if (termIdx < g.rIni[i1].rTerm.size() && g.rIni[i1].rTerm[termIdx].isstr != 0) {
+                            // 文本列: data[] → 按 dataCode 解码 → UTF-8 给 SQLite
+                            QString str = Encoding::readOutStr(ds.data.constData(), ds.dataLen);
+                            // 转义双引号
+                            str.replace('"', "\"\"");
+                            sql += QStringLiteral("\"%1\",").arg(str);
+                        } else {
+                            // 整数列
+                            int64_t value = readRDataInt(ds);
+                            sql += QString::number(value) + ",";
+                        }
+                    }
+                }
+            }
+            if (sql.endsWith(','))
+                sql.chop(1);
+            sql += ")";
+            db.execute(sql);
+        }
+    }
+
+    db.commit();
 }
 
 // ── 计算 name 位置 ──────────────────────────────────────
 
 void RFileIO::calcNamePos(RFile *prf, const RFileGlobals &g)
 {
-    for (int t = 0; t < prf->typeNumber && t < g.rIni.size(); ++t) {
-        prf->rType[t].namePos = -1;
-        for (int d = 0; d < g.rIni[t].rTerm.size(); ++d) {
-            if (g.rIni[t].rTerm[d].isname == 1) {
-                prf->rType[t].namePos = d;
+    for (int i1 = 0; i1 < prf->typeNumber && i1 < g.rIni.size(); ++i1) {
+        prf->rType[i1].namePos = -1;
+        int temp = -1;
+        for (int i2 = 0; i2 < g.typeDataItem[i1] && i2 < g.rIni[i1].rTerm.size(); ++i2) {
+            if (g.rIni[i1].rTerm[i2].datanum > 0)
+                ++temp;
+            if (g.rIni[i1].rTerm[i2].isname == 1) {
+                prf->rType[i1].namePos = temp;
                 break;
             }
         }
@@ -308,11 +561,62 @@ void RFileIO::calcNamePos(RFile *prf, const RFileGlobals &g)
 
 // ── 添加新记录 ──────────────────────────────────────────
 
-void RFileIO::addNewRData(RFile *prf, int crType, const RData &rd)
+void RFileIO::addNewRData(RFile *prf, int crType, const RFileGlobals &g, const RData *prd)
 {
     if (crType < 0 || crType >= prf->rType.size()) return;
-    prf->rType[crType].rData.append(rd);
-    prf->rType[crType].dataNum = prf->rType[crType].rData.size();
+    RType &rt = prf->rType[crType];
+
+    if (rt.dataNum < 0) rt.dataNum = 0;
+    ++rt.dataNum;
+    rt.rData.resize(rt.dataNum);
+    RData &newRd = rt.rData[rt.dataNum - 1];
+
+    int fieldCount = (crType < g.typeDataItem.size()) ? g.typeDataItem[crType] : 0;
+
+    // 计算有效 RDataLine 数量 (仅 datanum > 0 的 term)
+    int lineCount = 0;
+    for (int i3 = 0; i3 < fieldCount && i3 < g.rIni[crType].rTerm.size(); ++i3) {
+        if (g.rIni[crType].rTerm[i3].datanum > 0)
+            ++lineCount;
+    }
+
+    newRd.num = lineCount;
+    newRd.rDataLine.resize(lineCount);
+
+    int temp = -1;
+    for (int i3 = 0; i3 < fieldCount && i3 < g.rIni[crType].rTerm.size(); ++i3) {
+        const RTermini &term = g.rIni[crType].rTerm[i3];
+        if (term.datanum <= 0) continue;
+
+        ++temp;
+        RDataLine &line = newRd.rDataLine[temp];
+        line.len = term.datanum;
+        line.rArray.resize(term.datanum);
+
+        for (int i4 = 0; i4 < term.datanum; ++i4) {
+            RArray &arr = line.rArray[i4];
+            arr.incNum = term.incnum;
+            arr.dataArray.resize(term.incnum);
+
+            for (int i5 = 0; i5 < term.incnum; ++i5) {
+                int termIdx = i3 + i5;
+                RDataSingle &ds = arr.dataArray[i5];
+                if (termIdx < g.rIni[crType].rTerm.size()) {
+                    ds.dataType = g.rIni[crType].rTerm[termIdx].isstr;
+                    ds.dataLen  = g.rIni[crType].rTerm[termIdx].datalen;
+                } else {
+                    ds.dataType = 0;
+                    ds.dataLen  = 0;
+                }
+                if (ds.dataLen < 0) ds.dataLen = 0;
+                ds.data.fill(0, ds.dataLen);
+            }
+        }
+    }
+
+    // 如果提供了源数据则覆盖
+    if (prd)
+        copyRData(*prd, newRd);
 }
 
 // ── 对话读写 ─────────────────────────────────────────────

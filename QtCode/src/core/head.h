@@ -76,8 +76,8 @@ struct RData {
 
 struct RType {
     int dataNum  = 0;
-    int namePos  = 0;
-    int mapPos   = 0;
+    int namePos  = -1;
+    int mapPos   = -1;
     QVector<RData> rData;
 };
 

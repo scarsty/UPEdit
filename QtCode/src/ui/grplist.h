@@ -34,14 +34,22 @@ private slots:
     void onExportAllPNG();
     void onReplacePNG();
     void onBatchOffset();
+    void onPresetChanged(int index);
+    void onSectionChanged(int index);
+
+protected:
+    void resizeEvent(QResizeEvent *e) override;
+    void mousePressEvent(QMouseEvent *e) override;
 
 private:
     void displayGrpList();
     void loadPalette(const QString &path);
+    void updateSectionCombo();
     QImage decodeSprite(int index);
 
     QLineEdit *m_idxEdit, *m_grpEdit, *m_colEdit;
     QComboBox *m_presetCombo;
+    QComboBox *m_sectionCombo;
     QLabel *m_imageLabel;
     QScrollBar *m_scrollBar;
     QProgressBar *m_progress;
@@ -52,6 +60,8 @@ private:
     int m_cols = 10;             // 每行列数
     int m_nowPic = -1;           // 当前选中
     int m_scrollOffset = 0;
+    int m_beginPic = 0;          // 当前显示范围起始
+    int m_endPic = -1;           // 当前显示范围结束 (-1 = 全部)
     QColor m_bgColor = Qt::black;
     QColor m_textColor = Qt::white;
 };

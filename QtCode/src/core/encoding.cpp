@@ -1,21 +1,18 @@
 #include "encoding.h"
-#include <QStringEncoder>
-#include <QStringDecoder>
-#ifdef Q_OS_WIN
-#include <qt_windows.h>
-#endif
+#include "PotConv.h"
+#include <cstring>
 
 int Encoding::dataCode    = 1; // 默认 BIG5
 int Encoding::talkCode    = 1;
 int Encoding::talkInvert  = 0;
 int Encoding::language    = 0;
 
-static const char *encodingNameForCode(int code)
+static const char *iconvNameForCode(int code)
 {
     switch (code) {
-    case 0: return "GBK";
-    case 1: return "Big5";
-    case 3: return "UTF-8";
+    case 0: return "cp936";
+    case 1: return "cp950";
+    case 3: return "utf-8";
     default: return nullptr; // UTF-16LE 需特殊处理
     }
 }
@@ -42,18 +39,21 @@ QString Encoding::readOutStrWithCode(const void *data, int len, int code)
         return result;
     }
 
-    const char *encName = encodingNameForCode(code);
+    const char *encName = iconvNameForCode(code);
     if (!encName)
         return {};
 
-    QByteArray ba(reinterpret_cast<const char *>(data), len);
     // 截断到第一个 \0
-    int nul = ba.indexOf('\0');
-    if (nul >= 0) ba.truncate(nul);
+    const char *raw = reinterpret_cast<const char *>(data);
+    int actualLen = 0;
+    while (actualLen < len && raw[actualLen] != '\0')
+        ++actualLen;
+    if (actualLen == 0)
+        return {};
 
-    auto decoder = QStringDecoder(encName);
-    if (!decoder.isValid()) return QString::fromUtf8(ba);
-    return decoder(ba);
+    std::string src(raw, actualLen);
+    std::string utf8 = PotConv::conv(src, encName, "utf-8");
+    return QString::fromUtf8(utf8.c_str(), static_cast<int>(utf8.size()));
 }
 
 void Encoding::writeInStr(const QString &str, void *data, int len)
@@ -76,39 +76,32 @@ void Encoding::writeInStrWithCode(const QString &str, void *data, int len, int c
         return;
     }
 
-    const char *encName = encodingNameForCode(code);
+    const char *encName = iconvNameForCode(code);
     if (!encName) return;
 
-    auto encoder = QStringEncoder(encName);
-    if (!encoder.isValid()) return;
-    QByteArray encoded = encoder(str);
+    std::string utf8 = str.toUtf8().toStdString();
+    std::string encoded = PotConv::conv(utf8, "utf-8", encName);
     int copyLen = qMin(static_cast<int>(encoded.size()), len);
-    memcpy(data, encoded.constData(), copyLen);
+    memcpy(data, encoded.c_str(), copyLen);
 }
 
 QString Encoding::traditionalToSimplified(const QString &s)
 {
-#ifdef Q_OS_WIN
-    // Windows: 使用 LCMapString 转简
-    std::wstring ws = s.toStdWString();
-    std::wstring result(ws.size(), L'\0');
-    LCMapStringW(0x0804, 0x02000000, ws.c_str(), ws.size(), &result[0], result.size());
-    return QString::fromStdWString(result);
-#else
-    return s;
-#endif
+    // 通过 cp950 → cp936 转码实现繁→简（近似转换）
+    std::string utf8 = s.toUtf8().toStdString();
+    std::string cp950 = PotConv::conv(utf8, "utf-8", "cp950");
+    std::string cp936 = PotConv::conv(cp950, "cp950", "cp936");
+    std::string result = PotConv::conv(cp936, "cp936", "utf-8");
+    return QString::fromUtf8(result.c_str(), static_cast<int>(result.size()));
 }
 
 QString Encoding::simplifiedToTraditional(const QString &s)
 {
-#ifdef Q_OS_WIN
-    std::wstring ws = s.toStdWString();
-    std::wstring result(ws.size(), L'\0');
-    LCMapStringW(0x0804, 0x04000000, ws.c_str(), ws.size(), &result[0], result.size());
-    return QString::fromStdWString(result);
-#else
-    return s;
-#endif
+    std::string utf8 = s.toUtf8().toStdString();
+    std::string cp936 = PotConv::conv(utf8, "utf-8", "cp936");
+    std::string cp950 = PotConv::conv(cp936, "cp936", "cp950");
+    std::string result = PotConv::conv(cp950, "cp950", "utf-8");
+    return QString::fromUtf8(result.c_str(), static_cast<int>(result.size()));
 }
 
 QString Encoding::displayStr(const QString &s)

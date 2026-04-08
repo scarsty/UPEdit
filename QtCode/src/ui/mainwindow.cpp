@@ -32,6 +32,7 @@
 #include <QMdiSubWindow>
 #include <QCloseEvent>
 
+
 const QString MainWindow::TITLE    = QStringLiteral("UPedit Formal Ver ");
 const QString MainWindow::APP_NAME = QStringLiteral("UPedit Formal");
 MainWindow *MainWindow::s_instance = nullptr;
@@ -121,10 +122,8 @@ void MainWindow::createStatusBar()
 
 void MainWindow::loadSettings()
 {
+    // INI 已在 main.cpp 中加载; 此处仅更新窗口标题
     IniConfig &cfg = IniConfig::instance();
-    QString iniPath = QApplication::applicationDirPath() + "/" + cfg.iniFileName;
-    cfg.load(iniPath);
-
     setWindowTitle(TITLE + FileIO::fileVersion(QApplication::applicationFilePath())
                    + " - " + cfg.gamePath);
 }
@@ -182,8 +181,8 @@ static WidgetType *showOrCreateMdi(WidgetType *&ptr, QMdiArea *mdi, const QStrin
     ptr = new WidgetType();
     QMdiSubWindow *sub = mdi->addSubWindow(ptr);
     sub->setWindowTitle(title);
-    sub->resize(800, 600);
     ptr->show();
+    sub->showMaximized();
     return ptr;
 }
 
@@ -195,6 +194,8 @@ void MainWindow::onSetPath()
     if (!dir.endsWith('/') && !dir.endsWith('\\'))
         dir += '/';
     IniConfig::instance().gamePath = dir;
+    setWindowTitle(TITLE + FileIO::fileVersion(QApplication::applicationFilePath())
+                   + " - " + dir);
     loadGameData();
 }
 

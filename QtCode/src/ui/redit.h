@@ -27,6 +27,7 @@ public:
     ~REditWidget();
 
 private slots:
+    void onProgressChanged(int index);
     void onTypeChanged(int index);
     void onRecordChanged(int index);
     void onFieldClicked(int row);
@@ -45,12 +46,14 @@ private slots:
 
 private:
     void setupUI();
+    void loadProgress(int index);
     void displayR();
     void arrange();
     void populateTypes();
     void populateRecords();
     void populateFields();
 
+    QComboBox   *m_progressCombo = nullptr; // 进度选择 (对应 Delphi ComboBox3)
     QComboBox   *m_typeCombo    = nullptr; // 类型选择
     QComboBox   *m_recordCombo  = nullptr; // 记录选择 (按编号)
     QComboBox   *m_fieldCombo   = nullptr; // 字段选择 (批量操作用)
@@ -82,4 +85,7 @@ private:
     QVector<Select> m_select;
     int m_currentType   = -1;
     int m_currentRecord = -1;
+
+    // 本地 R 文件工作副本 (对应 Delphi Form5.RFile, 区别于 useR)
+    RFile m_rFile;
 };

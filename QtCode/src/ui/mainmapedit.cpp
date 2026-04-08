@@ -1,6 +1,7 @@
 #include "mainmapedit.h"
 #include "grpdata.h"
 #include "mapdata.h"
+#include "fileio.h"
 #include "iniconfig.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
@@ -55,18 +56,52 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
 void MainMapEdit::readMainMapFile()
 {
     IniConfig &cfg = IniConfig::instance();
-    MapIO::readMap(cfg.gamePath + "/" + cfg.mmapFileIdx,
-                   cfg.gamePath + "/" + cfg.mmapFileGrp, m_mapData);
+
+    // 固定 480×480, 5 层 (对应 Delphi 硬编码)
+    const int W = 480, H = 480;
+    m_mapData.num = 1;
+    m_mapData.map.resize(1);
+    Map &m = m_mapData.map[0];
+    m.layerNum = 5;
+    m.x = W;
+    m.y = H;
+    m.mapLayer.resize(5);
+
+    // 5 层对应文件: earth, surface, building, buildx, buildy
+    QString files[5] = { cfg.mEarth, cfg.mSurface, cfg.mBuilding, cfg.mBuildX, cfg.mBuildY };
+
+    for (int l = 0; l < 5; ++l) {
+        m.mapLayer[l].pic.resize(W);
+        for (int x = 0; x < W; ++x)
+            m.mapLayer[l].pic[x].resize(H, 0);
+
+        QByteArray data = FileIO::readFileAll(cfg.gamePath + files[l]);
+        if (data.isEmpty()) continue;
+
+        const int16_t *p = reinterpret_cast<const int16_t *>(data.constData());
+        int maxIdx = data.size() / 2;
+        int idx = 0;
+
+        // Delphi: for iy := 0 to 479 do fileread(grp, pic[iy][0], 480*2)
+        // Delphi pic[y][x], Qt pic[x][y] — 按行读取后转置
+        for (int y = 0; y < H && idx < maxIdx; ++y) {
+            for (int x = 0; x < W && idx < maxIdx; ++x) {
+                m.mapLayer[l].pic[x][y] = p[idx++];
+            }
+        }
+    }
 }
 
 void MainMapEdit::readMainMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
-    GrpIO::readGrp(cfg.gamePath + "/" + cfg.mainMapTileIdx,
-                    cfg.gamePath + "/" + cfg.mainMapTileGrp, m_grpPics);
+    // 主地图贴图使用 MMAPIDX/MMAPGRP (对应 Delphi MMapfileIDX/MMapfilegrp)
+    GrpIO::readGrp(cfg.gamePath + cfg.mmapFileIdx,
+                    cfg.gamePath + cfg.mmapFileGrp, m_grpPics);
 
+    // 调色板使用全局 palette (对应 Delphi readMcol 读 palette)
     uint8_t pr[256], pg[256], pb[256];
-    MapIO::readPalette(cfg.gamePath + "/" + cfg.mainMapPalette, pr, pg, pb);
+    MapIO::readPalette(cfg.gamePath + cfg.palette, pr, pg, pb);
 
     m_tileCache.resize(m_grpPics.size());
     for (int i = 0; i < m_grpPics.size(); ++i) {
@@ -106,7 +141,7 @@ void MainMapEdit::renderMap()
                 if (ix >= layerData.pic.size()) continue;
                 if (iy >= layerData.pic[ix].size()) continue;
 
-                int tileId = layerData.pic[ix][iy];
+                int tileId = layerData.pic[ix][iy] / 2;  // Delphi: pic[iy][ix] div 2
                 if (tileId < 0 || tileId >= m_tileCache.size()) continue;
                 if (m_tileCache[tileId].isNull()) continue;
 
@@ -160,8 +195,25 @@ void MainMapEdit::onVScroll(int value) { m_viewY = value; renderMap(); }
 void MainMapEdit::onSaveMap()
 {
     IniConfig &cfg = IniConfig::instance();
-    MapIO::saveMap(cfg.gamePath + "/" + cfg.mmapFileIdx,
-                   cfg.gamePath + "/" + cfg.mmapFileGrp, m_mapData);
+    if (m_mapData.map.isEmpty()) return;
+    const Map &m = m_mapData.map[0];
+
+    // 逐层写回 5 个独立文件 (对应 Delphi 按行写入)
+    QString files[5] = { cfg.mEarth, cfg.mSurface, cfg.mBuilding, cfg.mBuildX, cfg.mBuildY };
+    for (int l = 0; l < 5 && l < m.mapLayer.size(); ++l) {
+        QByteArray data(m.x * m.y * 2, '\0');
+        int16_t *p = reinterpret_cast<int16_t *>(data.data());
+        int idx = 0;
+        for (int y = 0; y < m.y; ++y) {
+            for (int x = 0; x < m.x; ++x) {
+                if (x < m.mapLayer[l].pic.size() && y < m.mapLayer[l].pic[x].size())
+                    p[idx++] = m.mapLayer[l].pic[x][y];
+                else
+                    p[idx++] = 0;
+            }
+        }
+        FileIO::writeFileAll(cfg.gamePath + files[l], data);
+    }
     QMessageBox::information(this, tr("保存"), tr("主地图保存成功"));
 }
 
