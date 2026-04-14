@@ -27,6 +27,7 @@ private slots:
     void onWarChanged(int index);
     void onDrawPosition();
     void onCellDoubleClicked(int row, int column);
+    void onTableItemChanged(QTableWidgetItem *item);
 
 private:
     struct WarRowInfo { int fieldIdx = -1; int valueIdx = -1; };
@@ -34,8 +35,13 @@ private:
     void readWIni();
     void readW();
     void displayW();
+    void rebuildWSelect();
+    void rebuildWarCombo();
     void drawWarPos();
     void countWarPos();
+    void readWarMapDef();
+    void readWarMapGrp();
+    int currentMapIndex() const;
 
     QComboBox *m_warCombo;
     QTableWidget *m_table;
@@ -50,4 +56,11 @@ private:
     WIni m_wIni;
     QVector<WarPos> m_warFriend, m_warEnemy;
     int m_currentWar = -1;
+    int m_mapFieldPos = -1;
+    bool m_autoWarFriend = false;
+    bool m_updatingTable = false;
+
+    MapStruct m_warMapData;
+    QVector<GrpPic> m_warGrpPics;
+    QVector<QImage> m_warTileCache;
 };

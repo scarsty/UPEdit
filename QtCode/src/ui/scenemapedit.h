@@ -34,6 +34,9 @@ private:
     void readSceneData(int sceneIndex);
     void readSceneGrp();
     void addUndoSave();
+    int eventIndexAt(int ix, int iy) const;
+    void loadEventToEditor(int eventIndex, int ix, int iy);
+    int displayedEventPic(const SceneEvent &evt) const;
 
     QComboBox *m_saveCombo;   // 进度选择
     QComboBox *m_sceneCombo;  // 场景选择
@@ -47,20 +50,12 @@ private:
     QLineEdit *m_evtAnim, *m_evtX, *m_evtY;
 
     // 场景事件数据
-    struct SceneEventLocal {
-        int16_t canWalk = 0, index = 0;
-        int16_t event1 = 0, event2 = 0, event3 = 0;
-        int16_t beginPic = 0, endPic = 0;
-        int16_t animFrames = 0;
-        int16_t x = 0, y = 0;
-        int16_t unused = 0;
-    };
-    QVector<QVector<SceneEventLocal>> m_sceneEvents; // [scene][index]
+    DFile m_dFile;
 
     // 撤销系统
     struct UndoState {
         MapStruct mapData;
-        QVector<SceneEventLocal> events;
+        QVector<SceneEvent> events;
     };
     QVector<UndoState> m_undoStack;
     int m_undoPos = -1;
@@ -70,6 +65,9 @@ private:
     int m_currentSave  = 0;
     QByteArray m_sceneRawData;   // 当前存档的场景 grp 原始数据
     int m_sceneCount = 0;        // 文件中场景数
+    int m_selectedEventIndex = -1;
+    int m_selectedEventX = -1;
+    int m_selectedEventY = -1;
 
     // 贴图预览
     void updateTilePreview(int ix, int iy);

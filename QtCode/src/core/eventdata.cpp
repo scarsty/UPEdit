@@ -11,15 +11,21 @@ bool EventIO::readEvents(const QString &idxFile, const QString &grpFile, DFile &
     if (idxData.isEmpty() || grpData.isEmpty())
         return false;
 
-    int mapCount = idxData.size() / 4;
+    const int bytesPerMap = 200 * static_cast<int>(sizeof(SceneEvent));
+    if (bytesPerMap <= 0)
+        return false;
+
+    int mapCount = grpData.size() / bytesPerMap;
+    if (mapCount <= 0)
+        return false;
+
     dfile.mapNum = mapCount;
     dfile.mapEvent.resize(mapCount);
 
-    const uint32_t *offsets = reinterpret_cast<const uint32_t *>(idxData.constData());
-
     for (int i = 0; i < mapCount; ++i) {
-        uint32_t off = offsets[i];
-        if (off + sizeof(MapEvent) > static_cast<uint32_t>(grpData.size())) continue;
+        int off = i * bytesPerMap;
+        if (off + bytesPerMap > grpData.size())
+            break;
 
         const SceneEvent *src = reinterpret_cast<const SceneEvent *>(grpData.constData() + off);
         for (int e = 0; e < 200; ++e) {

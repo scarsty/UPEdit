@@ -5,6 +5,7 @@
 #include "eventdata.h"
 #include "iniconfig.h"
 #include "encoding.h"
+#include "rfile.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -146,14 +147,34 @@ void SceneMapEdit::loadSceneGrpFile(int saveSlot)
     }
     m_sceneRawData = f.readAll();
 
+    m_dFile.mapNum = 0;
+    m_dFile.mapEvent.clear();
+    if (saveSlot < cfg.dIdx.size() && saveSlot < cfg.dGrp.size()) {
+        EventIO::readEvents(cfg.gamePath + "/" + cfg.dIdx[saveSlot],
+                            cfg.gamePath + "/" + cfg.dGrp[saveSlot], m_dFile);
+    }
+
     // 每个场景: 64 * 64 * 6 层 * 2 字节 (无文件头, Delphi hardcoded)
     const int sceneStride = 64 * 64 * 6 * 2;
     m_sceneCount = m_sceneRawData.size() / sceneStride;
 
     m_sceneCombo->blockSignals(true);
     m_sceneCombo->clear();
-    for (int i = 0; i < m_sceneCount; ++i)
-        m_sceneCombo->addItem(QString::number(i));
+    const RFile &rFile = cfg.rGlobals.rFile;
+    const RType *sceneType = (rFile.rType.size() > 3) ? &rFile.rType[3] : nullptr;
+    for (int i = 0; i < m_sceneCount; ++i) {
+        QString label = QString::number(i);
+        if (sceneType && i < sceneType->rData.size() && sceneType->namePos >= 0
+            && sceneType->namePos < sceneType->rData[i].rDataLine.size()) {
+            const RDataLine &line = sceneType->rData[i].rDataLine[sceneType->namePos];
+            if (!line.rArray.isEmpty() && !line.rArray[0].dataArray.isEmpty()) {
+                QString name = Encoding::displayStr(RFileIO::readRDataStr(line.rArray[0].dataArray[0]));
+                if (!name.isEmpty())
+                    label += name;
+            }
+        }
+        m_sceneCombo->addItem(label);
+    }
     m_sceneCombo->blockSignals(false);
 
     if (m_sceneCount > 0) {
@@ -165,6 +186,9 @@ void SceneMapEdit::loadSceneGrpFile(int saveSlot)
 void SceneMapEdit::readSceneData(int sceneIndex)
 {
     m_currentScene = sceneIndex;
+    m_selectedEventIndex = -1;
+    m_selectedEventX = -1;
+    m_selectedEventY = -1;
 
     // 从缓存的原始数据中提取指定场景 (64×64, 6 层, 无文件头)
     const int sceneStride = 64 * 64 * 6 * 2;
@@ -175,32 +199,51 @@ void SceneMapEdit::readSceneData(int sceneIndex)
     m_mapData.map.resize(1);
     MapIO::readSingleMap(m_sceneRawData, offset, m_mapData.map[0], 6, 64, 64);
 
-    // 加载事件数据 (D-file, idx/grp 格式, 每场景 200 events × 11 int16)
-    IniConfig &cfg = IniConfig::instance();
-    if (m_currentSave < cfg.dIdx.size() && m_currentSave < cfg.dGrp.size()) {
-        QByteArray idxData = FileIO::readFileAll(cfg.gamePath + "/" + cfg.dIdx[m_currentSave]);
-        QByteArray grpData = FileIO::readFileAll(cfg.gamePath + "/" + cfg.dGrp[m_currentSave]);
+}
 
-        if (!idxData.isEmpty() && !grpData.isEmpty() && sceneIndex * 4 + 4 <= idxData.size()) {
-            uint32_t dOff = *reinterpret_cast<const uint32_t*>(idxData.constData() + sceneIndex * 4);
-            if (dOff < (uint32_t)grpData.size()) {
-                QDataStream ds(grpData.mid(dOff));
-                ds.setByteOrder(QDataStream::LittleEndian);
+int SceneMapEdit::eventIndexAt(int ix, int iy) const
+{
+    if (m_mapData.map.isEmpty()) return -1;
+    const Map &curMap = m_mapData.map[0];
+    if (3 >= curMap.mapLayer.size()) return -1;
+    if (ix < 0 || iy < 0 || ix >= curMap.x || iy >= curMap.y) return -1;
+    const auto &evtLayer = curMap.mapLayer[3];
+    if (ix >= evtLayer.pic.size() || iy >= evtLayer.pic[ix].size()) return -1;
+    int eventIndex = evtLayer.pic[ix][iy];
+    if (eventIndex < 0 || eventIndex >= 200) return -1;
+    if (m_currentScene < 0 || m_currentScene >= m_dFile.mapEvent.size()) return -1;
+    return eventIndex;
+}
 
-                int eventsPerScene = 200;
-                QVector<SceneEventLocal> events(eventsPerScene);
-                for (int i = 0; i < eventsPerScene; ++i) {
-                    ds >> events[i].canWalk >> events[i].index
-                       >> events[i].event1 >> events[i].event2 >> events[i].event3
-                       >> events[i].beginPic >> events[i].endPic
-                       >> events[i].animFrames
-                       >> events[i].x >> events[i].y >> events[i].unused;
-                }
-                if (sceneIndex >= m_sceneEvents.size()) m_sceneEvents.resize(sceneIndex + 1);
-                m_sceneEvents[sceneIndex] = events;
-            }
-        }
+void SceneMapEdit::loadEventToEditor(int eventIndex, int ix, int iy)
+{
+    if (m_currentScene < 0 || m_currentScene >= m_dFile.mapEvent.size()) return;
+    if (eventIndex < 0 || eventIndex >= 200) return;
+
+    const SceneEvent &evt = m_dFile.mapEvent[m_currentScene].sceneEvent[eventIndex];
+    m_selectedEventIndex = eventIndex;
+    m_selectedEventX = ix;
+    m_selectedEventY = iy;
+    m_evtCanWalk->setText(QString::number(evt.canWalk));
+    m_evtIndex->setText(QString::number(evt.num));
+    m_evtEvent1->setText(QString::number(evt.event1));
+    m_evtEvent2->setText(QString::number(evt.event2));
+    m_evtEvent3->setText(QString::number(evt.event3));
+    m_evtBeginPic->setText(QString::number(evt.beginPic1));
+    m_evtEndPic->setText(QString::number(evt.endPic));
+    m_evtAnim->setText(QString::number(evt.picDelay));
+    m_evtX->setText(QString::number(evt.xPos));
+    m_evtY->setText(QString::number(evt.yPos));
+}
+
+int SceneMapEdit::displayedEventPic(const SceneEvent &evt) const
+{
+    if (evt.beginPic1 < evt.endPic) {
+        int span = evt.endPic - evt.beginPic1;
+        if (span > 0)
+            return evt.beginPic1 + (evt.picDelay * 2) % span;
     }
+    return evt.beginPic1;
 }
 
 void SceneMapEdit::readSceneGrp()
@@ -262,9 +305,9 @@ void SceneMapEdit::renderMap()
     bool showEvent    = (layer == 5 || layer == 3);
 
     // 获取事件数据
-    const QVector<SceneEventLocal> *evts = nullptr;
-    if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size())
-        evts = &m_sceneEvents[m_currentScene];
+    const MapEvent *evts = nullptr;
+    if (m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size())
+        evts = &m_dFile.mapEvent[m_currentScene];
 
     // 辅助: 绘制单个贴图
     auto drawOneTile = [&](int ly, int ix, int iy, const QPoint &sp, int elevLayer) {
@@ -296,9 +339,8 @@ void SceneMapEdit::renderMap()
         const auto &layerData = curMap.mapLayer[3];
         if (ix >= layerData.pic.size() || iy >= layerData.pic[ix].size()) return;
         int evtIdx = layerData.pic[ix][iy];
-        if (evtIdx < 0 || !evts || evtIdx >= evts->size()) return;
-        int beginPic = (*evts)[evtIdx].beginPic;
-        int tileId = beginPic / 2;
+        if (evtIdx < 0 || !evts || evtIdx >= 200) return;
+        int tileId = displayedEventPic(evts->sceneEvent[evtIdx]) / 2;
         if (tileId <= 0 || tileId >= m_tileCache.size()) return;
         const auto &tile = m_tileCache[tileId];
         if (tile.isNull()) return;
@@ -363,25 +405,10 @@ void SceneMapEdit::renderMap()
 void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
     int layer = m_layerCombo->currentIndex();
-    if (layer >= 3) {
-        // 事件层
-        if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size()) {
-            for (auto &evt : m_sceneEvents[m_currentScene]) {
-                if (evt.x == ix && evt.y == iy) {
-                    m_evtCanWalk->setText(QString::number(evt.canWalk));
-                    m_evtIndex->setText(QString::number(evt.index));
-                    m_evtEvent1->setText(QString::number(evt.event1));
-                    m_evtEvent2->setText(QString::number(evt.event2));
-                    m_evtEvent3->setText(QString::number(evt.event3));
-                    m_evtBeginPic->setText(QString::number(evt.beginPic));
-                    m_evtEndPic->setText(QString::number(evt.endPic));
-                    m_evtAnim->setText(QString::number(evt.animFrames));
-                    m_evtX->setText(QString::number(evt.x));
-                    m_evtY->setText(QString::number(evt.y));
-                    return;
-                }
-            }
-        }
+    if (layer == 3) {
+        int eventIndex = eventIndexAt(ix, iy);
+        if (eventIndex >= 0)
+            loadEventToEditor(eventIndex, ix, iy);
         return;
     }
 
@@ -402,21 +429,50 @@ void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 
 void SceneMapEdit::onEventConfirm()
 {
-    if (m_currentScene < 0 || m_currentScene >= m_sceneEvents.size()) return;
-    int x = m_evtX->text().toInt(), y = m_evtY->text().toInt();
-    for (auto &evt : m_sceneEvents[m_currentScene]) {
-        if (evt.x == x && evt.y == y) {
-            evt.canWalk = m_evtCanWalk->text().toShort();
-            evt.index = m_evtIndex->text().toShort();
-            evt.event1 = m_evtEvent1->text().toShort();
-            evt.event2 = m_evtEvent2->text().toShort();
-            evt.event3 = m_evtEvent3->text().toShort();
-            evt.beginPic = m_evtBeginPic->text().toShort();
-            evt.endPic = m_evtEndPic->text().toShort();
-            evt.animFrames = m_evtAnim->text().toShort();
-            renderMap();
-            return;
-        }
+    if (m_currentScene < 0 || m_currentScene >= m_dFile.mapEvent.size()) return;
+    if (m_mapData.map.isEmpty()) return;
+
+    Map &curMap = m_mapData.map[0];
+    if (3 >= curMap.mapLayer.size()) return;
+
+    int eventIndex = m_selectedEventIndex;
+    if (eventIndex < 0 && m_selectedEventX >= 0 && m_selectedEventY >= 0)
+        eventIndex = eventIndexAt(m_selectedEventX, m_selectedEventY);
+    if (eventIndex < 0 || eventIndex >= 200) return;
+
+    int newX = m_evtX->text().toInt();
+    int newY = m_evtY->text().toInt();
+    bool oldValid = m_selectedEventX >= 0 && m_selectedEventY >= 0
+        && m_selectedEventX < curMap.x && m_selectedEventY < curMap.y;
+    bool newValid = newX >= 0 && newY >= 0 && newX < curMap.x && newY < curMap.y;
+    if (!oldValid && !newValid) return;
+
+    addUndoSave();
+
+    auto &evtLayer = curMap.mapLayer[3];
+    if (oldValid && m_selectedEventX < evtLayer.pic.size() && m_selectedEventY < evtLayer.pic[m_selectedEventX].size()
+        && evtLayer.pic[m_selectedEventX][m_selectedEventY] == eventIndex) {
+        evtLayer.pic[m_selectedEventX][m_selectedEventY] = -1;
+    }
+
+    if (newValid) {
+        if (newX < evtLayer.pic.size() && newY < evtLayer.pic[newX].size())
+            evtLayer.pic[newX][newY] = eventIndex;
+
+        SceneEvent &evt = m_dFile.mapEvent[m_currentScene].sceneEvent[eventIndex];
+        evt.canWalk = m_evtCanWalk->text().toShort();
+        evt.num = m_evtIndex->text().toShort();
+        evt.event1 = m_evtEvent1->text().toShort();
+        evt.event2 = m_evtEvent2->text().toShort();
+        evt.event3 = m_evtEvent3->text().toShort();
+        evt.beginPic1 = m_evtBeginPic->text().toShort();
+        evt.endPic = m_evtEndPic->text().toShort();
+        evt.picDelay = m_evtAnim->text().toShort();
+        evt.xPos = newX;
+        evt.yPos = newY;
+        loadEventToEditor(eventIndex, newX, newY);
+        renderMap();
+        updateTilePreview(newX, newY);
     }
 }
 
@@ -427,8 +483,11 @@ void SceneMapEdit::addUndoSave()
 
     UndoState state;
     state.mapData = m_mapData;
-    if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size())
-        state.events = m_sceneEvents[m_currentScene];
+    if (m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size()) {
+        state.events.resize(200);
+        for (int i = 0; i < 200; ++i)
+            state.events[i] = m_dFile.mapEvent[m_currentScene].sceneEvent[i];
+    }
     m_undoStack.append(state);
     m_undoPos = m_undoStack.size() - 1;
 
@@ -444,8 +503,10 @@ void SceneMapEdit::onUndo()
     if (m_undoPos <= 0) return;
     m_undoPos--;
     m_mapData = m_undoStack[m_undoPos].mapData;
-    if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size())
-        m_sceneEvents[m_currentScene] = m_undoStack[m_undoPos].events;
+    if (m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size()) {
+        for (int i = 0; i < m_undoStack[m_undoPos].events.size() && i < 200; ++i)
+            m_dFile.mapEvent[m_currentScene].sceneEvent[i] = m_undoStack[m_undoPos].events[i];
+    }
     renderMap();
 }
 
@@ -454,8 +515,10 @@ void SceneMapEdit::onRedo()
     if (m_undoPos >= m_undoStack.size() - 1) return;
     m_undoPos++;
     m_mapData = m_undoStack[m_undoPos].mapData;
-    if (m_currentScene >= 0 && m_currentScene < m_sceneEvents.size())
-        m_sceneEvents[m_currentScene] = m_undoStack[m_undoPos].events;
+    if (m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size()) {
+        for (int i = 0; i < m_undoStack[m_undoPos].events.size() && i < 200; ++i)
+            m_dFile.mapEvent[m_currentScene].sceneEvent[i] = m_undoStack[m_undoPos].events[i];
+    }
     renderMap();
 }
 
@@ -465,26 +528,14 @@ void SceneMapEdit::onSaveScene()
     if (m_currentScene < 0) return;
 
     // 保存地图
-    QString idxPath = cfg.gamePath + "/" + cfg.sIdx[m_currentScene];
-    QString grpPath = cfg.gamePath + "/" + cfg.sGrp[m_currentScene];
+    QString idxPath = cfg.gamePath + "/" + cfg.sIdx[m_currentSave];
+    QString grpPath = cfg.gamePath + "/" + cfg.sGrp[m_currentSave];
     MapIO::saveMap(idxPath, grpPath, m_mapData);
 
     // 保存事件数据
-    if (m_currentScene < m_sceneEvents.size() && m_currentScene < cfg.dIdx.size()) {
-        QString dPath = cfg.gamePath + "/" + cfg.dIdx[m_currentScene];
-        QFile dFile(dPath);
-        if (dFile.open(QIODevice::ReadWrite)) {
-            int eventsPerScene = 200, eventSize = 11 * 2;
-            dFile.seek(m_currentScene * eventsPerScene * eventSize);
-            QDataStream ds(&dFile);
-            ds.setByteOrder(QDataStream::LittleEndian);
-            for (const auto &evt : m_sceneEvents[m_currentScene]) {
-                ds << evt.canWalk << evt.index
-                   << evt.event1 << evt.event2 << evt.event3
-                   << evt.beginPic << evt.endPic
-                   << evt.animFrames << evt.x << evt.y << evt.unused;
-            }
-        }
+    if (m_currentSave < cfg.dIdx.size() && m_currentSave < cfg.dGrp.size()) {
+        EventIO::saveEvents(cfg.gamePath + "/" + cfg.dIdx[m_currentSave],
+                            cfg.gamePath + "/" + cfg.dGrp[m_currentSave], m_dFile);
     }
     QMessageBox::information(this, tr("保存"), tr("场景保存成功"));
 }
@@ -549,9 +600,10 @@ void SceneMapEdit::updateTilePreview(int ix, int iy)
         const auto &layer = curMap.mapLayer[3];
         if (ix < layer.pic.size() && iy < layer.pic[ix].size()) {
             int evtIdx = layer.pic[ix][iy];
-            if (evtIdx >= 0 && m_currentScene >= 0 && m_currentScene < m_sceneEvents.size()
-                && evtIdx < m_sceneEvents[m_currentScene].size()) {
-                int tileId = m_sceneEvents[m_currentScene][evtIdx].beginPic / 2;
+            if (evtIdx >= 0 && m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size()
+                && evtIdx < 200) {
+                int displayPic = displayedEventPic(m_dFile.mapEvent[m_currentScene].sceneEvent[evtIdx]);
+                int tileId = displayPic / 2;
                 m_lblEventVal->setText(QString("%1 (pic:%2)").arg(evtIdx).arg(tileId));
                 if (tileId > 0 && tileId < m_tileCache.size() && !m_tileCache[tileId].isNull()) {
                     m_imgEvent->setPixmap(QPixmap::fromImage(m_tileCache[tileId]).scaled(

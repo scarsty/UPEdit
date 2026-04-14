@@ -7,6 +7,7 @@
 
 #include <QMainWindow>
 #include <QMdiArea>
+#include <QMenu>
 #include <QMenuBar>
 #include <QStatusBar>
 #include <QLabel>
@@ -68,6 +69,7 @@ private slots:
     // 设置
     void onSetLanguage();
     void onFileRelation();
+    void updateWindowMenu();
 
 private:
     void createMenus();
@@ -96,6 +98,7 @@ private:
     ReplicatedList     *m_repList    = nullptr;
 
     QLabel *m_statusLabel = nullptr;
+    QMenu *m_windowMenu = nullptr;
 
     static const QString TITLE;
     static const QString APP_NAME;

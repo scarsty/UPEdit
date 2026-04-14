@@ -102,12 +102,11 @@ void MainWindow::createMenus()
     // ── 设置菜单 ────────────────────────────────────────
     QMenu *settingsMenu = menuBar()->addMenu(tr("设置(&S)"));
     settingsMenu->addAction(tr("语言/编码(&L)..."), this, &MainWindow::onSetLanguage);
-    settingsMenu->addAction(tr("文件关联(&A)..."), this, &MainWindow::onFileRelation);
 
     // ── 窗口菜单 ────────────────────────────────────────
-    QMenu *windowMenu = menuBar()->addMenu(tr("窗口(&W)"));
-    windowMenu->addAction(tr("层叠"), m_mdiArea, &QMdiArea::cascadeSubWindows);
-    windowMenu->addAction(tr("平铺"), m_mdiArea, &QMdiArea::tileSubWindows);
+    m_windowMenu = menuBar()->addMenu(tr("窗口(&W)"));
+    connect(m_windowMenu, &QMenu::aboutToShow, this, &MainWindow::updateWindowMenu);
+    updateWindowMenu();
 
     // ── 帮助菜单 ────────────────────────────────────────
     QMenu *helpMenu = menuBar()->addMenu(tr("帮助(&H)"));
@@ -234,6 +233,35 @@ void MainWindow::onOpenPNGImport()  { showOrCreateMdi(m_pngImport, m_mdiArea, tr
 void MainWindow::onOpenCYHead()     { showOrCreateMdi(m_cyHead, m_mdiArea, tr("苍炎头像")); }
 void MainWindow::onOpenTxtLeadIn()  { showOrCreateMdi(m_txtLeadIn, m_mdiArea, tr("文本/Lua脚本")); }
 void MainWindow::onOpenReplicatedList() { showOrCreateMdi(m_repList, m_mdiArea, tr("关键值关联")); }
+
+void MainWindow::updateWindowMenu()
+{
+    if (!m_windowMenu) return;
+
+    m_windowMenu->clear();
+    m_windowMenu->addAction(tr("层叠"), m_mdiArea, &QMdiArea::cascadeSubWindows);
+    m_windowMenu->addAction(tr("平铺"), m_mdiArea, &QMdiArea::tileSubWindows);
+
+    const auto windows = m_mdiArea->subWindowList();
+    if (windows.isEmpty()) return;
+
+    m_windowMenu->addSeparator();
+    QMdiSubWindow *active = m_mdiArea->activeSubWindow();
+    for (QMdiSubWindow *sub : windows) {
+        QString title = sub->windowTitle();
+        if (title.isEmpty() && sub->widget())
+            title = sub->widget()->windowTitle();
+        QAction *action = m_windowMenu->addAction(title);
+        action->setCheckable(true);
+        action->setChecked(sub == active);
+        connect(action, &QAction::triggered, this, [this, sub]() {
+            if (!sub) return;
+            sub->showNormal();
+            sub->showMaximized();
+            m_mdiArea->setActiveSubWindow(sub);
+        });
+    }
+}
 
 void MainWindow::onAbout()
 {
