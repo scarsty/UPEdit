@@ -54,6 +54,7 @@ protected:
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
     virtual void handleMouseMove(QMouseEvent *event);
+    virtual void handleMouseRelease(QMouseEvent *event);
 
 private:
     void handleMousePress(QMouseEvent *event);
@@ -71,17 +72,28 @@ private slots:
     void onNewMap();
     void onDeleteMap();
     void onExportImage();
+    void onImportModule();
+    void onExportModule();
 
 protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void handleMouseMove(QMouseEvent *event) override;
+    void handleMouseRelease(QMouseEvent *event) override;
 
 private:
     void readWarMapDef();
     void readWarMapGrp();
     void updateTilePreview(int ix, int iy);
     void updateThumbnail();
+    bool isLayerAll() const;
+    int selectedLayerIndex() const;
+    bool inCurrentMap(int ix, int iy) const;
+    void copySelectionToClipboard(int sx, int sy, int ex, int ey);
+    void pasteClipboardAt(int tx, int ty);
+    bool loadModuleFile(const QString &filePath, Map &moduleMap);
+    bool saveModuleFile(const QString &filePath, const Map &moduleMap);
+    void drawSelectionArea(QPainter &p, int sx, int sy, int ex, int ey);
 
     QComboBox *m_mapCombo;
     int m_currentMapIndex = -1;
@@ -94,4 +106,13 @@ private:
 
     // 缩略图
     QLabel *m_thumbLabel = nullptr;
+
+    // Delphi 式编辑状态
+    bool m_isSelecting = false;
+    int m_pressIsoX = -1;
+    int m_pressIsoY = -1;
+    int m_hoverIsoX = -1;
+    int m_hoverIsoY = -1;
+    bool m_hasClipboard = false;
+    Map m_clipboardMap;
 };

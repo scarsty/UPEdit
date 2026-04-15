@@ -10,6 +10,8 @@
 #include <QMouseEvent>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QFile>
+#include <QDataStream>
 
 // ============ IsoMapEditor 基类 ============
 
@@ -91,6 +93,10 @@ bool IsoMapEditor::eventFilter(QObject *obj, QEvent *event)
             handleMouseMove(static_cast<QMouseEvent*>(event));
             return true;
         }
+        if (event->type() == QEvent::MouseButtonRelease) {
+            handleMouseRelease(static_cast<QMouseEvent*>(event));
+            return true;
+        }
     }
     return QWidget::eventFilter(obj, event);
 }
@@ -110,6 +116,10 @@ void IsoMapEditor::handleMouseMove(QMouseEvent *event)
         m_statusBar->showMessage(QString("(%1, %2)").arg(iso.x()).arg(iso.y()));
 }
 
+void IsoMapEditor::handleMouseRelease(QMouseEvent * /*event*/)
+{
+}
+
 // ============ WarMapEdit ============
 
 WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
@@ -122,12 +132,16 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
     auto *btnNew = new QPushButton(tr("新增"));
     auto *btnDel = new QPushButton(tr("删除"));
     auto *btnExport = new QPushButton(tr("导出图片"));
+    auto *btnImportModule = new QPushButton(tr("导入模块"));
+    auto *btnExportModule = new QPushButton(tr("导出模块"));
 
     leftLayout->insertWidget(0, new QLabel(tr("地图索引:")));
     leftLayout->insertWidget(1, m_mapCombo);
     leftLayout->insertWidget(4, btnNew);
     leftLayout->insertWidget(5, btnDel);
     leftLayout->insertWidget(6, btnExport);
+    leftLayout->insertWidget(7, btnImportModule);
+    leftLayout->insertWidget(8, btnExportModule);
 
     // 贴图预览 GroupBox
     auto *tileGroup = new QGroupBox(tr("当前贴图"));
@@ -164,6 +178,8 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(btnNew, &QPushButton::clicked, this, &WarMapEdit::onNewMap);
     connect(btnDel, &QPushButton::clicked, this, &WarMapEdit::onDeleteMap);
     connect(btnExport, &QPushButton::clicked, this, &WarMapEdit::onExportImage);
+    connect(btnImportModule, &QPushButton::clicked, this, &WarMapEdit::onImportModule);
+    connect(btnExportModule, &QPushButton::clicked, this, &WarMapEdit::onExportModule);
 
     // 初始加载数据
     readWarMapDef();
@@ -318,6 +334,9 @@ void WarMapEdit::renderMap()
     if (m_selIsoX >= 0 && m_selIsoY >= 0)
         drawSelection(p, m_selIsoX, m_selIsoY);
 
+    if (m_isSelecting && inCurrentMap(m_pressIsoX, m_pressIsoY) && inCurrentMap(m_hoverIsoX, m_hoverIsoY))
+        drawSelectionArea(p, m_pressIsoX, m_pressIsoY, m_hoverIsoX, m_hoverIsoY);
+
     m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
     m_mapLabel->resize(m_mapImage.size());
 
@@ -326,19 +345,87 @@ void WarMapEdit::renderMap()
 
 void WarMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
-    int layer = m_layerCombo->currentIndex();
-    if (layer <= 0 || layer == 3) return;
-    int ly = layer - 1;
     if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
-    Map &curMap = m_mapData.map[m_currentMapIndex];
-    if (ly >= curMap.mapLayer.size()) return;
-    if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) return;
-    if (ix >= curMap.mapLayer[ly].pic.size()) return;
+    if (!inCurrentMap(ix, iy)) return;
 
-    if (btn == Qt::LeftButton && m_selectedTileId >= 0) {
+    m_selIsoX = ix;
+    m_selIsoY = iy;
+    m_hoverIsoX = ix;
+    m_hoverIsoY = iy;
+
+    if (btn == Qt::LeftButton) {
+        m_isSelecting = true;
+        m_pressIsoX = ix;
+        m_pressIsoY = iy;
+        renderMap();
+        return;
+    }
+
+    if (btn == Qt::RightButton) {
+        int ly = selectedLayerIndex();
+        Map &curMap = m_mapData.map[m_currentMapIndex];
+
+        if (m_hasClipboard) {
+            pasteClipboardAt(ix, iy);
+            renderMap();
+            return;
+        }
+
+        if (ly < 0 || ly >= curMap.mapLayer.size()) return;
+        if (m_selectedTileId < 0) return;
+        if (ix >= curMap.mapLayer[ly].pic.size() || iy >= curMap.mapLayer[ly].pic[ix].size()) return;
+
         curMap.mapLayer[ly].pic[ix][iy] = m_selectedTileId * 2;
         renderMap();
     }
+}
+
+void WarMapEdit::handleMouseMove(QMouseEvent *event)
+{
+    IsoMapEditor::handleMouseMove(event);
+    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
+    m_hoverIsoX = iso.x();
+    m_hoverIsoY = iso.y();
+    updateTilePreview(iso.x(), iso.y());
+
+    if (m_isSelecting)
+        renderMap();
+}
+
+void WarMapEdit::handleMouseRelease(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton || !m_isSelecting) return;
+    m_isSelecting = false;
+
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
+    m_hoverIsoX = iso.x();
+    m_hoverIsoY = iso.y();
+
+    if (!inCurrentMap(m_pressIsoX, m_pressIsoY)) {
+        renderMap();
+        return;
+    }
+
+    int ex = qBound(0, iso.x(), m_mapData.map[m_currentMapIndex].x - 1);
+    int ey = qBound(0, iso.y(), m_mapData.map[m_currentMapIndex].y - 1);
+
+    bool singleCell = (m_pressIsoX == ex && m_pressIsoY == ey);
+    if (singleCell && !isLayerAll()) {
+        int ly = selectedLayerIndex();
+        const Map &curMap = m_mapData.map[m_currentMapIndex];
+        if (ly >= 0 && ly < curMap.mapLayer.size()
+            && ex < curMap.mapLayer[ly].pic.size()
+            && ey < curMap.mapLayer[ly].pic[ex].size()) {
+            m_selectedTileId = curMap.mapLayer[ly].pic[ex][ey] / 2;
+            m_hasClipboard = false;
+        }
+    } else {
+        copySelectionToClipboard(m_pressIsoX, m_pressIsoY, ex, ey);
+        m_selectedTileId = -1;
+    }
+
+    renderMap();
 }
 
 void WarMapEdit::onSaveMap()
@@ -403,13 +490,6 @@ void WarMapEdit::onExportImage()
     if (!f.isEmpty()) m_mapImage.save(f);
 }
 
-void WarMapEdit::handleMouseMove(QMouseEvent *event)
-{
-    IsoMapEditor::handleMouseMove(event);
-    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
-    updateTilePreview(iso.x(), iso.y());
-}
-
 void WarMapEdit::updateTilePreview(int ix, int iy)
 {
     if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
@@ -439,4 +519,206 @@ void WarMapEdit::updateThumbnail()
     if (m_mapImage.isNull() || !m_thumbLabel) return;
     m_thumbLabel->setPixmap(QPixmap::fromImage(m_mapImage).scaled(
         m_thumbLabel->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+}
+
+bool WarMapEdit::isLayerAll() const
+{
+    return m_layerCombo->currentIndex() == 3;
+}
+
+int WarMapEdit::selectedLayerIndex() const
+{
+    int layer = m_layerCombo->currentIndex();
+    if (layer <= 0 || layer == 3) return -1;
+    return layer - 1;
+}
+
+bool WarMapEdit::inCurrentMap(int ix, int iy) const
+{
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return false;
+    const Map &curMap = m_mapData.map[m_currentMapIndex];
+    return ix >= 0 && iy >= 0 && ix < curMap.x && iy < curMap.y;
+}
+
+void WarMapEdit::copySelectionToClipboard(int sx, int sy, int ex, int ey)
+{
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+    const Map &src = m_mapData.map[m_currentMapIndex];
+
+    int minX = qMin(sx, ex), maxX = qMax(sx, ex);
+    int minY = qMin(sy, ey), maxY = qMax(sy, ey);
+    minX = qBound(0, minX, src.x - 1);
+    maxX = qBound(0, maxX, src.x - 1);
+    minY = qBound(0, minY, src.y - 1);
+    maxY = qBound(0, maxY, src.y - 1);
+
+    m_clipboardMap.layerNum = src.layerNum;
+    m_clipboardMap.x = maxX - minX + 1;
+    m_clipboardMap.y = maxY - minY + 1;
+    m_clipboardMap.mapLayer.resize(src.layerNum);
+
+    for (int l = 0; l < src.layerNum; ++l) {
+        m_clipboardMap.mapLayer[l].pic.resize(m_clipboardMap.x);
+        for (int x = 0; x < m_clipboardMap.x; ++x) {
+            m_clipboardMap.mapLayer[l].pic[x].resize(m_clipboardMap.y, 0);
+            for (int y = 0; y < m_clipboardMap.y; ++y) {
+                int srcX = minX + x;
+                int srcY = minY + y;
+                if (srcX < src.mapLayer[l].pic.size() && srcY < src.mapLayer[l].pic[srcX].size())
+                    m_clipboardMap.mapLayer[l].pic[x][y] = src.mapLayer[l].pic[srcX][srcY];
+            }
+        }
+    }
+    m_hasClipboard = true;
+}
+
+void WarMapEdit::pasteClipboardAt(int tx, int ty)
+{
+    if (!m_hasClipboard) return;
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.num) return;
+
+    Map &dst = m_mapData.map[m_currentMapIndex];
+    int ly = selectedLayerIndex();
+
+    auto pasteLayer = [&](int layerIdx) {
+        if (layerIdx < 0 || layerIdx >= dst.layerNum || layerIdx >= m_clipboardMap.layerNum) return;
+        for (int dx = 0; dx < m_clipboardMap.x; ++dx) {
+            for (int dy = 0; dy < m_clipboardMap.y; ++dy) {
+                int dstX = tx - dx;
+                int dstY = ty - dy;
+                if (dstX < 0 || dstY < 0 || dstX >= dst.x || dstY >= dst.y) continue;
+
+                int srcX = m_clipboardMap.x - dx - 1;
+                int srcY = m_clipboardMap.y - dy - 1;
+                if (srcX < 0 || srcY < 0) continue;
+                if (srcX >= m_clipboardMap.mapLayer[layerIdx].pic.size()) continue;
+                if (srcY >= m_clipboardMap.mapLayer[layerIdx].pic[srcX].size()) continue;
+                if (dstX >= dst.mapLayer[layerIdx].pic.size()) continue;
+                if (dstY >= dst.mapLayer[layerIdx].pic[dstX].size()) continue;
+
+                dst.mapLayer[layerIdx].pic[dstX][dstY] = m_clipboardMap.mapLayer[layerIdx].pic[srcX][srcY];
+            }
+        }
+    };
+
+    if (isLayerAll()) {
+        for (int l = 0; l < qMin(dst.layerNum, m_clipboardMap.layerNum); ++l)
+            pasteLayer(l);
+    } else {
+        pasteLayer(ly);
+    }
+}
+
+bool WarMapEdit::loadModuleFile(const QString &filePath, Map &moduleMap)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly)) return false;
+
+    QDataStream ds(&f);
+    ds.setByteOrder(QDataStream::LittleEndian);
+
+    qint32 mapX = 0, mapY = 0;
+    ds >> mapX >> mapY;
+    if (mapX <= 0 || mapY <= 0) return false;
+
+    moduleMap.layerNum = 2;
+    moduleMap.x = mapX;
+    moduleMap.y = mapY;
+    moduleMap.mapLayer.resize(moduleMap.layerNum);
+
+    for (int l = 0; l < moduleMap.layerNum; ++l) {
+        moduleMap.mapLayer[l].pic.resize(moduleMap.x);
+        for (int x = 0; x < moduleMap.x; ++x)
+            moduleMap.mapLayer[l].pic[x].resize(moduleMap.y, 0);
+
+        for (int y = 0; y < moduleMap.y; ++y) {
+            for (int x = 0; x < moduleMap.x; ++x) {
+                qint16 v = 0;
+                ds >> v;
+                moduleMap.mapLayer[l].pic[x][y] = v;
+            }
+        }
+    }
+    return ds.status() == QDataStream::Ok;
+}
+
+bool WarMapEdit::saveModuleFile(const QString &filePath, const Map &moduleMap)
+{
+    QFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly)) return false;
+
+    QDataStream ds(&f);
+    ds.setByteOrder(QDataStream::LittleEndian);
+    ds << static_cast<qint32>(moduleMap.x) << static_cast<qint32>(moduleMap.y);
+
+    int layers = qMin(2, moduleMap.layerNum);
+    for (int l = 0; l < layers; ++l) {
+        for (int y = 0; y < moduleMap.y; ++y) {
+            for (int x = 0; x < moduleMap.x; ++x) {
+                qint16 v = 0;
+                if (x < moduleMap.mapLayer[l].pic.size() && y < moduleMap.mapLayer[l].pic[x].size())
+                    v = static_cast<qint16>(moduleMap.mapLayer[l].pic[x][y]);
+                ds << v;
+            }
+        }
+    }
+    return ds.status() == QDataStream::Ok;
+}
+
+void WarMapEdit::onImportModule()
+{
+    QString filePath = QFileDialog::getOpenFileName(this, tr("导入模块"), {}, tr("War Module (*.wmd);;All Files (*.*)"));
+    if (filePath.isEmpty()) return;
+
+    Map moduleMap;
+    if (!loadModuleFile(filePath, moduleMap)) {
+        QMessageBox::warning(this, tr("导入失败"), tr("无法读取模块文件。"));
+        return;
+    }
+
+    m_clipboardMap = moduleMap;
+    m_hasClipboard = true;
+    m_selectedTileId = -1;
+    m_layerCombo->setCurrentIndex(3); // 全部层
+    renderMap();
+    QMessageBox::information(this, tr("导入成功"), tr("模块已载入，右键可粘贴。"));
+}
+
+void WarMapEdit::onExportModule()
+{
+    if (!m_hasClipboard) {
+        QMessageBox::information(this, tr("提示"), tr("请先左键框选区域以复制模块。"));
+        return;
+    }
+
+    QString filePath = QFileDialog::getSaveFileName(this, tr("导出模块"), {}, tr("War Module (*.wmd)"));
+    if (filePath.isEmpty()) return;
+    if (!filePath.endsWith(".wmd", Qt::CaseInsensitive))
+        filePath += ".wmd";
+
+    if (!saveModuleFile(filePath, m_clipboardMap)) {
+        QMessageBox::warning(this, tr("导出失败"), tr("无法写入模块文件。"));
+        return;
+    }
+    QMessageBox::information(this, tr("导出成功"), tr("模块导出成功。"));
+}
+
+void WarMapEdit::drawSelectionArea(QPainter &p, int sx, int sy, int ex, int ey)
+{
+    int minX = qMin(sx, ex), maxX = qMax(sx, ex);
+    int minY = qMin(sy, ey), maxY = qMax(sy, ey);
+    p.setPen(QPen(Qt::red, 2));
+    for (int x = minX; x <= maxX; ++x) {
+        for (int y = minY; y <= maxY; ++y) {
+            if (!inCurrentMap(x, y)) continue;
+            QPoint sp = isoToScreen(x, y);
+            int tw = tileW(), th = tileH();
+            QPolygon diamond;
+            diamond << QPoint(sp.x(), sp.y() - th)
+                    << QPoint(sp.x() + tw, sp.y())
+                    << QPoint(sp.x(), sp.y() + th)
+                    << QPoint(sp.x() - tw, sp.y());
+            p.drawPolygon(diamond);
+        }
+    }
 }
