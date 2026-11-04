@@ -8,6 +8,7 @@
 // 主地图编辑器 (对应 Delphi TForm13)
 class MainMapEdit : public IsoMapEditor {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit MainMapEdit(QWidget *parent = nullptr);
 
@@ -19,12 +20,13 @@ private slots:
     void onHScroll(int value);
     void onVScroll(int value);
     void onTimerTick();
-    void onMoreSettings(bool checked);
 
 protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void resizeEvent(QResizeEvent *e) override;
+    void handleMouseRelease(QMouseEvent *event) override;
+    void handleMousePress(QMouseEvent *event) override;
 
 private:
     void readMainMapFile();
@@ -52,12 +54,12 @@ private:
     int m_stillMode = 0;
     int m_stillX = -1, m_stillY = -1;
     int m_copyMapMode = 0;
+    Map m_moduleMap;
+    QPoint m_selectionStart{-1, -1};
 
     // 左侧面板元素
     QLabel *m_lblEarthVal = nullptr, *m_lblSurfVal = nullptr;
     QLabel *m_lblBuildVal = nullptr, *m_lblRefBuildVal = nullptr;
     QLabel *m_imgEarth = nullptr, *m_imgSurf = nullptr;
     QLabel *m_imgBuild = nullptr, *m_imgRefBuild = nullptr;
-    QCheckBox *m_chkMore = nullptr;
-    QWidget *m_morePanel = nullptr;
 };

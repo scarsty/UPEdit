@@ -12,6 +12,9 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QDataStream>
+#include <QDialog>
+#include <QListWidget>
+#include <QDialogButtonBox>
 
 // ============ IsoMapEditor 基类 ============
 
@@ -22,11 +25,14 @@ IsoMapEditor::IsoMapEditor(QWidget *parent) : QWidget(parent)
     // 左侧面板
     auto *leftPanel = new QVBoxLayout;
     m_layerCombo = new QComboBox;
+    m_tileSourceCombo = new QComboBox;
+    m_tileSourceCombo->addItems({tr("自动"), tr("GRP"), tr("PNG压缩包"), tr("PNG文件夹")});
     m_btnSelectTile = new QPushButton(tr("选贴图"));
     m_btnSave = new QPushButton(tr("保存"));
 
     leftPanel->addWidget(new QLabel(tr("操作层:")));
     leftPanel->addWidget(m_layerCombo);
+    leftPanel->addWidget(m_tileSourceCombo);
     leftPanel->addWidget(m_btnSelectTile);
     leftPanel->addWidget(m_btnSave);
     leftPanel->addStretch();
@@ -42,7 +48,31 @@ IsoMapEditor::IsoMapEditor(QWidget *parent) : QWidget(parent)
     mainLayout->addWidget(m_scroll, 1);
 
     m_statusBar = new QStatusBar;
-    // 添加到右侧底部需要修改布局
+    leftPanel->addWidget(m_statusBar);
+    connect(m_btnSelectTile, &QPushButton::clicked, this, [this] {
+        QDialog dialog(this);
+        dialog.setWindowTitle(tr("选择贴图"));
+        dialog.resize(640, 480);
+        QVBoxLayout layout(&dialog);
+        QListWidget list;
+        list.setViewMode(QListView::IconMode);
+        list.setIconSize(QSize(80, 80));
+        list.setGridSize(QSize(96, 112));
+        list.setResizeMode(QListView::Adjust);
+        for (int index = 0; index < m_tileCache.size(); ++index) {
+            if (m_tileCache[index].isNull()) continue;
+            auto *item = new QListWidgetItem(QIcon(QPixmap::fromImage(m_tileCache[index])), QString::number(index), &list);
+            item->setData(Qt::UserRole, index);
+        }
+        layout.addWidget(&list);
+        QDialogButtonBox buttons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        layout.addWidget(&buttons);
+        connect(&buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(&buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        connect(&list, &QListWidget::itemDoubleClicked, &dialog, &QDialog::accept);
+        if (dialog.exec() == QDialog::Accepted && list.currentItem())
+            selectTile(list.currentItem()->data(Qt::UserRole).toInt());
+    });
 }
 
 QPoint IsoMapEditor::isoToScreen(int ix, int iy) const
@@ -184,6 +214,7 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
     // 初始加载数据
     readWarMapDef();
     readWarMapGrp();
+    connect(m_tileSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { readWarMapGrp(); renderMap(); });
     if (m_mapData.num > 0) {
         m_mapCombo->setCurrentIndex(0);
         onLoadMap(0);
@@ -231,6 +262,12 @@ void WarMapEdit::readWarMapDef()
 void WarMapEdit::readWarMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
+    int source = m_tileSourceCombo->currentIndex();
+    if ((source == 0 || source == 2) && !cfg.wmapImz.isEmpty()
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.wmapImz, m_grpPics, m_tileCache)) return;
+    if ((source == 0 || source == 3) && !cfg.wmapPNGPath.isEmpty()
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.wmapPNGPath, m_grpPics, m_tileCache)) return;
+    if (source == 2 || source == 3) { QMessageBox::warning(this, tr("贴图"), tr("PNG贴图读取失败")); return; }
     GrpIO::readGrp(cfg.gamePath + "/" + cfg.warMapIdx,
                     cfg.gamePath + "/" + cfg.warMapGrp, m_grpPics);
 
@@ -485,9 +522,32 @@ void WarMapEdit::onDeleteMap()
 
 void WarMapEdit::onExportImage()
 {
-    if (m_mapImage.isNull()) return;
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.map.size()) return;
     QString f = QFileDialog::getSaveFileName(this, tr("导出地图图片"), {}, "PNG (*.png);;BMP (*.bmp)");
-    if (!f.isEmpty()) m_mapImage.save(f);
+    if (f.isEmpty()) return;
+    int layer = selectedLayerIndex();
+    QImage image = exportImage(layer < 0 || layer == 0, layer < 0 || layer == 1);
+    if (image.isNull()) { QMessageBox::warning(this, tr("导出"), tr("地图尺寸超限或内存不足")); return; }
+    if (f.endsWith(".bmp", Qt::CaseInsensitive)) {
+        QImage opaque(image.size(), QImage::Format_RGB32);
+        opaque.fill(Qt::black);
+        QPainter painter(&opaque);
+        painter.drawImage(0, 0, image);
+        painter.end();
+        image = opaque;
+    }
+    if (!image.save(f)) QMessageBox::warning(this, tr("导出"), tr("图片写入失败"));
+}
+
+QImage WarMapEdit::exportImage(bool ground, bool building) const
+{
+    if (m_currentMapIndex < 0 || m_currentMapIndex >= m_mapData.map.size()) return {};
+    Map map = m_mapData.map[m_currentMapIndex];
+    map.layerNum = 3;
+    map.mapLayer.resize(3);
+    map.mapLayer[2].pic.resize(map.x);
+    for (auto &column : map.mapLayer[2].pic) column.fill(0, map.y);
+    return MapIO::renderMainMap(map, m_tileCache, m_grpPics, ground, building, false, m_tileScale);
 }
 
 void WarMapEdit::updateTilePreview(int ix, int iy)
@@ -611,35 +671,7 @@ void WarMapEdit::pasteClipboardAt(int tx, int ty)
 
 bool WarMapEdit::loadModuleFile(const QString &filePath, Map &moduleMap)
 {
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly)) return false;
-
-    QDataStream ds(&f);
-    ds.setByteOrder(QDataStream::LittleEndian);
-
-    qint32 mapX = 0, mapY = 0;
-    ds >> mapX >> mapY;
-    if (mapX <= 0 || mapY <= 0) return false;
-
-    moduleMap.layerNum = 2;
-    moduleMap.x = mapX;
-    moduleMap.y = mapY;
-    moduleMap.mapLayer.resize(moduleMap.layerNum);
-
-    for (int l = 0; l < moduleMap.layerNum; ++l) {
-        moduleMap.mapLayer[l].pic.resize(moduleMap.x);
-        for (int x = 0; x < moduleMap.x; ++x)
-            moduleMap.mapLayer[l].pic[x].resize(moduleMap.y, 0);
-
-        for (int y = 0; y < moduleMap.y; ++y) {
-            for (int x = 0; x < moduleMap.x; ++x) {
-                qint16 v = 0;
-                ds >> v;
-                moduleMap.mapLayer[l].pic[x][y] = v;
-            }
-        }
-    }
-    return ds.status() == QDataStream::Ok;
+    return MapIO::decodeModule(FileIO::readFileAll(filePath), 2, moduleMap, 64);
 }
 
 bool WarMapEdit::saveModuleFile(const QString &filePath, const Map &moduleMap)
@@ -699,6 +731,15 @@ void WarMapEdit::onExportModule()
     if (!saveModuleFile(filePath, m_clipboardMap)) {
         QMessageBox::warning(this, tr("导出失败"), tr("无法写入模块文件。"));
         return;
+    }
+    Map previewMap = m_clipboardMap;
+    previewMap.layerNum = 3;
+    previewMap.mapLayer.resize(3);
+    previewMap.mapLayer[2].pic.resize(previewMap.x);
+    for (int column = 0; column < previewMap.x; ++column) previewMap.mapLayer[2].pic[column].resize(previewMap.y, 0);
+    QImage preview = MapIO::renderMainMap(previewMap, m_tileCache, m_grpPics, true, true, false, m_tileScale);
+    if (preview.isNull() || !preview.save(filePath + ".png")) {
+        QMessageBox::warning(this, tr("导出"), tr("模块已保存，但预览图写入失败")); return;
     }
     QMessageBox::information(this, tr("导出成功"), tr("模块导出成功。"));
 }

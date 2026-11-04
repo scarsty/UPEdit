@@ -22,7 +22,6 @@ FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
     m_grpCheck = new QCheckBox(tr("*.grp — GRP编辑器"));
     m_idxCheck = new QCheckBox(tr("*.idx — GRP编辑器"));
     m_picCheck = new QCheckBox(tr("*.pic — 图片编辑器"));
-    m_txtCheck = new QCheckBox(tr("*.txt — 脚本导入"));
     m_bmpCheck = new QCheckBox(tr("*.bmp — GRP导入"));
     m_pngCheck = new QCheckBox(tr("*.png — GRP导入"));
     m_jpgCheck = new QCheckBox(tr("*.jpg — GRP导入"));
@@ -32,7 +31,6 @@ FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
     layout->addWidget(m_grpCheck);
     layout->addWidget(m_idxCheck);
     layout->addWidget(m_picCheck);
-    layout->addWidget(m_txtCheck);
     layout->addWidget(m_bmpCheck);
     layout->addWidget(m_pngCheck);
     layout->addWidget(m_jpgCheck);
@@ -76,7 +74,6 @@ void FileRelation::onConfirm()
     if (m_grpCheck->isChecked()) registerFileType("grp", "GRP Sprite File", "");
     if (m_idxCheck->isChecked()) registerFileType("idx", "IDX Index File", "");
     if (m_picCheck->isChecked()) registerFileType("pic", "PIC Image File", "");
-    if (m_txtCheck->isChecked()) registerFileType("txt", "Lua Script File", "");
     if (m_bmpCheck->isChecked()) registerFileType("bmp", "BMP Image File", "");
     if (m_pngCheck->isChecked()) registerFileType("png", "PNG Image File", "");
     if (m_jpgCheck->isChecked()) registerFileType("jpg", "JPEG Image File", "");

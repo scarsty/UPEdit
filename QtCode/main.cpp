@@ -3,6 +3,7 @@
 #include <QFileInfo>
 #include "mainwindow.h"
 #include "iniconfig.h"
+#include "tests/selftest.h"
 
 int main(int argc, char *argv[])
 {
@@ -10,6 +11,8 @@ int main(int argc, char *argv[])
     app.setApplicationName("UPedit");
     app.setOrganizationName("Upwinded");
     app.setApplicationVersion("1.0.0");
+    if (app.arguments().size() > 2 && app.arguments()[1] == "--self-test")
+        return runSelfTests(app.arguments()[2]);
 
     // 设置工作目录为可执行文件所在目录
     QDir::setCurrent(QApplication::applicationDirPath());

@@ -37,6 +37,8 @@ private slots:
     void onUnpack();
 
 private:
+    friend int runSelfTests(const QString &reportPath);
+    int spriteIndexAt(const QPoint &position) const;
     void readImzFromFile(const QString &path);
     void readImzFromFolder(const QString &dir);
     void drawImz();
@@ -61,4 +63,5 @@ protected:
     int m_currentIndex = -1;
     int m_animFrame = 0;
     QString m_currentPath;
+    QStringList m_originalFolderFiles;
 };

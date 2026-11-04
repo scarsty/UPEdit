@@ -10,6 +10,9 @@
 #include <QString>
 #include <QVector>
 
+class QTemporaryFile;
+bool prepareIniPath(const QString &originalPath, QTemporaryFile &tmpFile, QString &outPath);
+
 class IniConfig {
 public:
     static IniConfig &instance();

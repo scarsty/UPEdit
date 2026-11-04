@@ -33,6 +33,7 @@ protected:
     QScrollArea *m_scroll;
     QLabel *m_mapLabel;
     QComboBox *m_layerCombo;
+    QComboBox *m_tileSourceCombo;
     QPushButton *m_btnSelectTile;
     QPushButton *m_btnSave;
     QStatusBar *m_statusBar;
@@ -55,14 +56,14 @@ protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
     virtual void handleMouseMove(QMouseEvent *event);
     virtual void handleMouseRelease(QMouseEvent *event);
-
-private:
-    void handleMousePress(QMouseEvent *event);
+    virtual void handleMousePress(QMouseEvent *event);
+    virtual void selectTile(int tileId) { m_selectedTileId = tileId; }
 };
 
 // 战斗地图编辑器 (对应 Delphi TForm11)
 class WarMapEdit : public IsoMapEditor {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit WarMapEdit(QWidget *parent = nullptr);
 
@@ -80,9 +81,11 @@ protected:
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void handleMouseMove(QMouseEvent *event) override;
     void handleMouseRelease(QMouseEvent *event) override;
+    void selectTile(int tileId) override { m_selectedTileId = tileId; m_hasClipboard = false; }
 
 private:
     void readWarMapDef();
+    QImage exportImage(bool ground, bool building) const;
     void readWarMapGrp();
     void updateTilePreview(int ix, int iy);
     void updateThumbnail();

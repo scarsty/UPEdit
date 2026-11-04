@@ -2,6 +2,145 @@
 #include "fileio.h"
 #include <QFile>
 #include <cstring>
+#include <QDataStream>
+#include <QPainter>
+#include <algorithm>
+#include "imzdata.h"
+
+bool MapIO::loadPngTiles(const QString &path, QVector<GrpPic> &pictures, QVector<QImage> &tiles)
+{
+    Imz sprites;
+    if (!ImzIO::readImz(path, sprites)) return false;
+    int maximumId = -1;
+    for (const auto &sprite : sprites.imzPng) {
+        if (sprite.fileNum < 0 || sprite.fileNum > 1000000) return false;
+        maximumId = qMax(maximumId, sprite.fileNum);
+    }
+    pictures.clear();
+    tiles.clear();
+    pictures.resize(maximumId + 1);
+    tiles.resize(maximumId + 1);
+    for (const auto &sprite : sprites.imzPng) {
+        if (sprite.frameData.isEmpty()) continue;
+        auto &picture = pictures[sprite.fileNum];
+        picture.data = sprite.frameData[0].data;
+        picture.size = picture.data.size();
+        picture.xoff = sprite.x;
+        picture.yoff = sprite.y;
+        tiles[sprite.fileNum].loadFromData(picture.data, "PNG");
+        picture.width = tiles[sprite.fileNum].width();
+        picture.height = tiles[sprite.fileNum].height();
+    }
+    return maximumId >= 0;
+}
+
+QImage MapIO::renderMainMap(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures,
+                            bool ground, bool surface, bool building, int scale, int zoom)
+{
+    if (map.layerNum < 3 || map.x <= 0 || map.y <= 0 || scale <= 0 || zoom <= 0) return {};
+    double factor = zoom / 100.0;
+    qint64 width = qint64(((map.x + map.y) * 18 + 80) * scale * factor);
+    qint64 height = qint64(((map.x + map.y) * 9 + 60) * scale * factor);
+    if (width <= 0 || height <= 0 || width > 32767 || height > 32767 || width * height > 300000000) return {};
+    QImage image(int(width), int(height), QImage::Format_ARGB32);
+    if (image.isNull()) return {};
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+    painter.scale(factor, factor);
+    int originX = ((map.x + map.y) * 18 + 80) * scale / 2 + 18 * scale;
+    int originY = 30 * scale;
+    auto draw = [&](int layer, int column, int row) {
+        int id = map.mapLayer[layer].pic[column][row] / 2;
+        if (id < 0 || (id == 0 && layer != 0) || id >= tiles.size() || tiles[id].isNull()) return;
+        int offsetX = id < pictures.size() ? pictures[id].xoff : 0;
+        int offsetY = id < pictures.size() ? pictures[id].yoff : 0;
+        painter.drawImage(originX + (column - row) * 18 * scale - offsetX,
+                          originY + (column + row) * 9 * scale - offsetY, tiles[id]);
+    };
+    for (int layer = 0; layer < 2; ++layer) {
+        if ((layer == 0 && !ground) || (layer == 1 && !surface)) continue;
+        for (int diagonal = 0; diagonal < map.x + map.y - 1; ++diagonal)
+            for (int column = qMax(0, diagonal - map.y + 1); column <= qMin(map.x - 1, diagonal); ++column)
+                draw(layer, column, diagonal - column);
+    }
+    if (building) {
+        struct Building { int column; int row; int depth; };
+        QVector<Building> ordered;
+        for (int column = 0; column < map.x; ++column)
+            for (int row = 0; row < map.y; ++row) {
+                int id = map.mapLayer[2].pic[column][row] / 2;
+                if (id <= 0 || id >= tiles.size() || tiles[id].isNull()) continue;
+                int span = 36 * scale;
+                int depth = 2 * (column + row) - (tiles[id].width() + span - 1) / span
+                    - (tiles[id].height() + span - 1) / span + 2;
+                ordered.append({column, row, depth});
+            }
+        std::stable_sort(ordered.begin(), ordered.end(), [](const Building &left, const Building &right) { return left.depth < right.depth; });
+        for (const auto &entry : ordered) draw(2, entry.column, entry.row);
+    }
+    return image;
+}
+
+QByteArray MapIO::encodeMap(const Map &map, bool moduleHeader)
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    if (moduleHeader) stream << qint32(map.x) << qint32(map.y);
+    for (int layer = 0; layer < map.layerNum; ++layer)
+        for (int row = 0; row < map.y; ++row)
+            for (int column = 0; column < map.x; ++column)
+                stream << qint16(map.mapLayer[layer].pic[column][row]);
+    return data;
+}
+
+bool MapIO::decodeModule(const QByteArray &data, int layers, Map &map, int maxDimension)
+{
+    if (data.size() < 8 || layers <= 0) return false;
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    qint32 width = 0, height = 0;
+    stream >> width >> height;
+    if (width <= 0 || height <= 0 || width > maxDimension || height > maxDimension
+        || data.size() != 8 + qint64(width) * height * layers * 2) return false;
+    Map decoded;
+    if (!readSingleMap(data, 8, decoded, layers, width, height)) return false;
+    map = decoded;
+    return true;
+}
+
+Map MapIO::extractRegion(const Map &map, const QRect &region)
+{
+    QRect bounds = region.normalized().intersected(QRect(0, 0, map.x, map.y));
+    Map result;
+    if (bounds.isEmpty()) return result;
+    result.x = bounds.width();
+    result.y = bounds.height();
+    result.layerNum = map.layerNum;
+    result.mapLayer.resize(map.layerNum);
+    for (int layer = 0; layer < map.layerNum; ++layer) {
+        result.mapLayer[layer].pic.resize(result.x);
+        for (int column = 0; column < result.x; ++column) {
+            result.mapLayer[layer].pic[column].resize(result.y);
+            for (int row = 0; row < result.y; ++row)
+                result.mapLayer[layer].pic[column][row] = map.mapLayer[layer].pic[bounds.x() + column][bounds.y() + row];
+        }
+    }
+    return result;
+}
+
+void MapIO::pasteRegion(Map &map, const Map &region, const QPoint &anchor)
+{
+    for (int layer = 0; layer < qMin(map.layerNum, region.layerNum); ++layer)
+        for (int column = 0; column < region.x; ++column)
+            for (int row = 0; row < region.y; ++row) {
+                int targetX = anchor.x() - region.x + 1 + column;
+                int targetY = anchor.y() - region.y + 1 + row;
+                if (targetX >= 0 && targetY >= 0 && targetX < map.x && targetY < map.y)
+                    map.mapLayer[layer].pic[targetX][targetY] = region.mapLayer[layer].pic[column][row];
+            }
+}
 
 bool MapIO::readMap(const QString &idxFile, const QString &grpFile, MapStruct &ms)
 {

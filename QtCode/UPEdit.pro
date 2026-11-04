@@ -44,14 +44,12 @@ SOURCES += \
 # ── 外部库封装 ──────────────────────────────────────────
 
 HEADERS += \
-    src/libs/luawrapper.h \
     src/libs/sqlite3wrapper.h \
     src/libs/ZipFile.h \
     src/libs/xlsxiowrapper.h \
     src/libs/PotConv.h
 
 SOURCES += \
-    src/libs/luawrapper.cpp \
     src/libs/sqlite3wrapper.cpp \
     src/libs/ZipFile.cpp \
     src/libs/xlsxiowrapper.cpp \
@@ -79,7 +77,6 @@ HEADERS += \
     src/ui/imagezform.h \
     src/ui/pngimport.h \
     src/ui/cyhead.h \
-    src/ui/txtleadin.h \
     src/ui/setlanguage.h \
     src/ui/replicatedlist.h \
     src/ui/filerelation.h \
@@ -106,7 +103,6 @@ SOURCES += \
     src/ui/imagezform.cpp \
     src/ui/pngimport.cpp \
     src/ui/cyhead.cpp \
-    src/ui/txtleadin.cpp \
     src/ui/setlanguage.cpp \
     src/ui/replicatedlist.cpp \
     src/ui/filerelation.cpp \
@@ -120,5 +116,5 @@ RESOURCES += \
     resources/resources.qrc
 
 # 外部库 (运行时动态加载，无需链接期依赖)
-# sqlite3.dll, lua5.1.dll, zip.dll, libxlsxio_read.dll, xlsxwriter.dll
+# sqlite3.dll, zip.dll, libxlsxio_read.dll, xlsxwriter.dll
 # 放在可执行文件同目录即可

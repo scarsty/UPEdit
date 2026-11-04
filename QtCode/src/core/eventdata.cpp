@@ -35,20 +35,20 @@ bool EventIO::readEvents(const QString &idxFile, const QString &grpFile, DFile &
     return true;
 }
 
-void EventIO::saveEvents(const QString &idxFile, const QString &grpFile, const DFile &dfile)
+bool EventIO::saveEvents(const QString &idxFile, const QString &grpFile, const DFile &dfile)
 {
+    if (dfile.mapNum < 0 || dfile.mapNum > dfile.mapEvent.size()) return false;
     QByteArray grpData;
     QByteArray idxData(dfile.mapNum * 4, '\0');
     uint32_t *offsets = reinterpret_cast<uint32_t *>(idxData.data());
 
     for (int i = 0; i < dfile.mapNum; ++i) {
-        offsets[i] = static_cast<uint32_t>(grpData.size());
         grpData.append(reinterpret_cast<const char *>(dfile.mapEvent[i].sceneEvent),
                        200 * sizeof(SceneEvent));
+        offsets[i] = static_cast<uint32_t>(grpData.size());
     }
 
-    FileIO::writeFileAll(grpFile, grpData);
-    FileIO::writeFileAll(idxFile, idxData);
+    return FileIO::writeFiles({{grpFile, grpData}, {idxFile, idxData}});
 }
 
 void EventIO::readKDEFIni(const QString &iniPath, KDEFIni &kdefIni)

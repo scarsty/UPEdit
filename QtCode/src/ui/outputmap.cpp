@@ -7,6 +7,20 @@
 #include <QColorDialog>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QImage>
+#include <QFileInfo>
+#include <QPainter>
+#include "mapdata.h"
+#include "iniconfig.h"
+#include "encoding.h"
+
+void OutputMap::setMapData(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures, int scale)
+{
+    m_map = map;
+    m_tiles = tiles;
+    m_pictures = pictures;
+    m_scale = scale;
+}
 
 OutputMap::OutputMap(QWidget *parent) : QDialog(parent)
 {
@@ -77,14 +91,61 @@ void OutputMap::onExport()
 
     m_logText->append(tr("开始导出地图..."));
 
-    // TODO: 地图导出的实际渲染逻辑
-    // 1. 创建大位图 (根据地图大小和TileScale)
-    // 2. 加载调色板和精灵
-    // 3. 逐层渲染(地面/表面/建筑, 按等距深度排序)
-    // 4. 添加场景名文字
-    // 5. 缩放
-    // 6. 保存
+    bool ok = false;
+    int zoom = m_zoomEdit->text().toInt(&ok);
+    if (!ok || zoom <= 0) {
+        QMessageBox::warning(this, tr("导出"), tr("缩放必须是正整数"));
+        return;
+    }
 
-    m_logText->append(tr("导出完成: %1").arg(savePath));
-    QMessageBox::information(this, tr("导出"), tr("地图导出完成"));
+    QImage image = MapIO::renderMainMap(m_map, m_tiles, m_pictures, m_groundCheck->isChecked(),
+        m_surfaceCheck->isChecked(), m_buildingCheck->isChecked(), m_scale, zoom);
+    if (image.isNull()) {
+        QString reason = m_map.mapLayer.isEmpty() ? tr("没有地图数据，请从地图编辑器打开导出窗口")
+            : tr("地图尺寸或缩放超限，或内存不足，请降低缩放比例");
+        m_logText->append(tr("导出失败: %1").arg(reason));
+        QMessageBox::warning(this, tr("导出"), reason);
+        return;
+    }
+
+    if (m_drawNamesCheck->isChecked()) {
+        QPainter painter(&image);
+        painter.setFont(m_mapFont);
+        painter.setPen(m_mapColor.isValid() ? m_mapColor : QColor(Qt::white));
+        const auto &types = IniConfig::instance().rGlobals.rFile.rType;
+        if (types.size() > 3) {
+            const auto &type = types[3];
+            for (const auto &record : type.rData) {
+                auto field = [&](int index) -> const RDataSingle * {
+                    if (index < 0 || index >= record.rDataLine.size()) return nullptr;
+                    const auto &line = record.rDataLine[index];
+                    if (line.rArray.isEmpty() || line.rArray[0].dataArray.isEmpty()) return nullptr;
+                    return &line.rArray[0].dataArray[0];
+                };
+                const auto *name = field(type.namePos), *x = field(6), *y = field(7);
+                if (!name || !x || !y) continue;
+                int column = int(RFileIO::readRDataInt(*x)), row = int(RFileIO::readRDataInt(*y));
+                if (column <= 0 || row <= 0) continue;
+                double factor = zoom / 100.0;
+                int originX = ((m_map.x + m_map.y) * 18 + 80) * m_scale / 2 + 18 * m_scale;
+                painter.drawText(QPointF((originX + (column - row) * 18 * m_scale) * factor,
+                    (30 * m_scale + (column + row) * 9 * m_scale) * factor), Encoding::displayStr(RFileIO::readRDataStr(*name)));
+            }
+        }
+    }
+    if (savePath.endsWith(".bmp", Qt::CaseInsensitive)) {
+        QImage opaque(image.size(), QImage::Format_RGB32);
+        opaque.fill(Qt::black);
+        QPainter painter(&opaque);
+        painter.drawImage(0, 0, image);
+        painter.end();
+        image = opaque;
+    }
+    if (!image.save(savePath)) {
+        m_logText->append(tr("导出失败: %1").arg(savePath));
+        QMessageBox::warning(this, tr("导出"), tr("无法写入文件"));
+        return;
+    }
+    m_logText->append(tr("导出完成: %1").arg(QFileInfo(savePath).absoluteFilePath()));
+    accept();
 }

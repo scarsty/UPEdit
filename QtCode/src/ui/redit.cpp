@@ -8,6 +8,7 @@
 #include <QGroupBox>
 #include <QMessageBox>
 #include <QFileDialog>
+#include <QInputDialog>
 
 REditWidget::REditWidget(QWidget *parent)
     : QWidget(parent)
@@ -341,13 +342,55 @@ void REditWidget::onDeleteRecord()
 
 void REditWidget::onCopyRecord()
 {
-    // 将当前记录存到剪贴板变量
+    if (m_currentType < 0 || m_currentType >= m_rFile.rType.size()
+        || m_currentRecord < 0 || m_currentRecord >= m_rFile.rType[m_currentType].rData.size()) {
+        m_statusBar->showMessage(tr("没有可复制的记录"), 3000);
+        return;
+    }
+    m_copiedRecord = m_rFile.rType[m_currentType].rData[m_currentRecord];
+    m_copiedType = m_currentType;
+    m_hasCopiedRecord = true;
     m_statusBar->showMessage(tr("已复制记录 %1").arg(m_currentRecord), 3000);
 }
 
 void REditWidget::onPasteRecord()
 {
-    m_statusBar->showMessage(tr("已粘贴"), 3000);
+    if (!m_hasCopiedRecord || m_currentType < 0 || m_currentType >= m_rFile.rType.size()) {
+        m_statusBar->showMessage(tr("没有可粘贴的记录"), 3000);
+        return;
+    }
+    auto &type = m_rFile.rType[m_currentType];
+    if (m_copiedType != m_currentType) {
+        QMessageBox::warning(this, tr("粘贴"), tr("只能粘贴相同类型的记录"));
+        return;
+    }
+    RFile candidate;
+    candidate.rType.resize(m_rFile.rType.size());
+    RFileIO::addNewRData(&candidate, m_currentType, IniConfig::instance().rGlobals);
+    if (!candidate.rType[m_currentType].rData.isEmpty()) {
+        const auto &expected = candidate.rType[m_currentType].rData.last();
+        bool compatible = expected.rDataLine.size() == m_copiedRecord.rDataLine.size();
+        for (int line = 0; compatible && line < expected.rDataLine.size(); ++line) {
+            const auto &target = expected.rDataLine[line].rArray;
+            const auto &source = m_copiedRecord.rDataLine[line].rArray;
+            compatible = target.size() == source.size();
+            for (int array = 0; compatible && array < target.size(); ++array) {
+                compatible = target[array].dataArray.size() == source[array].dataArray.size();
+                for (int item = 0; compatible && item < target[array].dataArray.size(); ++item)
+                    compatible = target[array].dataArray[item].dataLen == source[array].dataArray[item].dataLen
+                        && target[array].dataArray[item].dataType == source[array].dataArray[item].dataType;
+            }
+        }
+        if (!compatible) {
+            QMessageBox::warning(this, tr("粘贴"), tr("复制记录与当前进度的数据结构不一致"));
+            return;
+        }
+    }
+    type.rData.append(m_copiedRecord);
+    type.dataNum = type.rData.size();
+    populateRecords();
+    m_recordCombo->setCurrentIndex(type.rData.size() - 1);
+    m_statusBar->showMessage(tr("已粘贴记录"), 3000);
 }
 
 void REditWidget::onBatchEdit()
@@ -596,7 +639,29 @@ void REditWidget::onImportXlsx()
 
 void REditWidget::onSearch()
 {
-    m_statusBar->showMessage(tr("搜索功能 (TODO)"), 3000);
+    bool ok = false;
+    QString text = QInputDialog::getText(this, tr("搜索"), tr("名称或字段值:"), QLineEdit::Normal, {}, &ok);
+    if (!ok || text.isEmpty()) return;
+    int first = m_radioRange->isChecked() ? m_editFrom->text().toInt() : 0;
+    int last = m_radioRange->isChecked() ? m_editTo->text().toInt() : m_recordCombo->count() - 1;
+    if (m_currentType < 0 || m_currentType >= m_rFile.rType.size()) return;
+    const auto &type = m_rFile.rType[m_currentType];
+    first = qMax(0, first);
+    last = qMin(last, type.rData.size() - 1);
+    for (int record = first; record <= last; ++record) {
+        const auto &data = type.rData[record];
+        bool found = false;
+        for (const auto &line : data.rDataLine)
+            for (const auto &array : line.rArray)
+                for (const auto &value : array.dataArray)
+                    if (RFileIO::readRDataStr(value).contains(text, Qt::CaseInsensitive)) found = true;
+        if (found) {
+            m_recordCombo->setCurrentIndex(record);
+            m_statusBar->showMessage(tr("找到记录 %1").arg(record), 3000);
+            return;
+        }
+    }
+    m_statusBar->showMessage(tr("未找到匹配记录"), 3000);
 }
 
 void REditWidget::onSearchRange()

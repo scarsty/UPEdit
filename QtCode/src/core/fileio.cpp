@@ -2,6 +2,11 @@
 #include <QFile>
 #include <QCryptographicHash>
 #include <QCoreApplication>
+#include <QSaveFile>
+#include <QTemporaryFile>
+#include <QFileInfo>
+#include <QDir>
+#include <QSet>
 #include <cstring>
 
 #ifdef Q_OS_WIN
@@ -19,10 +24,58 @@ QByteArray FileIO::readFileAll(const QString &filename)
 
 bool FileIO::writeFileAll(const QString &filename, const QByteArray &data)
 {
-    QFile f(filename);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    QSaveFile f(filename);
+    if (!f.open(QIODevice::WriteOnly))
         return false;
-    return f.write(data) == data.size();
+    return f.write(data) == data.size() && f.commit();
+}
+
+bool FileIO::writeFiles(const QMap<QString, QByteArray> &files)
+{
+    struct Pending { QString target, staged, backup; bool existed = false, installed = false; };
+    QVector<Pending> pending;
+    QSet<QString> targets;
+    auto cleanup = [&](bool rollback) {
+        for (auto &file : pending) {
+            if (rollback && file.installed) QFile::remove(file.target);
+            if (!file.staged.isEmpty()) QFile::remove(file.staged);
+            if (!file.backup.isEmpty()) {
+                if (rollback) QFile::rename(file.backup, file.target);
+                else QFile::remove(file.backup);
+            }
+        }
+    };
+    for (auto entry = files.constBegin(); entry != files.constEnd(); ++entry) {
+        QFileInfo info(entry.key());
+        QString target = info.absoluteFilePath();
+        QString key = target;
+#ifdef Q_OS_WIN
+        key = key.toCaseFolded();
+#endif
+        if (targets.contains(key) || info.isSymLink() || (info.exists() && !info.isFile())) { cleanup(true); return false; }
+        targets.insert(key);
+        QTemporaryFile staged(info.dir().filePath(".upedit-new-XXXXXX"));
+        if (!staged.open() || staged.write(entry.value()) != entry.value().size() || !staged.flush()) { cleanup(true); return false; }
+        staged.setAutoRemove(false);
+        pending.append({target, staged.fileName(), {}, info.exists(), false});
+    }
+    for (auto &file : pending) {
+        if (!file.existed) continue;
+        QTemporaryFile backup(QFileInfo(file.target).dir().filePath(".upedit-old-XXXXXX"));
+        if (!backup.open()) { cleanup(true); return false; }
+        QString name = backup.fileName();
+        backup.close();
+        backup.remove();
+        if (!QFile::rename(file.target, name)) { cleanup(true); return false; }
+        file.backup = name;
+    }
+    for (auto &file : pending) {
+        if (!QFile::rename(file.staged, file.target)) { cleanup(true); return false; }
+        file.installed = true;
+        file.staged.clear();
+    }
+    cleanup(false);
+    return true;
 }
 
 QString FileIO::hashFile(const QString &filename)

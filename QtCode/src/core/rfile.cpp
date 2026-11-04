@@ -5,6 +5,7 @@
 #include "sqlite3wrapper.h"
 #include <QFile>
 #include <QSettings>
+#include <QTemporaryFile>
 
 // QSettings IniFormat 将含逗号的值拆为 QStringList，
 // toString() 将返回空串。此辅助函数统一还原原始字符串。
@@ -111,7 +112,10 @@ void RFileIO::copyRData(const RData &source, RData &dest)
 
 void RFileIO::readIni(RFileGlobals &g, const QString &iniPath)
 {
-    QSettings ini(iniPath, QSettings::IniFormat);
+    QTemporaryFile tmpFile;
+    QString settingsPath;
+    if (!prepareIniPath(iniPath, tmpFile, settingsPath)) return;
+    QSettings ini(settingsPath, QSettings::IniFormat);
 
     g.typeNumber = ini.value("R_Modify/TypeNumber", 0).toInt();
     if (g.typeNumber <= 0) return;

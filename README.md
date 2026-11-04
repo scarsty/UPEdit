@@ -10,7 +10,39 @@ An Editor for All Heroes of Kam Yung's Stories
 
 工程内提供的预编译版是64位版本。需注意网上下载的Delphi有可能不提供64位工具包。
 
-## 以下是旧内容
+## Qt 版本验证
+
+Qt 工程位于 `QtCode`，当前 Windows 配置为 Qt 6.3.2、MSVC x64。
+运行 `QtCode/release/UPEdit.exe` 时可以传入 INI 的绝对路径。
+
+无损回归测试入口：
+
+```powershell
+$exe = (Resolve-Path 'QtCode/release/UPEdit.exe').Path
+$report = Join-Path $env:TEMP 'upedit-selftest.txt'
+Start-Process $exe -WorkingDirectory (Split-Path $exe) -ArgumentList @('--self-test', $report) -Wait
+Get-Content $report
+```
+
+测试使用临时文件，不改写游戏存档。覆盖地图模块的小端格式、非正方形往返、
+剪贴板裁剪、分层渲染像素、事件累计结束偏移、场景切换及撤销重做、
+多帧与稀疏编号 PNG/ZIP、战斗帧配置保留。
+
+Lua／剧本导入功能按用户要求不移植，已从 Qt 版移除，无需部署 Lua DLL。
+Delphi 原版及其剧本脚本库保留不变。
+完整真实存档回写还需使用有效数据副本核验，不能用空数据库代替。
+
+Qt 场景编辑按进度保留内存会话，关闭前提示未保存修改。场景模块仍兼容六层
+`.smd`，新导出同时生成 `.smd.events`，携带事件定义及模块匹配数据；移动模块时
+应一起移动这两个文件。旧模块没有事件定义时只导入非事件层，避免误用目标场景事件。
+跨场景粘贴会分配空闲事件编号；目标位置已有事件或编号不足时拒绝整次粘贴。
+
+PNG 文件夹保存使用 `.upedit-images.json` 记录管理的图片，未登记的其他图片不自动删除。
+保存先校验、暂存，再替换，失败时回滚；场景四文件及主地图五文件也采用批量提交。
+这些机制处理正常文件操作失败，不保证断电时的跨文件原子性。若回滚被文件锁阻止，
+请保留 `.upedit-old-*` 或 `.upedit-save-*` 中的备份。首次保存旧 PNG 目录前仍应备份。
+
+## 旧版构建说明
 
   You can build it with delphi2010, with some parts supported by XLSreadwriteII.
   Anybody who gets this source code is able to modify or rebuild it anyway,

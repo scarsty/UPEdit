@@ -1,4 +1,5 @@
 #include "waredit.h"
+#include <QTemporaryFile>
 #include "iniconfig.h"
 #include "rfile.h"
 #include "encoding.h"
@@ -99,7 +100,10 @@ void WarEdit::readWIni()
 {
     IniConfig &cfg = IniConfig::instance();
     // Read W_Modify section from INI
-    QSettings ini(cfg.iniPath, QSettings::IniFormat);
+    QTemporaryFile temporary;
+    QString iniPath;
+    if (!prepareIniPath(cfg.iniPath, temporary, iniPath)) return;
+    QSettings ini(iniPath, QSettings::IniFormat);
     ini.beginGroup("W_Modify");
 
     m_wIni.wTerm.clear();

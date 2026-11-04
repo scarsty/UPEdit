@@ -12,7 +12,6 @@
 #include "imagezform.h"
 #include "pngimport.h"
 #include "cyhead.h"
-#include "txtleadin.h"
 #include "replicatedlist.h"
 #include "setlanguage.h"
 #include "filerelation.h"
@@ -22,7 +21,6 @@
 #include "fileio.h"
 #include "mapdata.h"
 #include "sqlite3wrapper.h"
-#include "luawrapper.h"
 #include "xlsxiowrapper.h"
 
 #include <QApplication>
@@ -63,6 +61,15 @@ MainWindow::~MainWindow()
     s_instance = nullptr;
 }
 
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    m_mdiArea->closeAllSubWindows();
+    for (auto *window : m_mdiArea->subWindowList()) {
+        if (window->isVisible()) { event->ignore(); return; }
+    }
+    event->accept();
+}
+
 MainWindow *MainWindow::instance()
 {
     return s_instance;
@@ -79,7 +86,7 @@ void MainWindow::createMenus()
     // ── 编辑器菜单 ──────────────────────────────────────
     QMenu *editMenu = menuBar()->addMenu(tr("编辑器(&E)"));
     editMenu->addAction(tr("R-数据编辑(&R)"), this, &MainWindow::onOpenREdit);
-    //editMenu->addAction(tr("GRP-贴图编辑(&G)"), this, &MainWindow::onOpenGrpEdit);
+    editMenu->addAction(tr("GRP-贴图编辑(&G)"), this, &MainWindow::onOpenGrpEdit);
     editMenu->addAction(tr("GRP-贴图列表(&L)"), this, &MainWindow::onOpenGrpList);
     editMenu->addAction(tr("单图编辑(&P)"), this, &MainWindow::onOpenPicEdit);
     editMenu->addSeparator();
@@ -92,12 +99,11 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
     editMenu->addAction(tr("PNG-图像编辑(&I)"), this, &MainWindow::onOpenImzEdit);
     // PNG批量导入导出已整合到PNG-图像编辑中
-    //editMenu->addAction(tr("PNG批量导出"), this, &MainWindow::onOpenPNGExport);
-    //editMenu->addAction(tr("PNG批量导入"), this, &MainWindow::onOpenPNGImport);
-    //editMenu->addAction(tr("苍炎头像(&C)"), this, &MainWindow::onOpenCYHead);
-    //editMenu->addSeparator();
-    //editMenu->addAction(tr("文本/Lua脚本(&T)"), this, &MainWindow::onOpenTxtLeadIn);
-    //editMenu->addAction(tr("关键值关联"), this, &MainWindow::onOpenReplicatedList);
+    editMenu->addAction(tr("PNG批量导出"), this, &MainWindow::onOpenPNGExport);
+    editMenu->addAction(tr("PNG批量导入"), this, &MainWindow::onOpenPNGImport);
+    editMenu->addAction(tr("苍炎头像(&C)"), this, &MainWindow::onOpenCYHead);
+    editMenu->addSeparator();
+    editMenu->addAction(tr("关键值关联"), this, &MainWindow::onOpenReplicatedList);
 
     // ── 设置菜单 ────────────────────────────────────────
     QMenu *settingsMenu = menuBar()->addMenu(tr("设置(&S)"));
@@ -231,7 +237,6 @@ void MainWindow::onOpenImzEdit()    { showOrCreateMdi(m_imagez, m_mdiArea, tr("P
 void MainWindow::onOpenPNGExport()  { showOrCreateMdi(m_pngExport, m_mdiArea, tr("PNG批量导出")); }
 void MainWindow::onOpenPNGImport()  { showOrCreateMdi(m_pngImport, m_mdiArea, tr("PNG批量导入")); }
 void MainWindow::onOpenCYHead()     { showOrCreateMdi(m_cyHead, m_mdiArea, tr("苍炎头像")); }
-void MainWindow::onOpenTxtLeadIn()  { showOrCreateMdi(m_txtLeadIn, m_mdiArea, tr("文本/Lua脚本")); }
 void MainWindow::onOpenReplicatedList() { showOrCreateMdi(m_repList, m_mdiArea, tr("关键值关联")); }
 
 void MainWindow::updateWindowMenu()

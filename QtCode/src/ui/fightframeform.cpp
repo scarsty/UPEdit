@@ -3,6 +3,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QDialogButtonBox>
+#include <QMessageBox>
 
 FightFrameForm::FightFrameForm(QWidget *parent) : QDialog(parent)
 {
@@ -44,11 +45,18 @@ QString FightFrameForm::content() const { return m_content; }
 
 void FightFrameForm::onConfirm()
 {
-    m_content.clear();
+    QString content;
     for (int i = 0; i < 5; ++i) {
-        int val = m_edit[i]->text().toInt();
+        bool valid = false;
+        int val = m_edit[i]->text().toInt(&valid);
+        if (!valid) {
+            QMessageBox::warning(this, tr("战斗帧"), tr("请输入有效整数"));
+            m_edit[i]->setFocus();
+            return;
+        }
         if (val != 0)
-            m_content += QString("%1, %2\n").arg(i).arg(val);
+            content += QString("%1, %2\n").arg(i).arg(val);
     }
+    m_content = content;
     accept();
 }

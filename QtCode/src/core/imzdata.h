@@ -15,6 +15,7 @@ namespace ImzIO {
     bool readImz(const QString &path, Imz &imz);
     // 保存 IMZ 到 ZIP 文件
     bool saveImz(const QString &path, const Imz &imz);
+    bool saveFolder(const QString &folder, const Imz &imz, const QStringList &previousFiles = {});
     // 从文件夹读取 IMZ 散文件
     bool readImzFromFolder(const QString &folder, Imz &imz);
 

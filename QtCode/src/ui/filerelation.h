@@ -15,6 +15,6 @@ private:
     void registerFileType(const QString &ext, const QString &desc, const QString &icon);
 
     QCheckBox *m_grpCheck, *m_idxCheck, *m_picCheck;
-    QCheckBox *m_txtCheck, *m_bmpCheck, *m_pngCheck;
+    QCheckBox *m_bmpCheck, *m_pngCheck;
     QCheckBox *m_jpgCheck, *m_gifCheck, *m_imzCheck;
 };

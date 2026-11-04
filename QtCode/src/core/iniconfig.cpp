@@ -27,9 +27,9 @@ IniConfig &IniConfig::instance()
 }
 
 // 将 UTF-16LE INI 转为 UTF-8 临时文件以供 QSettings 读取
-static bool prepareIniPath(const QString &originalPath,
-                           QTemporaryFile &tmpFile,
-                           QString &outPath)
+bool prepareIniPath(const QString &originalPath,
+                    QTemporaryFile &tmpFile,
+                    QString &outPath)
 {
     QFile f(originalPath);
     if (!f.open(QIODevice::ReadOnly)) return false;
@@ -47,6 +47,7 @@ static bool prepareIniPath(const QString &originalPath,
         if (!content.isEmpty() && content[0] == QChar(0xFEFF))
             content = content.mid(1);
 
+        content.replace("\\", "\\\\");
         tmpFile.setAutoRemove(true);
         if (!tmpFile.open()) return false;
         tmpFile.write(content.toUtf8());

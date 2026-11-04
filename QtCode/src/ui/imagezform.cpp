@@ -1,6 +1,8 @@
 #include "imagezform.h"
+#include "fightframeform.h"
 #include "imzdata.h"
 #include "iniconfig.h"
+#include "ZipFile.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
@@ -59,6 +61,7 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
     // 主显示区
     auto *centerLayout = new QHBoxLayout;
     m_imageLabel = new QLabel;
+    m_imageLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     m_imageLabel->setMinimumSize(640, 480);
     m_imageLabel->setContextMenuPolicy(Qt::CustomContextMenu);
     m_scrollBar = new QScrollBar(Qt::Vertical);
@@ -96,21 +99,31 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
 
 void ImagezForm::openImzFile(const QString &path)
 {
+    m_modePngFolder->setChecked(QFileInfo(path).isDir());
+    m_modePngZip->setChecked(!QFileInfo(path).isDir());
     m_fileEdit->setText(path);
     m_currentPath = path;
-    readImzFromFile(path);
+    if (QFileInfo(path).isDir()) readImzFromFolder(path);
+    else readImzFromFile(path);
     drawImz();
 }
 
 void ImagezForm::readImzFromFile(const QString &path)
 {
+    m_modePngZip->setChecked(true);
+    m_originalFolderFiles.clear();
     ImzIO::readImz(path, m_imz);
     updateScrollRange();
 }
 
 void ImagezForm::readImzFromFolder(const QString &dir)
 {
+    m_modePngFolder->setChecked(true);
     ImzIO::readImzFromFolder(dir, m_imz);
+    m_originalFolderFiles.clear();
+    for (const auto &sprite : m_imz.imzPng)
+        m_originalFolderFiles.append(QDir(dir).entryList({QString("%1.png").arg(sprite.fileNum),
+            QString("%1_*.png").arg(sprite.fileNum)}, QDir::Files));
     updateScrollRange();
 }
 
@@ -138,7 +151,7 @@ void ImagezForm::onDisplay() { drawImz(); }
 
 void ImagezForm::drawImz()
 {
-    if (m_imz.pngNum <= 0) return;
+    if (m_imz.pngNum <= 0) { m_imageLabel->clear(); return; }
 
     static const int SQUARE_H = 100;
     static const int TITLE_H  = 10;
@@ -223,13 +236,7 @@ void ImagezForm::mousePressEvent(QMouseEvent *e)
         return;
     }
 
-    int squareW = m_imageLabel->width() / m_cols;
-    if (squareW < 10) squareW = 10;
-    static const int SQUARE_H = 100;
-
-    int col = pos.x() / squareW;
-    int row = pos.y() / SQUARE_H;
-    int idx = (m_scrollOffset + row) * m_cols + col;
+    int idx = spriteIndexAt(pos);
     if (idx >= 0 && idx < m_imz.pngNum) {
         m_currentIndex = idx;
         drawImz();
@@ -241,30 +248,20 @@ QImage ImagezForm::drawImzPNG(int index)
 {
     if (index < 0 || index >= m_imz.imzPng.size()) return {};
     const auto &sprite = m_imz.imzPng[index];
-    if (sprite.frameData.isEmpty() || sprite.frameData[0].data.isEmpty()) return {};
+    if (sprite.frameData.isEmpty()) return {};
 
     QImage img;
-    img.loadFromData(sprite.frameData[0].data, "PNG");
+    img.loadFromData(sprite.frameData[m_animFrame % sprite.frameData.size()].data, "PNG");
     return img;
 }
 
 void ImagezForm::onSave()
 {
     if (m_currentPath.isEmpty()) return;
-    if (m_modeImz->isChecked()) {
-        ImzIO::saveImz(m_currentPath, m_imz);
-    } else if (m_modePngFolder->isChecked()) {
-        QDir dir(m_currentPath);
-        dir.mkpath(".");
-        // Save each PNG to folder individually
-        for (int i = 0; i < m_imz.imzPng.size(); ++i) {
-            const auto &sp = m_imz.imzPng[i];
-            if (!sp.frameData.isEmpty() && !sp.frameData[0].data.isEmpty()) {
-                QFile f(m_currentPath + "/" + QString::number(i) + ".png");
-                if (f.open(QIODevice::WriteOnly)) f.write(sp.frameData[0].data);
-            }
-        }
-    }
+    bool saved = m_modePngFolder->isChecked() ? ImzIO::saveFolder(m_currentPath, m_imz, m_originalFolderFiles)
+        : ImzIO::saveImz(m_currentPath, m_imz);
+    if (!saved) { QMessageBox::warning(this, tr("保存"), tr("保存失败")); return; }
+    m_originalFolderFiles.clear();
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -272,17 +269,24 @@ void ImagezForm::onScroll(int value) { m_scrollOffset = value; drawImz(); }
 
 void ImagezForm::onAnimate()
 {
-    m_animFrame++;
+    m_animFrame = (m_animFrame + 1) % 1000000;
     drawImz();
 }
 
 void ImagezForm::onContextMenu(const QPoint &pos)
 {
-    int cellW = 80, cellH = 80;
-    int col = pos.x() / cellW, row = pos.y() / cellH;
-    m_currentIndex = (m_scrollOffset + row) * m_cols + col;
-    if (m_currentIndex >= m_imz.pngNum) m_currentIndex = -1;
+    m_currentIndex = spriteIndexAt(pos);
+    drawImz();
     m_contextMenu->exec(m_imageLabel->mapToGlobal(pos));
+}
+
+int ImagezForm::spriteIndexAt(const QPoint &position) const
+{
+    if (!m_imageLabel->rect().contains(position) || m_cols <= 0) return -1;
+    int column = position.x() / qMax(10, m_imageLabel->width() / m_cols);
+    if (column >= m_cols) return -1;
+    int index = (m_scrollOffset + position.y() / 100) * m_cols + column;
+    return index >= 0 && index < m_imz.imzPng.size() ? index : -1;
 }
 
 void ImagezForm::onEditSprite()
@@ -366,6 +370,14 @@ void ImagezForm::onPasteSprite()
         if (m_imz.imzPng[m_currentIndex].frameData.isEmpty())
             m_imz.imzPng[m_currentIndex].frameData.resize(1);
         m_imz.imzPng[m_currentIndex].frameData[0].data = pngData;
+        auto &sprite = m_imz.imzPng[m_currentIndex];
+        sprite.frame = sprite.frameData.size();
+        sprite.frameLen.resize(sprite.frame);
+        sprite.len = 0;
+        for (int frame = 0; frame < sprite.frame; ++frame) {
+            sprite.frameLen[frame] = sprite.frameData[frame].data.size();
+            sprite.len += sprite.frameLen[frame];
+        }
     }
     drawImz();
 }
@@ -375,6 +387,8 @@ void ImagezForm::onDeleteSprite()
     if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
     m_imz.imzPng.removeAt(m_currentIndex);
     m_imz.pngNum = m_imz.imzPng.size();
+    m_currentIndex = qMin(m_currentIndex, m_imz.pngNum - 1);
+    updateScrollRange();
     drawImz();
 }
 
@@ -382,8 +396,19 @@ void ImagezForm::onInsertSprite()
 {
     if (m_currentIndex < 0) m_currentIndex = m_imz.imzPng.size();
     ImzPng newSprite;
+    int nextId = 0;
+    for (const auto &sprite : m_imz.imzPng) nextId = qMax(nextId, sprite.fileNum + 1);
+    newSprite.fileNum = nextId;
+    newSprite.frame = 1;
+    newSprite.frameData.resize(1);
+    QImage blank(1, 1, QImage::Format_ARGB32);
+    blank.fill(Qt::transparent);
+    newSprite.frameData[0].data = ImzIO::encodePng(blank);
+    newSprite.frameLen = {int(newSprite.frameData[0].data.size())};
+    newSprite.len = newSprite.frameLen[0];
     m_imz.imzPng.insert(m_currentIndex, newSprite);
     m_imz.pngNum = m_imz.imzPng.size();
+    updateScrollRange();
     drawImz();
 }
 
@@ -392,25 +417,47 @@ void ImagezForm::onExportAllPNG()
     QString dir = QFileDialog::getExistingDirectory(this, tr("选择导出路径"));
     if (dir.isEmpty()) return;
 
-    // 写 index.ka
-    QFile ka(dir + "/index.ka");
-    ka.open(QIODevice::WriteOnly);
-    QDataStream ds(&ka);
-    ds.setByteOrder(QDataStream::LittleEndian);
-
-    for (int i = 0; i < m_imz.imzPng.size(); ++i) {
-        const auto &sprite = m_imz.imzPng[i];
-        if (!sprite.frameData.isEmpty() && !sprite.frameData[0].data.isEmpty()) {
-            QFile f(dir + "/" + QString::number(i) + ".png");
-            if (f.open(QIODevice::WriteOnly))
-                f.write(sprite.frameData[0].data);
-        }
-        ds << sprite.x << sprite.y;
-    }
+    if (!ImzIO::saveFolder(dir, m_imz)) { QMessageBox::warning(this, tr("导出"), tr("导出失败")); return; }
     QMessageBox::information(this, tr("导出"), tr("导出完成"));
 }
 
-void ImagezForm::onSetFightFrames() { /* TODO: 打开 FightFrameForm 对话框 */ }
+void ImagezForm::onSetFightFrames()
+{
+    FightFrameForm dialog(this);
+    QString content;
+    if (QFileInfo(m_currentPath).isDir()) {
+        QFile file(QDir(m_currentPath).filePath("fightframe.txt"));
+        if (file.open(QIODevice::ReadOnly)) content = QString::fromLocal8Bit(file.readAll());
+    } else if (!m_currentPath.isEmpty()) {
+        ZipFile zip;
+        zip.openRead(m_currentPath.toLocal8Bit().toStdString());
+        if (zip.opened()) {
+            std::string raw = zip.readFile("fightframe.txt");
+            content = QString::fromLocal8Bit(raw.data(), static_cast<int>(raw.size()));
+        }
+    }
+    dialog.setContent(content);
+    if (dialog.exec() == QDialog::Accepted)
+    {
+        QByteArray data = dialog.content().toLocal8Bit();
+        bool saved = false;
+        if (QFileInfo(m_currentPath).isDir()) {
+            QFile file(QDir(m_currentPath).filePath("fightframe.txt"));
+            if (file.open(QIODevice::WriteOnly)) {
+                saved = file.write(data) == data.size();
+                file.close();
+            }
+        } else if (!m_currentPath.isEmpty()) {
+            ZipFile zip;
+            zip.openWrite(m_currentPath.toLocal8Bit().toStdString());
+            if (zip.opened()) {
+                saved = zip.addData("fightframe.txt", data.constData(), data.size()) && zip.commit();
+            }
+        }
+        if (saved) QMessageBox::information(this, tr("战斗帧"), tr("战斗帧设置已保存"));
+        else QMessageBox::warning(this, tr("战斗帧"), tr("战斗帧文件保存失败"));
+    }
+}
 
 void ImagezForm::onPack()
 {
@@ -420,8 +467,18 @@ void ImagezForm::onPack()
     if (dst.isEmpty()) return;
 
     Imz imz;
-    ImzIO::readImzFromFolder(src, imz);
-    ImzIO::saveImz(dst, imz);
+    if (!ImzIO::readImzFromFolder(src, imz) || !ImzIO::saveImz(dst, imz)) {
+        QMessageBox::warning(this, tr("打包"), tr("打包失败")); return;
+    }
+    QFile metadata(QDir(src).filePath("fightframe.txt"));
+    if (metadata.open(QIODevice::ReadOnly)) {
+        QByteArray bytes = metadata.readAll();
+        ZipFile zip;
+        zip.openWrite(dst.toLocal8Bit().toStdString());
+        if (!zip.addData("fightframe.txt", bytes.constData(), bytes.size()) || !zip.commit()) {
+            QMessageBox::warning(this, tr("打包"), tr("战斗帧配置写入失败")); return;
+        }
+    }
     QMessageBox::information(this, tr("打包"), tr("打包完成"));
 }
 
@@ -433,13 +490,17 @@ void ImagezForm::onUnpack()
     if (dst.isEmpty()) return;
 
     Imz imz;
-    ImzIO::readImz(src, imz);
-    // Save each PNG to folder
-    for (int i = 0; i < imz.imzPng.size(); ++i) {
-        const auto &sp = imz.imzPng[i];
-        if (!sp.frameData.isEmpty() && !sp.frameData[0].data.isEmpty()) {
-            QFile f(dst + "/" + QString::number(i) + ".png");
-            if (f.open(QIODevice::WriteOnly)) f.write(sp.frameData[0].data);
+    if (!ImzIO::readImz(src, imz) || !ImzIO::saveFolder(dst, imz)) {
+        QMessageBox::warning(this, tr("解包"), tr("解包失败")); return;
+    }
+    ZipFile zip;
+    zip.openRead(src.toLocal8Bit().toStdString());
+    for (const auto &entry : zip.getFileNames()) {
+        if (entry != "fightframe.txt") continue;
+        std::string bytes = zip.readFile(entry);
+        QFile file(QDir(dst).filePath("fightframe.txt"));
+        if (!file.open(QIODevice::WriteOnly) || file.write(bytes.data(), bytes.size()) != qint64(bytes.size())) {
+            QMessageBox::warning(this, tr("解包"), tr("战斗帧配置写入失败")); return;
         }
     }
     QMessageBox::information(this, tr("解包"), tr("解包完成"));

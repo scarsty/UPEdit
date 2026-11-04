@@ -11,10 +11,17 @@ ZipFile::ZipFile()
 
 ZipFile::~ZipFile()
 {
-    if (zip_)
-    {
-        zip_close(zip_);
-    }
+    commit();
+}
+
+bool ZipFile::commit()
+{
+    if (!zip_) return true;
+    bool result = zip_close(zip_) == 0;
+    if (!result) zip_discard(zip_);
+    zip_ = nullptr;
+    buffer_.clear();
+    return result;
 }
 
 void ZipFile::openRead(const std::string& zip_filename)
@@ -93,9 +100,9 @@ void ZipFile::readFileToBuffer(const std::string& filename, std::vector<char>& c
     }
 }
 
-void ZipFile::addData(const std::string& filename, const char* p, int size)
+bool ZipFile::addData(const std::string& filename, const char* p, int size)
 {
-    if (zip_)
+    if (zip_ && size >= 0 && (p || size == 0))
     {
         std::lock_guard<std::mutex> lock(*mutex_);
         buffer_.push_back(std::string(p, size));
@@ -106,8 +113,10 @@ void ZipFile::addData(const std::string& filename, const char* p, int size)
             {
                 zip_source_free(source);
             }
+            else return true;
         }
     }
+    return false;
 }
 
 void ZipFile::removeFile(const std::string& filename)

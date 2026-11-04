@@ -82,9 +82,6 @@
     <ClCompile Include="src\ui\kdefedit.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\libs\luawrapper.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -131,9 +128,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\takein.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ui\txtleadin.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ui\updatedialog.cpp">
@@ -204,9 +198,6 @@
     <QtMoc Include="src\ui\kdefedit.h">
       <Filter>Header Files</Filter>
     </QtMoc>
-    <ClInclude Include="src\libs\luawrapper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <QtMoc Include="src\ui\mainmapedit.h">
       <Filter>Header Files</Filter>
     </QtMoc>
@@ -250,9 +241,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <QtMoc Include="src\ui\takein.h">
-      <Filter>Header Files</Filter>
-    </QtMoc>
-    <QtMoc Include="src\ui\txtleadin.h">
       <Filter>Header Files</Filter>
     </QtMoc>
     <QtMoc Include="src\ui\updatedialog.h">

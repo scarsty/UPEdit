@@ -7,12 +7,14 @@
 
 #include <QString>
 #include <QByteArray>
+#include <QMap>
 
 namespace FileIO {
     // 读取整个文件到字节数组
     QByteArray readFileAll(const QString &filename);
     // 写入整个字节数组到文件
     bool writeFileAll(const QString &filename, const QByteArray &data);
+    bool writeFiles(const QMap<QString, QByteArray> &files);
 
     // 文件 MD5 哈希
     QString hashFile(const QString &filename);

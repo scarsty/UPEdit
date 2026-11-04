@@ -3,6 +3,7 @@
 #include "mapdata.h"
 #include "fileio.h"
 #include "iniconfig.h"
+#include "outputmap.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPainter>
@@ -30,8 +31,6 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     leftLayout->addWidget(btnImport);
     leftLayout->addWidget(btnExBlock);
 
-    m_chkMore = new QCheckBox(tr("更多设置"));
-    leftLayout->addWidget(m_chkMore);
 
     // 当前贴图预览 GroupBox (对应 Delphi GroupBox1)
     auto *tileGroup = new QGroupBox(tr("当前贴图"));
@@ -58,9 +57,6 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     tileGroup->setFixedWidth(200);
     leftLayout->addWidget(tileGroup);
 
-    m_morePanel = new QWidget;
-    m_morePanel->setVisible(false);
-    leftLayout->addWidget(m_morePanel);
     leftLayout->addStretch();
 
     // ── 右侧地图区 ───────────────────────────────────────
@@ -101,7 +97,6 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(m_hScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onHScroll);
     connect(m_vScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onVScroll);
     connect(m_timer, &QTimer::timeout, this, &MainMapEdit::onTimerTick);
-    connect(m_chkMore, &QCheckBox::toggled, this, &MainMapEdit::onMoreSettings);
     connect(m_layerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int idx){
         m_layer = idx - 1;
         m_needUpdate = true;
@@ -110,6 +105,7 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     // ── 加载数据 ──────────────────────────────────────────
     readMainMapFile();
     readMainMapGrp();
+    connect(m_tileSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { readMainMapGrp(); m_needUpdate = true; });
     if (m_mapData.num > 0 && !m_mapData.map.isEmpty()) {
         const Map &curMap = m_mapData.map[0];
         int maxDim = qMax(curMap.x, curMap.y);
@@ -148,9 +144,9 @@ void MainMapEdit::readMainMapFile()
 
     for (int l = 0; l < 5; ++l) {
         // pic[y][x] — 与 Delphi pic[iy][ix] 一致
-        m.mapLayer[l].pic.resize(H);
-        for (int y = 0; y < H; ++y)
-            m.mapLayer[l].pic[y].resize(W, 0);
+        m.mapLayer[l].pic.resize(W);
+        for (int x = 0; x < W; ++x)
+            m.mapLayer[l].pic[x].resize(H, 0);
 
         QByteArray data = FileIO::readFileAll(cfg.gamePath + files[l]);
         if (data.isEmpty()) continue;
@@ -162,7 +158,7 @@ void MainMapEdit::readMainMapFile()
         // Delphi: for iy := 0 to 479 do fileread(grp, pic[iy][0], 480*2)
         for (int y = 0; y < H && idx < maxIdx; ++y) {
             for (int x = 0; x < W && idx < maxIdx; ++x) {
-                m.mapLayer[l].pic[y][x] = p[idx++];
+                m.mapLayer[l].pic[x][y] = p[idx++];
             }
         }
     }
@@ -171,12 +167,18 @@ void MainMapEdit::readMainMapFile()
 void MainMapEdit::readMainMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
+    int source = m_tileSourceCombo->currentIndex();
+    if ((source == 0 || source == 2) && !cfg.mmapImz.isEmpty()
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapImz, m_grpPics, m_tileCache)) return;
+    if ((source == 0 || source == 3) && !cfg.mmapPNGPath.isEmpty()
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapPNGPath, m_grpPics, m_tileCache)) return;
+    if (source == 2 || source == 3) { QMessageBox::warning(this, tr("贴图"), tr("PNG贴图读取失败")); return; }
     // 主地图贴图使用 MMAPIDX/MMAPGRP (对应 Delphi MMapfileIDX/MMapfilegrp)
     GrpIO::readGrp(cfg.gamePath + cfg.mmapFileIdx,
                     cfg.gamePath + cfg.mmapFileGrp, m_grpPics);
 
     // 调色板使用全局 palette (对应 Delphi readMcol 读 palette)
-    uint8_t pr[256], pg[256], pb[256];
+    uint8_t pr[256]={}, pg[256]={}, pb[256]={};
     MapIO::readPalette(cfg.gamePath + cfg.palette, pr, pg, pb);
 
     m_tileCache.resize(m_grpPics.size());
@@ -249,9 +251,9 @@ void MainMapEdit::renderMap()
                 int rx = (d + t) / 2, ry = (d - t) / 2;
                 int ix = CX + rx, iy = CY + ry;
                 if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) continue;
-                if (iy >= layerData.pic.size() || ix >= layerData.pic[iy].size()) continue;
+                if (ix >= layerData.pic.size() || iy >= layerData.pic[ix].size()) continue;
 
-                int tileId = layerData.pic[iy][ix] / 2;
+                int tileId = layerData.pic[ix][iy] / 2;
                 if (tileId <= 0 || tileId >= m_tileCache.size()) continue;
                 if (m_tileCache[tileId].isNull()) continue;
 
@@ -276,9 +278,9 @@ void MainMapEdit::renderMap()
                 int rx = (d + t) / 2, ry = (d - t) / 2;
                 int ix = CX + rx, iy = CY + ry;
                 if (ix < 0 || ix >= curMap.x || iy < 0 || iy >= curMap.y) continue;
-                if (iy >= bldLayer.pic.size() || ix >= bldLayer.pic[iy].size()) continue;
+                if (ix >= bldLayer.pic.size() || iy >= bldLayer.pic[ix].size()) continue;
 
-                int tileId = bldLayer.pic[iy][ix] / 2;
+                int tileId = bldLayer.pic[ix][iy] / 2;
                 if (tileId <= 0 || tileId >= m_tileCache.size()) continue;
                 if (m_tileCache[tileId].isNull()) continue;
 
@@ -288,13 +290,9 @@ void MainMapEdit::renderMap()
             }
         }
 
-        // 冒泡排序 (匹配 Delphi)
-        for (int i = 0; i < items.size() - 1; ++i) {
-            for (int j = i + 1; j < items.size(); ++j) {
-                if (items[j].center < items[i].center)
-                    std::swap(items[i], items[j]);
-            }
-        }
+        std::stable_sort(items.begin(), items.end(), [](const BuildItem &left, const BuildItem &right) {
+            return left.center < right.center;
+        });
 
         for (auto &b : items) {
             int xoff = (b.tileId < m_grpPics.size()) ? m_grpPics[b.tileId].xoff : 0;
@@ -318,11 +316,16 @@ void MainMapEdit::renderMap()
     m_mapLabel->resize(m_mapImage.size());
 }
 
-void MainMapEdit::onTileClicked(int /*ix*/, int /*iy*/, Qt::MouseButton btn)
+void MainMapEdit::handleMousePress(QMouseEvent *event)
 {
-    // 使用 hover 坐标 (通过 timer 实时追踪)
-    int ix = m_hoverIX;
-    int iy = m_hoverIY;
+    QPoint position = screenToMapRel(event->pos().x(), event->pos().y());
+    m_hoverIX = position.x();
+    m_hoverIY = position.y();
+    onTileClicked(position.x(), position.y(), event->button());
+}
+
+void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
+{
     if (ix < 0 || iy < 0) return;
 
     if (m_mapData.map.isEmpty()) return;
@@ -330,22 +333,74 @@ void MainMapEdit::onTileClicked(int /*ix*/, int /*iy*/, Qt::MouseButton btn)
     if (ix >= curMap.x || iy >= curMap.y) return;
 
     int layer = m_layer;
+    if (layer == 4) {
+        if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
+        if (btn == Qt::RightButton && m_moduleMap.layerNum > 0) {
+            Map adjusted = m_moduleMap;
+            int left = ix - adjusted.x + 1, top = iy - adjusted.y + 1;
+            for (int column = 0; column < adjusted.x; ++column)
+                for (int row = 0; row < adjusted.y; ++row) {
+                    int refX = adjusted.mapLayer[3].pic[column][row];
+                    int refY = adjusted.mapLayer[4].pic[column][row];
+                    bool valid = refX >= 0 && refX < adjusted.x && refY >= 0 && refY < adjusted.y
+                        && adjusted.mapLayer[2].pic[refX][refY] > 0
+                        && refX + left >= 0 && refX + left < curMap.x && refY + top >= 0 && refY + top < curMap.y;
+                    adjusted.mapLayer[3].pic[column][row] = valid ? refX + left : 0;
+                    adjusted.mapLayer[4].pic[column][row] = valid ? refY + top : 0;
+                }
+            MapIO::pasteRegion(curMap, adjusted, QPoint(ix, iy));
+            m_needUpdate = true;
+        }
+        return;
+    }
     if (layer < 0 || layer > 3) return;
+    if (layer == 3) {
+        if (btn == Qt::LeftButton) {
+            m_qbuildx = ix;
+            m_qbuildy = iy;
+        } else if (btn == Qt::RightButton) {
+            if (m_qbuildx < 0 || m_qbuildy < 0) return;
+            curMap.mapLayer[3].pic[ix][iy] = m_qbuildx;
+            curMap.mapLayer[4].pic[ix][iy] = m_qbuildy;
+        }
+        m_needUpdate = true;
+        return;
+    }
 
     if (layer >= (int)curMap.mapLayer.size()) return;
 
     if (btn == Qt::RightButton && m_selectedTileId >= 0) {
         // 右键放置选定贴图
-        curMap.mapLayer[layer].pic[iy][ix] = m_selectedTileId * 2;
+        curMap.mapLayer[layer].pic[ix][iy] = m_selectedTileId * 2;
         m_needUpdate = true;
     } else if (btn == Qt::LeftButton) {
         // 左键拾取当前贴图
-        m_selectedTileId = curMap.mapLayer[layer].pic[iy][ix] / 2;
+        m_selectedTileId = curMap.mapLayer[layer].pic[ix][iy] / 2;
         updateTilePreview();
     }
 }
 
 void MainMapEdit::onHScroll(int) { m_needUpdate = true; }
+void MainMapEdit::handleMouseRelease(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton || m_layer != 4 || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
+    QPoint end = screenToMapRel(event->pos().x(), event->pos().y());
+    if (end.x() >= 0) {
+        QRect bounds = QRect(m_selectionStart, end).normalized();
+        m_moduleMap = MapIO::extractRegion(m_mapData.map[0], bounds);
+        for (int column = 0; column < m_moduleMap.x; ++column)
+            for (int row = 0; row < m_moduleMap.y; ++row) {
+                int refX = m_moduleMap.mapLayer[3].pic[column][row];
+                int refY = m_moduleMap.mapLayer[4].pic[column][row];
+                bool valid = (refX != 0 || refY != 0) && bounds.contains(refX, refY)
+                    && m_moduleMap.mapLayer[2].pic[refX - bounds.x()][refY - bounds.y()] > 0;
+                m_moduleMap.mapLayer[3].pic[column][row] = valid ? refX - bounds.x() : -1;
+                m_moduleMap.mapLayer[4].pic[column][row] = valid ? refY - bounds.y() : -1;
+            }
+        m_statusBar->showMessage(tr("已复制模块 %1 x %2，右键粘贴").arg(m_moduleMap.x).arg(m_moduleMap.y));
+    }
+    m_selectionStart = QPoint(-1, -1);
+}
 void MainMapEdit::onVScroll(int) { m_needUpdate = true; }
 
 void MainMapEdit::onSaveMap()
@@ -353,6 +408,8 @@ void MainMapEdit::onSaveMap()
     IniConfig &cfg = IniConfig::instance();
     if (m_mapData.map.isEmpty()) return;
     const Map &m = m_mapData.map[0];
+    QMap<QString, QByteArray> pending;
+    if (m.mapLayer.size() != 5) return;
 
     // 逐层写回 5 个独立文件 (对应 Delphi 按行写入)
     QString files[5] = { cfg.mEarth, cfg.mSurface, cfg.mBuilding, cfg.mBuildX, cfg.mBuildY };
@@ -362,39 +419,60 @@ void MainMapEdit::onSaveMap()
         int idx = 0;
         for (int y = 0; y < m.y; ++y) {
             for (int x = 0; x < m.x; ++x) {
-                if (y < m.mapLayer[l].pic.size() && x < m.mapLayer[l].pic[y].size())
-                    p[idx++] = m.mapLayer[l].pic[y][x];
+                if (x < m.mapLayer[l].pic.size() && y < m.mapLayer[l].pic[x].size())
+                    p[idx++] = m.mapLayer[l].pic[x][y];
                 else
                     p[idx++] = 0;
             }
         }
-        FileIO::writeFileAll(cfg.gamePath + files[l], data);
+        QString path = cfg.gamePath + files[l];
+        if (files[l].isEmpty() || pending.contains(path)) { QMessageBox::warning(this, tr("保存"), tr("主地图路径缺失或重复")); return; }
+        pending.insert(path, data);
     }
+    if (!FileIO::writeFiles(pending)) { QMessageBox::warning(this, tr("保存"), tr("主地图保存失败；请保留 .upedit-old-* 备份")); return; }
     QMessageBox::information(this, tr("保存"), tr("主地图保存成功"));
 }
 
 void MainMapEdit::onExportImage()
 {
     if (m_mapImage.isNull()) return;
-    QString f = QFileDialog::getSaveFileName(this, tr("导出地图图片"), {}, "PNG (*.png);;BMP (*.bmp)");
-    if (!f.isEmpty()) m_mapImage.save(f);
+    OutputMap dialog(this);
+    if (!m_mapData.map.isEmpty()) dialog.setMapData(m_mapData.map[0], m_tileCache, m_grpPics, m_tileScale);
+    dialog.exec();
 }
 
 void MainMapEdit::onImportBlock()
 {
-    // TODO: 导入图块
-    QMessageBox::information(this, tr("提示"), tr("导入图块功能尚未实现"));
+    QString path = QFileDialog::getOpenFileName(this, tr("导入主地图模块"), {}, "Main Map Module (*.mmd);;All Files (*)");
+    if (path.isEmpty()) return;
+    QByteArray data = FileIO::readFileAll(path);
+    Map module;
+    if (!MapIO::decodeModule(data, 5, module)) {
+        QMessageBox::warning(this, tr("导入"), tr("无法读取主地图模块"));
+        return;
+    }
+    m_moduleMap = module;
+    m_layerCombo->setCurrentIndex(5);
+    m_statusBar->showMessage(tr("模块已载入，右键粘贴"));
 }
 
 void MainMapEdit::onExportBlock()
 {
-    // TODO: 导出图块
-    QMessageBox::information(this, tr("提示"), tr("导出图块功能尚未实现"));
-}
-
-void MainMapEdit::onMoreSettings(bool checked)
-{
-    m_morePanel->setVisible(checked);
+    if (m_moduleMap.layerNum == 0) {
+        QMessageBox::information(this, tr("导出"), tr("请在全部图层下先框选区域"));
+        return;
+    }
+    QString path = QFileDialog::getSaveFileName(this, tr("导出主地图模块"), {}, "Main Map Module (*.mmd);;All Files (*)");
+    if (path.isEmpty()) return;
+    if (!path.endsWith(".mmd", Qt::CaseInsensitive)) path += ".mmd";
+    QByteArray data = MapIO::encodeMap(m_moduleMap, true);
+    if (!FileIO::writeFileAll(path, data))
+        QMessageBox::warning(this, tr("导出"), tr("无法写入文件"));
+    else {
+        QImage preview = MapIO::renderMainMap(m_moduleMap, m_tileCache, m_grpPics, true, true, true, m_tileScale);
+        if (preview.isNull() || !preview.save(path + ".png"))
+            QMessageBox::warning(this, tr("导出"), tr("模块已保存，但预览图写入失败"));
+    }
 }
 
 QPoint MainMapEdit::mapToScreen(int ix, int iy) const
@@ -472,8 +550,8 @@ void MainMapEdit::updateTilePreview()
     auto showTile = [&](int layerIdx, QLabel *valLbl, QLabel *imgLbl) {
         if (layerIdx >= (int)curMap.mapLayer.size()) return;
         const auto &layer = curMap.mapLayer[layerIdx];
-        if (iy >= layer.pic.size() || ix >= layer.pic[iy].size()) return;
-        int tileId = layer.pic[iy][ix] / 2;
+        if (ix >= layer.pic.size() || iy >= layer.pic[ix].size()) return;
+        int tileId = layer.pic[ix][iy] / 2;
         if (tileId == 0) {
             valLbl->clear();
             imgLbl->clear();
@@ -496,16 +574,16 @@ void MainMapEdit::updateTilePreview()
     if (3 < (int)curMap.mapLayer.size() && 4 < (int)curMap.mapLayer.size()) {
         const auto &bxLayer = curMap.mapLayer[3];
         const auto &byLayer = curMap.mapLayer[4];
-        if (iy < bxLayer.pic.size() && ix < bxLayer.pic[iy].size() &&
-            iy < byLayer.pic.size() && ix < byLayer.pic[iy].size()) {
-            int bx = bxLayer.pic[iy][ix];
-            int by = byLayer.pic[iy][ix];
-            int refIx = ix + bx, refIy = iy + by;
+        if (ix < bxLayer.pic.size() && iy < bxLayer.pic[ix].size() &&
+            ix < byLayer.pic.size() && iy < byLayer.pic[ix].size()) {
+            int bx = bxLayer.pic[ix][iy];
+            int by = byLayer.pic[ix][iy];
+            int refIx = bx, refIy = by;
             if (refIx >= 0 && refIx < curMap.x && refIy >= 0 && refIy < curMap.y &&
                 2 < (int)curMap.mapLayer.size()) {
                 const auto &bldLayer = curMap.mapLayer[2];
-                if (refIy < bldLayer.pic.size() && refIx < bldLayer.pic[refIy].size()) {
-                    int tileId = bldLayer.pic[refIy][refIx] / 2;
+                if (refIx < bldLayer.pic.size() && refIy < bldLayer.pic[refIx].size()) {
+                    int tileId = bldLayer.pic[refIx][refIy] / 2;
                     m_lblRefBuildVal->setText(QString("(%1,%2) -> %3").arg(bx).arg(by).arg(tileId));
                     if (tileId >= 0 && tileId < m_tileCache.size() && !m_tileCache[tileId].isNull()) {
                         m_imgRefBuild->setPixmap(QPixmap::fromImage(m_tileCache[tileId]).scaled(

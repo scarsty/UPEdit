@@ -26,7 +26,6 @@ class ImagezForm;
 class PNGImport;
 class PNGExport;
 class CYHead;
-class TxtLeadIn;
 class ReplicatedList;
 
 class MainWindow : public QMainWindow {
@@ -60,7 +59,6 @@ private slots:
     void onOpenPNGExport();
     void onOpenPNGImport();
     void onOpenCYHead();
-    void onOpenTxtLeadIn();
     void onOpenReplicatedList();
 
     // 帮助菜单
@@ -72,6 +70,7 @@ private slots:
     void updateWindowMenu();
 
 private:
+    void closeEvent(QCloseEvent *event) override;
     void createMenus();
     void createStatusBar();
     void loadSettings();
@@ -94,7 +93,6 @@ private:
     PNGImport          *m_pngImport  = nullptr;
     PNGExport          *m_pngExport  = nullptr;
     CYHead             *m_cyHead     = nullptr;
-    TxtLeadIn          *m_txtLeadIn  = nullptr;
     ReplicatedList     *m_repList    = nullptr;
 
     QLabel *m_statusLabel = nullptr;

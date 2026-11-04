@@ -83,6 +83,9 @@ private:
 
     // 选择项列表
     QVector<Select> m_select;
+    RData m_copiedRecord;
+    int m_copiedType = -1;
+    bool m_hasCopiedRecord = false;
     int m_currentType   = -1;
     int m_currentRecord = -1;
 

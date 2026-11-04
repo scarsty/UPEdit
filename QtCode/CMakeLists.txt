@@ -35,8 +35,6 @@ set(CORE_SOURCES
 
 # ── 外部库封装 ──────────────────────────────────────────
 set(LIB_SOURCES
-    src/libs/luawrapper.h
-    src/libs/luawrapper.cpp
     src/libs/sqlite3wrapper.h
     src/libs/sqlite3wrapper.cpp
     src/libs/zipwrapper.h
@@ -77,8 +75,6 @@ set(UI_SOURCES
     src/ui/pngimport.cpp
     src/ui/cyhead.h
     src/ui/cyhead.cpp
-    src/ui/txtleadin.h
-    src/ui/txtleadin.cpp
     src/ui/setlanguage.h
     src/ui/setlanguage.cpp
     src/ui/replicatedlist.h
@@ -124,7 +120,7 @@ target_link_libraries(UPEdit PRIVATE
 )
 
 # 外部库 (运行时动态加载，无需链接期依赖)
-# sqlite3.dll, lua5.1.dll, zip.dll, libxlsxio_read.dll, xlsxwriter.dll
+# sqlite3.dll, zip.dll, libxlsxio_read.dll, xlsxwriter.dll
 # 放在可执行文件同目录即可
 
 if(WIN32)

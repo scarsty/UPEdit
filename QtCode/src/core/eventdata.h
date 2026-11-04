@@ -12,7 +12,7 @@ namespace EventIO {
     // 从 idx+grp 读取事件数据
     bool readEvents(const QString &idxFile, const QString &grpFile, DFile &dfile);
     // 保存事件数据
-    void saveEvents(const QString &idxFile, const QString &grpFile, const DFile &dfile);
+    bool saveEvents(const QString &idxFile, const QString &grpFile, const DFile &dfile);
 
     // 从 INI 读取 KDEF 配置
     void readKDEFIni(const QString &iniPath, KDEFIni &kdefIni);

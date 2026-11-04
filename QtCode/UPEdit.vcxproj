@@ -210,7 +210,6 @@
     <ClCompile Include="src\core\imzdata.cpp" />
     <ClCompile Include="src\core\iniconfig.cpp" />
     <ClCompile Include="src\ui\kdefedit.cpp" />
-    <ClCompile Include="src\libs\luawrapper.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="src\ui\mainmapedit.cpp" />
     <ClCompile Include="src\ui\mainwindow.cpp" />
@@ -227,7 +226,6 @@
     <ClCompile Include="src\ui\splashscreen.cpp" />
     <ClCompile Include="src\libs\sqlite3wrapper.cpp" />
     <ClCompile Include="src\ui\takein.cpp" />
-    <ClCompile Include="src\ui\txtleadin.cpp" />
     <ClCompile Include="src\ui\updatedialog.cpp" />
     <ClCompile Include="src\ui\waredit.cpp" />
     <ClCompile Include="src\ui\warmapedit.cpp" />
@@ -250,7 +248,6 @@
     <ClInclude Include="src\core\imzdata.h" />
     <ClInclude Include="src\core\iniconfig.h" />
     <QtMoc Include="src\ui\kdefedit.h" />
-    <ClInclude Include="src\libs\luawrapper.h" />
     <QtMoc Include="src\ui\mainmapedit.h" />
     <QtMoc Include="src\ui\mainwindow.h" />
     <ClInclude Include="src\core\mapdata.h" />
@@ -266,7 +263,6 @@
     <QtMoc Include="src\ui\splashscreen.h" />
     <ClInclude Include="src\libs\sqlite3wrapper.h" />
     <QtMoc Include="src\ui\takein.h" />
-    <QtMoc Include="src\ui\txtleadin.h" />
     <QtMoc Include="src\ui\updatedialog.h" />
     <QtMoc Include="src\ui\waredit.h" />
     <QtMoc Include="src\ui\warmapedit.h" />

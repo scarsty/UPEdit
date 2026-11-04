@@ -4,10 +4,12 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QLineEdit>
+#include <QMap>
 
 // 场景地图编辑器 (对应 Delphi TForm12)
 class SceneMapEdit : public IsoMapEditor {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit SceneMapEdit(QWidget *parent = nullptr);
 
@@ -20,6 +22,8 @@ private slots:
     void onImportScene();
     void onExportScene();
     void onExportImage();
+    void onImportModule();
+    void onExportModule();
     void onUndo();
     void onRedo();
     void onEventConfirm();
@@ -28,12 +32,28 @@ protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void handleMouseMove(QMouseEvent *event) override;
+    void handleMouseRelease(QMouseEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private:
     void loadSceneGrpFile(int saveSlot);
     void readSceneData(int sceneIndex);
     void readSceneGrp();
     void addUndoSave();
+    void syncCurrentScene();
+    Map m_moduleMap;
+    QMap<int, SceneEvent> m_moduleEvents;
+    bool pasteModule(const QPoint &anchor);
+    struct SaveSession {
+        QByteArray maps;
+        DFile events;
+        int scene = 0;
+    };
+    QMap<int, SaveSession> m_sessions;
+    QMap<int, SaveSession> m_savedSessions;
+    bool hasUnsavedChanges();
+    bool m_sessionLoaded = false;
+    QPoint m_selectionStart{-1, -1};
     int eventIndexAt(int ix, int iy) const;
     void loadEventToEditor(int eventIndex, int ix, int iy);
     int displayedEventPic(const SceneEvent &evt) const;
@@ -47,6 +67,10 @@ private:
     QLineEdit *m_evtCanWalk, *m_evtIndex;
     QLineEdit *m_evtEvent1, *m_evtEvent2, *m_evtEvent3;
     QLineEdit *m_evtBeginPic, *m_evtEndPic;
+    QLineEdit *m_evtBeginPic2;
+    QSpinBox *m_altitude;
+    bool m_exporting = false;
+    int m_exportLayers = 15;
     QLineEdit *m_evtAnim, *m_evtX, *m_evtY;
 
     // 场景事件数据
