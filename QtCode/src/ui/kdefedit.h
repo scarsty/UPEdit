@@ -27,6 +27,7 @@ private slots:
     void onMoveDown();
     void onCopyInstruction();
     void onPasteInstruction();
+    void onPasteEvent();
 
 private:
     friend int runSelfTests(const QString &reportPath);
@@ -63,6 +64,7 @@ private:
     };
     QVector<KDEFInstrDef> m_instrDefs;
     QVector<QVector<QPair<int, QString>>> m_guideChoices;
+    QVector<QPair<int, QString>> m_warChoices;
     QStringList m_subInstructions;
 
     // 事件数据
@@ -76,9 +78,12 @@ private:
         QVector<KDEFInstruction> instructions;
     };
     QVector<KDEFEvent> m_events;
+    KDEFEvent m_eventClipboard;
+    bool m_hasEventClipboard = false;
     int m_currentEvent = -1;
     int m_currentInstr = -1;
     QVector<KDEFInstruction> m_clipboard;
+    QMap<int, QMap<int, int>> m_clipboardTargets;
     int m_clipboardEvent = -1;
     int m_nextIdentity = 1;
 };

@@ -21,6 +21,11 @@ private slots:
     void onExpScroll(int val);
 
 private:
+    friend int runSelfTests(const QString &reportPath);
+    void closeEvent(QCloseEvent *event) override;
+    QByteArray stateBytes() const;
+    bool saveData();
+    QByteArray m_savedState;
     void loadData();
     void displayLeave(int index);
     void displayEffect(int index);
@@ -49,4 +54,5 @@ private:
     QVector<int16_t> m_effectList;  // 200 entries
     QVector<int16_t> m_matchList;   // 300 entries (triplets)
     QVector<int16_t> m_expList;     // 100 entries
+    bool m_loadValid = false;
 };

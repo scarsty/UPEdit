@@ -1,6 +1,8 @@
 #include "kdefedit.h"
+#include <QSpinBox>
 #include "iniconfig.h"
 #include "eventdata.h"
+#include "mapdata.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -20,6 +22,8 @@
 #include "fileio.h"
 #include "encoding.h"
 #include <QCloseEvent>
+#include <QTimer>
+#include <QLineEdit>
 
 QByteArray KDEFEdit::stateBytes() const
 {
@@ -70,11 +74,13 @@ KDEFEdit::KDEFEdit(QWidget *parent) : QWidget(parent)
     auto *btnTalk = new QPushButton(tr("对话文本"));
     auto *btnNewEvent = new QPushButton(tr("新增事件"));
     auto *btnCopyEvent = new QPushButton(tr("复制事件"));
+    auto *btnPasteEvent = new QPushButton(tr("覆盖当前事件"));
     auto *btnDeleteEvent = new QPushButton(tr("删除末尾事件"));
     auto *btnExportEvent = new QPushButton(tr("导出事件文本"));
     topBar->addWidget(btnTalk);
     topBar->addWidget(btnNewEvent);
     topBar->addWidget(btnCopyEvent);
+    topBar->addWidget(btnPasteEvent);
     topBar->addWidget(btnDeleteEvent);
     topBar->addWidget(btnExportEvent);
     topBar->addWidget(btnLoad);
@@ -169,12 +175,15 @@ KDEFEdit::KDEFEdit(QWidget *parent) : QWidget(parent)
     connect(btnCopyEvent, &QPushButton::clicked, this, [this] {
         if (m_currentEvent < 0 || m_currentEvent >= m_events.size()) return;
         auto event = m_events[m_currentEvent];
+        m_eventClipboard = event;
+        m_hasEventClipboard = true;
         event.eventId = m_events.size();
         for (auto &instruction : event.instructions) instruction.identity = m_nextIdentity++;
         m_events.append(event);
         displayEventList();
         displayInstructions(event.eventId);
     });
+    connect(btnPasteEvent, &QPushButton::clicked, this, &KDEFEdit::onPasteEvent);
     connect(btnDeleteEvent, &QPushButton::clicked, this, [this] {
         if (m_events.isEmpty()) return;
         if (QMessageBox::question(this, tr("删除事件"), tr("删除末尾事件？请先确认场景中没有引用该编号。")) != QMessageBox::Yes) return;
@@ -209,15 +218,20 @@ void KDEFEdit::loadKDEFIni()
         return entry.metaType().id() == QMetaType::QStringList ? entry.toStringList().join(',') : entry.toString();
     };
     m_instrDefs.clear();
-    int count = ini.value("KdefAttrib/number", 0).toInt();
+    int count = qBound(0, ini.value("KdefAttrib/number", 0).toInt(), 32768);
     for (int i = 0; i < count; ++i) {
         QStringList parts = value(QString("KdefAttrib/attrib%1").arg(i)).split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
-        if (parts.size() < 6) continue;
         KDEFInstrDef def;
+        def.code = i;
+        if (parts.size() < 6) { m_instrDefs.append(def); continue; }
         bool valid = false;
         def.code = parts[0].toInt(&valid, 16);
         int words = parts[1].toInt();
-        if (!valid || words < 1 || words > 256) continue;
+        if (!valid || words < 1 || words > 256) {
+            def.code = i;
+            m_instrDefs.append(def);
+            continue;
+        }
         def.name = parts.mid(5).join(' ');
         def.guide = value(QString("KdefAttrib/guidestring%1").arg(i));
         QStringList quoteTypes = value(QString("KdefAttrib/guidequotetype%1").arg(i)).split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
@@ -246,7 +260,45 @@ void KDEFEdit::loadKDEFIni()
     m_subInstructions.clear();
     int subCount = qBound(0, ini.value("kdef50/num", 0).toInt(), 32768);
     for (int index = 0; index < subCount; ++index)
-        m_subInstructions.append(value(QString("kdef50/sub%1").arg(index)));
+        m_subInstructions.append(ini.contains(QString("kdef50/sub%1").arg(index))
+            ? value(QString("kdef50/sub%1").arg(index)) : value("kdef50/other"));
+    m_warChoices = {{-2, tr("保持不变")}, {-1, tr("无")}};
+    qint64 recordSize = 0, nameOffset = -1;
+    int nameLength = 0;
+    bool validLayout = true;
+    int fieldCount = ini.value("W_Modify/typedataitem", 0).toInt();
+    if (fieldCount <= 0 || fieldCount > 32768) validLayout = false;
+    for (int field = 0; validLayout && field < fieldCount; ++field) {
+        auto parts = value(QString("W_Modify/data(%1)").arg(field)).split(QRegularExpression("\\s+"), Qt::SkipEmptyParts);
+        if (parts.size() < 7) { validLayout = false; break; }
+        bool countValid = false, repeatValid = false, lengthValid = false;
+        int count = parts[0].toInt(&countValid), repeat = parts[1].toInt(&repeatValid), length = parts[2].toInt(&lengthValid);
+        if (!countValid || !repeatValid || !lengthValid || count < 0 || repeat < 0 || length < 0
+            || count > SHRT_MAX || repeat > SHRT_MAX || length > SHRT_MAX) { validLayout = false; break; }
+        qint64 fieldSize = qint64(count) * repeat * length;
+        if (nameOffset < 0 && parts[4].toInt() == 1 && parts[3].toInt() == 1 && fieldSize > 0) {
+            nameOffset = recordSize;
+            nameLength = length;
+        }
+        recordSize += fieldSize;
+        if (recordSize > INT_MAX) validLayout = false;
+    }
+    if (validLayout && recordSize > 0 && !cfg.warData.isEmpty()) {
+        QFile warFile(cfg.gamePath + "/" + cfg.warData);
+        if (warFile.open(QIODevice::ReadOnly) && warFile.size() % recordSize == 0
+            && warFile.size() / recordSize <= SHRT_MAX + 1) {
+            for (int record = 0; record < warFile.size() / recordSize; ++record) {
+                QString name;
+                if (nameOffset >= 0) {
+                    if (!warFile.seek(record * recordSize + nameOffset)) break;
+                    auto bytes = warFile.read(nameLength);
+                    if (bytes.size() != nameLength) break;
+                    name = Encoding::readOutStrWithCode(bytes.constData(), bytes.size(), cfg.dataCode);
+                }
+                m_warChoices.append(qMakePair(record, name));
+            }
+        }
+    }
 }
 
 bool KDEFEdit::decodeRecords(const QByteArray &index, const QByteArray &data, QVector<QByteArray> &records)
@@ -337,6 +389,20 @@ void KDEFEdit::displayEventList()
     }
 }
 
+void KDEFEdit::onPasteEvent()
+{
+    if (!m_hasEventClipboard || m_currentEvent < 0 || m_currentEvent >= m_events.size()) return;
+    if (QMessageBox::question(this, tr("覆盖事件"), tr("确认用复制的事件覆盖当前事件？"),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Yes) return;
+    int destination = m_currentEvent;
+    auto replacement = m_eventClipboard;
+    replacement.eventId = m_events[destination].eventId;
+    for (auto &instruction : replacement.instructions) instruction.identity = m_nextIdentity++;
+    m_events[destination] = replacement;
+    displayEventList();
+    displayInstructions(destination);
+}
+
 void KDEFEdit::displayInstructions(int eventIndex)
 {
     m_currentEvent = eventIndex;
@@ -374,6 +440,63 @@ void KDEFEdit::displayInstructionDetail(int instrIndex)
     for (int p = 0; p < instr.params.size(); ++p) {
         m_paramTable->removeCellWidget(p, 1);
         QString pname = getParamName(instr.code, p);
+        int subInstruction = instr.code == 50 && !instr.params.isEmpty() ? instr.params[0] : -1;
+        if (subInstruction == 0) {
+            if (p == 1) pname = tr("变量");
+            if (p == 2) pname = tr("数值");
+        } else if (subInstruction == 1 || subInstruction == 2) {
+            const QStringList labels = {tr("子指令"), tr("变量标志"), tr("操作数位宽"),
+                tr("数组/字符串变量"), tr("下标"), tr("值")};
+            if (p < labels.size()) pname = labels[p];
+        } else if (subInstruction == 3) {
+            const QStringList labels = {tr("子指令"), tr("右操作数为变量"), tr("运算"), tr("目标变量"), tr("左变量"), tr("右操作数")};
+            if (p < labels.size()) pname = labels[p];
+        } else if (subInstruction == 4) {
+            const QStringList labels = {tr("子指令"), tr("右操作数为变量"), tr("条件"), tr("变量 A"), tr("操作数 B")};
+            if (p < labels.size()) pname = labels[p];
+        }
+        const QMap<int, QStringList> labels50 = {
+            {8, {tr("变量标志"), tr("对话编号"), tr("字符串变量")}},
+            {9, {tr("变量标志"), tr("格式字符串变量"), tr("目标字符串变量"), tr("数值")}},
+            {10, {tr("字符串变量"), tr("返回长度变量")}},
+            {11, {tr("目标字符串变量"), tr("字符串变量 A"), tr("字符串变量 B")}},
+            {12, {tr("变量标志"), tr("空格数量"), tr("字符串变量")}},
+            {16, {tr("变量标志"), tr("R 类别"), tr("记录编号"), tr("属性字节偏移"), tr("数值")}},
+            {17, {tr("变量标志"), tr("R 类别"), tr("记录编号"), tr("属性字节偏移"), tr("返回值变量")}},
+            {18, {tr("变量标志"), tr("队伍位置"), tr("数值")}},
+            {19, {tr("变量标志"), tr("队伍位置"), tr("返回值变量")}},
+            {20, {tr("变量标志"), tr("物品编号"), tr("返回数量变量")}},
+            {21, {tr("变量标志"), tr("场景编号"), tr("事件编号"), tr("事件属性"), tr("数值")}},
+            {22, {tr("变量标志"), tr("场景编号"), tr("事件编号"), tr("事件属性"), tr("返回值变量")}},
+            {23, {tr("变量标志"), tr("场景编号"), tr("图层"), tr("X"), tr("Y"), tr("数值")}},
+            {24, {tr("变量标志"), tr("场景编号"), tr("图层"), tr("X"), tr("Y"), tr("返回值变量")}},
+            {25, {tr("变量标志"), tr("操作数位宽"), tr("地址低字"), tr("地址高字"), tr("偏移"), tr("数值")}},
+            {26, {tr("变量标志"), tr("操作数位宽"), tr("地址低字"), tr("地址高字"), tr("偏移"), tr("返回值变量")}},
+            {27, {tr("变量标志"), tr("R 类别"), tr("记录编号"), tr("目标字符串变量")}},
+            {28, {tr("返回战斗序号变量")}},
+            {29, {tr("变量标志"), tr("战斗序号"), tr("步数"), tr("返回目标变量"), tr("动画显示")}},
+            {30, {tr("变量标志"), tr("战斗序号"), tr("属性偏移"), tr("返回值变量")}},
+            {31, {tr("变量标志"), tr("战斗序号"), tr("属性偏移"), tr("数值")}},
+            {32, {tr("变量标志"), tr("指令偏移"), tr("变量编号")}},
+            {33, {tr("变量标志"), tr("字符串变量"), tr("X"), tr("Y"), tr("颜色")}},
+            {34, {tr("变量标志"), tr("X"), tr("Y"), tr("宽度"), tr("高度"), tr("透明度")}},
+            {35, {tr("返回键值变量"), tr("返回鼠标 X 变量"), tr("返回鼠标 Y 变量")}},
+            {36, {tr("变量标志"), tr("字符串变量"), tr("X"), tr("Y"), tr("颜色")}},
+            {37, {tr("变量标志"), tr("延时时间")}},
+            {38, {tr("变量标志"), tr("随机数范围"), tr("返回值变量")}},
+            {39, {tr("变量标志"), tr("菜单项数"), tr("菜单数组变量"), tr("返回值变量"), tr("X"), tr("Y")}},
+            {40, {tr("变量标志/最大显示项数"), tr("菜单项数"), tr("菜单数组变量"), tr("返回值变量"), tr("X"), tr("Y")}},
+            {41, {tr("变量标志"), tr("图片类别"), tr("X"), tr("Y"), tr("图片编号")}},
+            {42, {tr("变量标志"), tr("X"), tr("Y")}},
+            {43, {tr("变量标志"), tr("事件编号"), tr("参数 0"), tr("参数 1"), tr("参数 2"), tr("参数 3")}},
+            {44, {tr("变量标志"), tr("人物战斗序号"), tr("动作类型"), tr("武功动画类型")}},
+            {45, {tr("变量标志"), tr("数值")}},
+            {46, {tr("变量标志"), tr("起点 X"), tr("起点 Y"), tr("宽度"), tr("高度"), tr("数值")}},
+            {47, {tr("变量标志"), tr("人物战斗序号")}},
+            {48, {tr("起始变量编号"), tr("变量个数")}}
+        };
+        if (p > 0 && labels50.contains(subInstruction) && p <= labels50[subInstruction].size())
+            pname = labels50[subInstruction][p - 1];
         auto *nameItem = new QTableWidgetItem(pname);
         nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
         m_paramTable->setItem(p, 0, nameItem);
@@ -381,6 +504,14 @@ void KDEFEdit::displayInstructionDetail(int instrIndex)
         QVector<QPair<int, QString>> choices;
         int quoteType = definition ? definition->quoteTypes.value(p) : 0;
         int quoteCount = definition ? definition->quoteCounts.value(p) : -1;
+        int flags = instr.params.value(1);
+        if (subInstruction == 8 && p == 2 && !(flags & 1)) quoteType = 3;
+        if (subInstruction == 20 && p == 2 && !(flags & 1)) { quoteType = 1; quoteCount = 2; }
+        if (subInstruction >= 21 && subInstruction <= 24 && p == 2 && !(flags & 1)) { quoteType = 1; quoteCount = 3; }
+        if ((subInstruction == 16 || subInstruction == 17 || subInstruction == 27) && p == 3 && !(flags & 1)) {
+            quoteType = 1;
+            quoteCount = instr.params.value(2) + 1;
+        }
         if (definition && (definition->yesJump == p || definition->noJump == p)) {
             int sourceEnd = 0, targetOffset = 0;
             for (int index = 0; index <= instrIndex; ++index) sourceEnd += 1 + evt.instructions[index].params.size();
@@ -403,6 +534,8 @@ void KDEFEdit::displayInstructionDetail(int instrIndex)
                     choices.append({record, name});
                 }
             }
+        } else if (quoteType == 2) {
+            choices = m_warChoices;
         } else if (quoteType == 3 || quoteType == 4) {
             const auto &config = IniConfig::instance();
             QString indexPath = quoteType == 3 ? config.talkIdx : config.nameIdx;
@@ -423,6 +556,76 @@ void KDEFEdit::displayInstructionDetail(int instrIndex)
         } else if (quoteType == 5 && quoteCount >= 0 && quoteCount < m_guideChoices.size()) choices = m_guideChoices[quoteCount];
         if (instr.code == 50 && p == 0)
             for (int sub = 0; sub < m_subInstructions.size(); ++sub) choices.append({sub, m_subInstructions[sub]});
+        if ((subInstruction == 1 || subInstruction == 2) && p == 1) {
+            choices = {{0, tr("直接数值")}, {1, tr("下标为变量")}};
+            if (subInstruction == 1) {
+                choices.append(qMakePair(2, tr("值为变量")));
+                choices.append(qMakePair(3, tr("下标和值均为变量")));
+            }
+        }
+        if ((subInstruction == 1 || subInstruction == 2) && p == 2)
+            choices = {{0, tr("16位数")}, {1, tr("8位字节")}};
+        if (p == 1) {
+            const QMap<int, int> flagMasks = {{3, 1}, {4, 1}, {8, 1}, {9, 1}, {12, 1},
+                {16, 7}, {17, 3}, {18, 3}, {19, 1}, {20, 1}, {21, 15}, {22, 7}, {23, 31},
+                {24, 15}, {25, 3}, {26, 1}, {27, 1}, {29, 3}, {30, 3}, {31, 7}, {32, 1},
+                {33, 7}, {34, 31}, {36, 7}, {37, 1}, {38, 1}, {39, 7}};
+            int mask = flagMasks.value(subInstruction);
+            if (mask) {
+                choices.clear();
+                for (int flags = 0; flags <= mask; ++flags)
+                    choices.append(qMakePair(flags, flags == 0 ? tr("直接数值")
+                        : tr("变量标志 0b%1").arg(QString::number(flags, 2))));
+                if (subInstruction == 3 || subInstruction == 4)
+                    choices = {{0, tr("直接数值")}, {1, tr("右操作数为变量")}};
+            }
+        }
+        if (subInstruction == 3 && p == 2)
+            choices = {{0, "+"}, {1, "-"}, {2, "*"}, {3, "/"}, {4, "mod"}};
+        if (subInstruction == 4 && p == 2)
+            choices = {{0, "A < B"}, {1, "A <= B"}, {2, "A = B"}, {3, "A != B"},
+                {4, "A >= B"}, {5, "A > B"}, {6, "JMP = 0"}, {7, "JMP = 1"}};
+        if (p == 1 && subInstruction >= 41 && subInstruction <= 47) {
+            int mask = subInstruction == 42 ? 3 : (subInstruction == 45 || subInstruction == 47) ? 1
+                : (subInstruction == 43 || subInstruction == 46) ? 31 : 7;
+            choices.clear();
+            for (int flags = 0; flags <= mask; ++flags)
+                choices.append(qMakePair(flags, tr("变量标志 0b%1").arg(QString::number(flags, 2))));
+        }
+        if (subInstruction == 41 && p == 2)
+            choices = {{0, tr("场景/主地图贴图")}, {1, tr("头像")}, {2, tr("物品/编号图片")}};
+        if (subInstruction == 29 && p == 5)
+            choices = {{0, tr("显示动画")}, {1, tr("不显示动画")}};
+        if ((subInstruction == 21 || subInstruction == 22) && p == 4 && !(flags & 4)) {
+            choices.clear();
+            const auto &fields = IniConfig::instance().dIni.attrib;
+            for (int field = 0; field < fields.size() && field <= SHRT_MAX; ++field)
+                choices.append(qMakePair(field, fields[field]));
+        }
+        if ((subInstruction == 25 || subInstruction == 26) && p == 2)
+            choices = {{0, tr("16位数")}, {1, tr("8位字节")}};
+        if ((subInstruction == 16 || subInstruction == 17 || subInstruction == 27) && p == 2) {
+            choices.clear();
+            const auto &globals = IniConfig::instance().rGlobals;
+            for (int type = 1; type < globals.rFile.rType.size(); ++type)
+                choices.append(qMakePair(type - 1, globals.typeName.value(type)));
+        }
+        if ((subInstruction == 16 || subInstruction == 17) && p == 4 && !(flags & 2)) {
+            choices.clear();
+            const auto &globals = IniConfig::instance().rGlobals;
+            int type = instr.params.value(2) + 1;
+            if (type >= 0 && type < globals.rIni.size()) {
+                const auto &terms = globals.rIni[type].rTerm;
+                qint64 offset = 0;
+                for (int term = 0; term < terms.size() && offset <= SHRT_MAX; ++term)
+                    for (int array = 0; array < terms[term].datanum && offset <= SHRT_MAX; ++array)
+                        for (int part = 0; part < terms[term].incnum && offset <= SHRT_MAX; ++part) {
+                            if (term + part >= terms.size() || terms[term + part].datalen <= 0) break;
+                            choices.append(qMakePair(int(offset), terms[term + part].name + QString("[%1]").arg(array)));
+                            offset += terms[term + part].datalen;
+                        }
+            }
+        }
         if (!choices.isEmpty()) {
             auto *combo = new QComboBox;
             combo->setEditable(true);
@@ -436,6 +639,107 @@ void KDEFEdit::displayInstructionDetail(int instrIndex)
                 int value = text.section(' ', 0, 0).toInt(&valid);
                 if (!valid || value < SHRT_MIN || value > SHRT_MAX || eventIndex != m_currentEvent || instrIndex != m_currentInstr) return;
                 m_events[eventIndex].instructions[instrIndex].params[p] = value;
+                if (p <= 2 && m_events[eventIndex].instructions[instrIndex].code == 50)
+                    QTimer::singleShot(0, this, [this, eventIndex, instrIndex] {
+                        if (m_currentEvent == eventIndex && m_currentInstr == instrIndex)
+                            displayInstructionDetail(instrIndex);
+                    });
+            });
+        }
+        if ((subInstruction == 33 || subInstruction == 36) && p == 5 && !(flags & 4)) {
+            auto *container = new QWidget;
+            auto *layout = new QHBoxLayout(container);
+            layout->setContentsMargins(0, 0, 0, 0);
+            uint8_t red[256]{}, green[256]{}, blue[256]{};
+            const auto &config = IniConfig::instance();
+            MapIO::readPalette(config.gamePath + "/" + config.palette, red, green, blue);
+            auto *foreground = new QComboBox;
+            auto *background = new QComboBox;
+            foreground->setObjectName("kdefForeground");
+            background->setObjectName("kdefBackground");
+            foreground->setToolTip(tr("前景调色板索引"));
+            background->setToolTip(tr("背景调色板索引"));
+            for (int color = 0; color < 256; ++color) {
+                QPixmap swatch(16, 16);
+                swatch.fill(QColor(red[color], green[color], blue[color]));
+                foreground->addItem(QIcon(swatch), QString::number(color), color);
+                background->addItem(QIcon(swatch), QString::number(color), color);
+            }
+            foreground->setCurrentIndex(quint16(instr.params[p]) & 0xff);
+            background->setCurrentIndex(quint16(instr.params[p]) >> 8);
+            layout->addWidget(foreground);
+            layout->addWidget(background);
+            m_paramTable->setCellWidget(p, 1, container);
+            auto update = [this, foreground, background, instrIndex, eventIndex = m_currentEvent] {
+                if (eventIndex != m_currentEvent || instrIndex != m_currentInstr) return;
+                m_events[eventIndex].instructions[instrIndex].params[5]
+                    = qint16(foreground->currentIndex() | (background->currentIndex() << 8));
+            };
+            connect(foreground, &QComboBox::currentIndexChanged, this, update);
+            connect(background, &QComboBox::currentIndexChanged, this, update);
+        }
+        if (subInstruction == 40 && p == 1) {
+            auto *container = new QWidget;
+            auto *layout = new QHBoxLayout(container);
+            layout->setContentsMargins(0, 0, 0, 0);
+            auto *variables = new QComboBox;
+            variables->setObjectName("kdef40Flags");
+            for (int value = 0; value < 8; ++value)
+                variables->addItem(tr("变量标志 %1").arg(value), value);
+            variables->setCurrentIndex(quint16(instr.params[p]) & 7);
+            auto *extra = new QSpinBox;
+            extra->setObjectName("kdef40Extra");
+            extra->setRange(0, 255);
+            extra->setPrefix(tr("最大显示项数 "));
+            extra->setValue(quint16(instr.params[p]) >> 8);
+            layout->addWidget(variables);
+            layout->addWidget(extra);
+            m_paramTable->setCellWidget(p, 1, container);
+            auto update = [this, variables, extra, instrIndex, eventIndex = m_currentEvent] {
+                if (eventIndex != m_currentEvent || instrIndex != m_currentInstr) return;
+                auto &value = m_events[eventIndex].instructions[instrIndex].params[1];
+                value = qint16((quint16(value) & 0x00f8) | variables->currentData().toInt() | (extra->value() << 8));
+            };
+            connect(variables, &QComboBox::currentIndexChanged, this, update);
+            connect(extra, &QSpinBox::valueChanged, this, update);
+        }
+        if ((subInstruction == 25 || subInstruction == 26) && p == 3 && instr.params.size() > 4) {
+            auto *address = new QLineEdit;
+            quint32 value = quint16(instr.params[3]) | (quint32(quint16(instr.params[4])) << 16);
+            address->setText(QString("0x%1").arg(value, 8, 16, QLatin1Char('0')));
+            m_paramTable->item(p, 0)->setText(tr("32位内存地址"));
+            auto *container = new QWidget;
+            auto *layout = new QHBoxLayout(container);
+            layout->setContentsMargins(0, 0, 0, 0);
+            layout->addWidget(address);
+            const auto &memory = IniConfig::instance().memoryList;
+            if (!memory.addr.isEmpty()) {
+                auto *presets = new QComboBox;
+                presets->setObjectName("kdefMemoryPresets");
+                presets->addItem(tr("常用地址"));
+                for (int index = 0; index < memory.addr.size(); ++index)
+                    presets->addItem(QString("0x%1 %2").arg(memory.addr[index], 8, 16, QLatin1Char('0'))
+                        .arg(memory.note.value(index)), memory.addr[index]);
+                layout->addWidget(presets);
+                connect(presets, &QComboBox::activated, this, [presets, address](int index) {
+                    if (index <= 0) return;
+                    address->setText(QString("0x%1").arg(presets->itemData(index).toUInt(), 8, 16, QLatin1Char('0')));
+                    QMetaObject::invokeMethod(address, "editingFinished", Qt::DirectConnection);
+                });
+            }
+            m_paramTable->setCellWidget(p, 1, container);
+            connect(address, &QLineEdit::editingFinished, this, [this, address, instrIndex, eventIndex = m_currentEvent] {
+                if (eventIndex != m_currentEvent || instrIndex != m_currentInstr) return;
+                bool valid = false;
+                QString text = address->text().trimmed();
+                if (text.startsWith("0x", Qt::CaseInsensitive)) text.remove(0, 2);
+                quint32 value = text.toUInt(&valid, 16);
+                if (!valid) return;
+                auto &parameters = m_events[eventIndex].instructions[instrIndex].params;
+                parameters[3] = qint16(value & 0xffff);
+                parameters[4] = qint16(value >> 16);
+                QSignalBlocker blocker(m_paramTable);
+                if (auto *item = m_paramTable->item(4, 1)) item->setText(QString::number(parameters[4]));
             });
         }
     }
@@ -514,12 +818,39 @@ void KDEFEdit::onMoveDown()
 
 void KDEFEdit::onCopyInstruction()
 {
-    if (m_currentEvent < 0 || m_currentInstr < 0) return;
+    if (m_currentEvent < 0 || m_currentEvent >= m_events.size()) return;
     const auto &instrs = m_events[m_currentEvent].instructions;
-    if (m_currentInstr < instrs.size()) {
-        m_clipboard.clear();
-        m_clipboard.append(instrs[m_currentInstr]);
+    QList<int> rows;
+    for (const auto &index : m_instrTable->selectionModel()->selectedRows()) rows.append(index.row());
+    if (rows.isEmpty() && m_currentInstr >= 0) rows.append(m_currentInstr);
+    std::sort(rows.begin(), rows.end());
+    QVector<KDEFInstruction> copied;
+    for (int row : rows) {
+        if (row >= 0 && row < instrs.size()) copied.append(instrs[row]);
+    }
+    if (!copied.isEmpty()) {
+        m_clipboard = copied;
         m_clipboardEvent = m_currentEvent;
+        m_clipboardTargets.clear();
+        QMap<int, int> positions;
+        int offset = 0;
+        for (const auto &instruction : instrs) {
+            positions.insert(offset, instruction.identity);
+            offset += 1 + instruction.params.size();
+        }
+        positions.insert(offset, -1);
+        offset = 0;
+        for (const auto &instruction : instrs) {
+            int end = offset + 1 + instruction.params.size();
+            for (const auto &definition : m_instrDefs) if (definition.code == instruction.code)
+                for (int parameter : {definition.yesJump, definition.noJump}) {
+                    if (parameter < 0 || parameter >= instruction.params.size() || instruction.params[parameter] == 0) continue;
+                    int target = end + instruction.params[parameter];
+                    if (positions.contains(target))
+                        m_clipboardTargets[instruction.identity].insert(parameter, positions[target]);
+                }
+            offset = end;
+        }
     }
 }
 
@@ -585,6 +916,9 @@ void KDEFEdit::mutateInstructions(int operation)
         selected = destination;
     } else {
         selected = selected < 0 ? changed.size() : selected + 1;
+        QMap<int, int> copiedIdentities;
+        for (const auto &instruction : m_clipboard)
+            copiedIdentities.insert(instruction.identity, m_nextIdentity++);
         for (auto instruction : m_clipboard) {
             int originalIdentity = instruction.identity;
             QVector<Jump> copiedJumps;
@@ -592,16 +926,33 @@ void KDEFEdit::mutateInstructions(int operation)
                 for (int parameter : {definition.yesJump, definition.noJump}) {
                     if (parameter < 0 || parameter >= instruction.params.size() || instruction.params[parameter] == 0) continue;
                     bool found = false;
-                    if (m_clipboardEvent == m_currentEvent)
+                    auto savedTargets = m_clipboardTargets.value(originalIdentity);
+                    if (m_clipboard.size() > 1 && savedTargets.contains(parameter)
+                        && copiedIdentities.contains(savedTargets[parameter])) {
+                        copiedJumps.append({originalIdentity, parameter, copiedIdentities[savedTargets[parameter]]});
+                        found = true;
+                    }
+                    if (!found && m_clipboardEvent == m_currentEvent)
                         for (const auto &jump : jumps)
                             if (jump.source == originalIdentity && jump.parameter == parameter) {
                                 copiedJumps.append(jump); found = true; break;
                             }
                     if (!found) {
-                        QMessageBox::warning(this, tr("粘贴"), tr("复制指令的跳转目标无法确定，请在原事件中重新复制")); return;
+                        QStringList targets;
+                        for (int target = 0; target < original.size(); ++target)
+                            targets.append(tr("指令 %1: %2").arg(target).arg(getKDEFName(original[target].code)));
+                        targets.append(tr("事件末尾"));
+                        bool accepted = false;
+                        QString target = QInputDialog::getItem(this, tr("选择粘贴跳转目标"),
+                            getParamName(instruction.code, parameter), targets, 0, false, &accepted);
+                        if (!accepted) return;
+                        int targetIndex = targets.indexOf(target);
+                        if (targetIndex < 0) return;
+                        copiedJumps.append({originalIdentity, parameter,
+                            targetIndex == original.size() ? -1 : original[targetIndex].identity});
                     }
                 }
-            instruction.identity = m_nextIdentity++;
+            instruction.identity = copiedIdentities[originalIdentity];
             for (auto jump : copiedJumps) {
                 jump.source = instruction.identity;
                 jumps.append(jump);
@@ -649,11 +1000,30 @@ void KDEFEdit::editTalks()
     auto *edit = new QTextEdit;
     auto *add = new QPushButton(tr("追加对话"));
     auto *remove = new QPushButton(tr("删除末尾对话"));
+    auto *arrange = new QPushButton(tr("重排星号"));
+    auto *exportTalk = new QPushButton(tr("导出全部对话"));
+    auto *arrangeWidth = new QSpinBox;
+    arrangeWidth->setObjectName("talkArrangeWidth");
+    arrange->setObjectName("talkArrange");
+    exportTalk->setObjectName("talkExport");
+    arrangeWidth->setRange(0, 32767);
+    QTemporaryFile settingsFile;
+    QString settingsPath;
+    if (prepareIniPath(config.iniPath, settingsFile, settingsPath)) {
+        QSettings settings(settingsPath, QSettings::IniFormat);
+        arrangeWidth->setValue(settings.value("KDEF/talkarrange", 0).toInt());
+    }
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel);
     layout->addWidget(list);
     layout->addWidget(edit);
     layout->addWidget(add);
     layout->addWidget(remove);
+    auto *arrangeRow = new QHBoxLayout;
+    arrangeRow->addWidget(new QLabel(tr("每行字符数")));
+    arrangeRow->addWidget(arrangeWidth);
+    arrangeRow->addWidget(arrange);
+    arrangeRow->addWidget(exportTalk);
+    layout->addLayout(arrangeRow);
     layout->addWidget(buttons);
     QStringList texts;
     for (auto bytes : records) {
@@ -682,6 +1052,31 @@ void KDEFEdit::editTalks()
         delete list->takeItem(texts.size() - 1); texts.removeLast();
     });
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(arrange, &QPushButton::clicked, &dialog, [&, edit, arrangeWidth] {
+        int width = arrangeWidth->value();
+        if (!saveTalkArrange(config.iniPath, width)) {
+            QMessageBox::warning(&dialog, tr("重排"), tr("配置保存失败，对话未修改")); return;
+        }
+        QString source = edit->toPlainText();
+        source.remove('*');
+        QString arranged;
+        for (int index = 0; index < source.size(); ++index) {
+            arranged += source[index];
+            if (width > 0 && (index + 1) % width == 0) arranged += '*';
+        }
+        edit->setPlainText(arranged);
+    });
+    connect(exportTalk, &QPushButton::clicked, &dialog, [&] {
+        QString path = QFileDialog::getSaveFileName(&dialog, tr("导出全部对话"), {}, "Text (*.txt)");
+        if (path.isEmpty()) return;
+        QString text = tr("对话文件 总数：%1\r\n\r\n").arg(texts.size());
+        for (int row = 0; row < texts.size(); ++row)
+            text += QString::number(row) + ":" + texts[row] + "\r\n\r\n";
+        QStringEncoder encoder(QStringConverter::Utf16LE);
+        QByteArray bytes = QByteArray::fromHex("fffe") + encoder(text);
+        if (!FileIO::writeFileAll(path, bytes))
+            QMessageBox::warning(&dialog, tr("导出"), tr("无法写入对话文本"));
+    });
     connect(buttons, &QDialogButtonBox::accepted, &dialog, [&, this] {
         QVector<QByteArray> encoded;
         for (int row = 0; row < texts.size(); ++row) {

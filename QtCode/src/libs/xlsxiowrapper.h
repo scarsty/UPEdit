@@ -61,7 +61,7 @@ public:
 
     static bool loadLibrary(const QString &dllPath = "xlsxwriter");
     bool create(const QString &filename);
-    void close();
+    bool close();
 
     bool addWorksheet(const QString &name = {});
     void writeString(int row, int col, const QString &value);
@@ -70,6 +70,7 @@ public:
 private:
     void *m_workbook  = nullptr;
     void *m_worksheet = nullptr;
+    bool m_failed = false;
 
     static QLibrary s_lib;
     static bool s_loaded;

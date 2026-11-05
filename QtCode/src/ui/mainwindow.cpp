@@ -111,6 +111,7 @@ void MainWindow::createMenus()
     // ── 设置菜单 ────────────────────────────────────────
     QMenu *settingsMenu = menuBar()->addMenu(tr("设置(&S)"));
     settingsMenu->addAction(tr("语言/编码(&L)..."), this, &MainWindow::onSetLanguage);
+    settingsMenu->addAction(tr("文件关联..."), this, &MainWindow::onFileRelation);
 
     // ── 窗口菜单 ────────────────────────────────────────
     m_windowMenu = menuBar()->addMenu(tr("窗口(&W)"));
@@ -198,11 +199,19 @@ static WidgetType *showOrCreateMdi(WidgetType *&ptr, QMdiArea *mdi, const QStrin
 
 void MainWindow::onSetPath()
 {
+    if (!m_mdiArea->subWindowList().isEmpty()) {
+        QMessageBox::warning(this, tr("切换路径"), tr("请先保存并关闭所有编辑器窗口，再切换游戏目录。"));
+        return;
+    }
     QString dir = QFileDialog::getExistingDirectory(this, tr("选择游戏路径"),
                                                     IniConfig::instance().gamePath);
     if (dir.isEmpty()) return;
     if (!dir.endsWith('/') && !dir.endsWith('\\'))
         dir += '/';
+    if (!saveRunPath(IniConfig::instance().iniPath, dir)) {
+        QMessageBox::warning(this, tr("切换路径"), tr("路径保存失败，游戏目录未切换。"));
+        return;
+    }
     IniConfig::instance().gamePath = dir;
     setWindowTitle(TITLE + FileIO::fileVersion(QApplication::applicationFilePath())
                    + " - " + dir);

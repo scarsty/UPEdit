@@ -17,6 +17,51 @@
 #include <QBuffer>
 #include <QDialog>
 #include <QSpinBox>
+#include <QCloseEvent>
+#include <QDialogButtonBox>
+#include <QInputDialog>
+#include <QListWidget>
+#include <QScrollArea>
+#include <QMouseEvent>
+#include <functional>
+
+class SpritePreviewLabel : public QLabel {
+public:
+    std::function<void(QPoint)> clicked;
+protected:
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        if (event->button() == Qt::LeftButton && clicked) clicked(event->position().toPoint());
+        else QLabel::mousePressEvent(event);
+    }
+};
+
+QByteArray ImagezForm::stateBytes() const
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    stream << m_imz.pngNum << m_imz.metadata;
+    for (const auto &sprite : m_imz.imzPng) {
+        stream << sprite.fileNum << sprite.x << sprite.y << sprite.frameData.size();
+        for (const auto &frame : sprite.frameData) stream << frame.data;
+    }
+    return bytes;
+}
+
+bool ImagezForm::confirmDiscard()
+{
+    if ((m_currentPath.isEmpty() && m_imz.imzPng.isEmpty()) || stateBytes() == m_savedState) return true;
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存图片修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) return false;
+    if (answer == QMessageBox::Save) { onSave(); return stateBytes() == m_savedState; }
+    return true;
+}
+
+void ImagezForm::closeEvent(QCloseEvent *event)
+{
+    if (confirmDiscard()) event->accept(); else event->ignore();
+}
 
 #include <QResizeEvent>
 #include <QMouseEvent>
@@ -82,7 +127,19 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
     m_contextMenu->addAction(tr("粘贴"), this, &ImagezForm::onPasteSprite);
     m_contextMenu->addSeparator();
     m_contextMenu->addAction(tr("插入"), this, &ImagezForm::onInsertSprite);
+    m_contextMenu->addAction(tr("从PNG插入"), this, [this] { insertPNG(false); });
+    m_contextMenu->addAction(tr("从PNG追加"), this, [this] { insertPNG(true); });
     m_contextMenu->addAction(tr("删除"), this, &ImagezForm::onDeleteSprite);
+    m_contextMenu->addAction(tr("追加贴图"), this, [this] {
+        m_currentIndex = m_imz.imzPng.size();
+        onInsertSprite();
+    });
+    m_contextMenu->addAction(tr("删除末尾贴图"), this, [this] {
+        m_currentIndex = m_imz.imzPng.size() - 1;
+        onDeleteSprite();
+    });
+    m_contextMenu->addAction(tr("设置总贴图数"), this, &ImagezForm::onSetSpriteCount);
+    m_contextMenu->addAction(tr("批量偏移"), this, &ImagezForm::onBatchOffset);
     m_contextMenu->addSeparator();
     m_contextMenu->addAction(tr("导出全部PNG"), this, &ImagezForm::onExportAllPNG);
     m_contextMenu->addAction(tr("设置战斗帧数"), this, &ImagezForm::onSetFightFrames);
@@ -101,10 +158,6 @@ ImagezForm::ImagezForm(QWidget *parent) : QWidget(parent)
 
 void ImagezForm::openImzFile(const QString &path)
 {
-    m_modePngFolder->setChecked(QFileInfo(path).isDir());
-    m_modePngZip->setChecked(!QFileInfo(path).isDir());
-    m_fileEdit->setText(path);
-    m_currentPath = path;
     if (QFileInfo(path).isDir()) readImzFromFolder(path);
     else readImzFromFile(path);
     drawImz();
@@ -112,16 +165,39 @@ void ImagezForm::openImzFile(const QString &path)
 
 void ImagezForm::readImzFromFile(const QString &path)
 {
+    if (!confirmDiscard()) return;
+    Imz loaded;
+    if (!ImzIO::readImz(path, loaded)) {
+        QMessageBox::warning(this, tr("打开"), tr("图片文件读取失败，当前会话未改变。"));
+        return;
+    }
+    m_imz = loaded;
+    m_savedState = stateBytes();
+    m_currentPath = path;
+    QFile source(path);
+    m_legacyImz = source.open(QIODevice::ReadOnly) && !source.peek(4).startsWith("PK");
+    m_fileEdit->setText(path);
     m_modePngZip->setChecked(true);
+    m_modePngFolder->setChecked(false);
     m_originalFolderFiles.clear();
-    ImzIO::readImz(path, m_imz);
     updateScrollRange();
 }
 
 void ImagezForm::readImzFromFolder(const QString &dir)
 {
+    if (!confirmDiscard()) return;
+    Imz loaded;
+    if (!ImzIO::readImzFromFolder(dir, loaded)) {
+        QMessageBox::warning(this, tr("打开"), tr("图片目录读取失败，当前会话未改变。"));
+        return;
+    }
+    m_imz = loaded;
+    m_savedState = stateBytes();
+    m_currentPath = dir;
+    m_legacyImz = false;
+    m_fileEdit->setText(dir);
     m_modePngFolder->setChecked(true);
-    ImzIO::readImzFromFolder(dir, m_imz);
+    m_modePngZip->setChecked(false);
     m_originalFolderFiles.clear();
     for (const auto &sprite : m_imz.imzPng)
         m_originalFolderFiles.append(QDir(dir).entryList({QString("%1.png").arg(sprite.fileNum),
@@ -133,8 +209,6 @@ void ImagezForm::onRead()
 {
     QString f = QFileDialog::getOpenFileName(this, tr("打开PNG压缩包"), {}, "ZIP (*.zip);;All (*.*)");
     if (f.isEmpty()) return;
-    m_fileEdit->setText(f);
-    m_currentPath = f;
     readImzFromFile(f);
     drawImz();
 }
@@ -143,8 +217,6 @@ void ImagezForm::onReadFolder()
 {
     QString d = QFileDialog::getExistingDirectory(this, tr("选择PNG文件夹"));
     if (d.isEmpty()) return;
-    m_fileEdit->setText(d);
-    m_currentPath = d;
     readImzFromFolder(d);
     drawImz();
 }
@@ -263,6 +335,7 @@ void ImagezForm::onSave()
     bool saved = m_modePngFolder->isChecked() ? ImzIO::saveFolder(m_currentPath, m_imz, m_originalFolderFiles)
         : ImzIO::saveImz(m_currentPath, m_imz);
     if (!saved) { QMessageBox::warning(this, tr("保存"), tr("保存失败")); return; }
+    m_savedState = stateBytes();
     m_originalFolderFiles.clear();
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
@@ -298,13 +371,22 @@ void ImagezForm::onEditSprite()
     ImzPng working = ip;
 
     QImage img = drawImzPNG(m_currentIndex);
-    if (img.isNull()) return;
 
     QDialog dlg(this);
     dlg.setWindowTitle(tr("编辑偏移 - %1").arg(ip.fileNum));
     auto *lay = new QVBoxLayout(&dlg);
 
-    auto *imgLabel = new QLabel;
+    auto *imgLabel = new SpritePreviewLabel;
+    imgLabel->setObjectName("spritePreview");
+    auto *previewScroll = new QScrollArea;
+    previewScroll->setWidget(imgLabel);
+    auto *thumbnails = new QListWidget;
+    thumbnails->setObjectName("spriteFrames");
+    thumbnails->setViewMode(QListView::IconMode);
+    thumbnails->setFlow(QListView::LeftToRight);
+    thumbnails->setWrapping(false);
+    thumbnails->setIconSize(QSize(64, 64));
+    thumbnails->setFixedHeight(104);
     auto *frameSpin = new QSpinBox;
     frameSpin->setRange(0, qMax(0, working.frameData.size() - 1));
     frameSpin->setValue(m_animFrame % qMax(1, working.frameData.size()));
@@ -314,8 +396,8 @@ void ImagezForm::onEditSprite()
     for (const auto &title : {tr("插入"), tr("追加"), tr("替换"), tr("删除"), tr("导出")})
         frameRow->addWidget(new QPushButton(title));
     auto *formLay = new QHBoxLayout;
-    auto *xSpin = new QSpinBox; xSpin->setRange(-9999, 9999); xSpin->setValue(ip.x);
-    auto *ySpin = new QSpinBox; ySpin->setRange(-9999, 9999); ySpin->setValue(ip.y);
+    auto *xSpin = new QSpinBox; xSpin->setRange(-32768, 32767); xSpin->setValue(ip.x);
+    auto *ySpin = new QSpinBox; ySpin->setRange(-32768, 32767); ySpin->setValue(ip.y);
     formLay->addWidget(new QLabel(tr("X偏移:")));
     formLay->addWidget(xSpin);
     formLay->addWidget(new QLabel(tr("Y偏移:")));
@@ -328,15 +410,31 @@ void ImagezForm::onEditSprite()
     btnBox->addWidget(btnOk);
     btnBox->addWidget(btnCancel);
 
-    lay->addWidget(imgLabel, 1);
+    lay->addWidget(thumbnails);
+    lay->addWidget(previewScroll, 1);
     lay->addLayout(frameRow);
     lay->addLayout(formLay);
     lay->addLayout(btnBox);
 
     // 绘制带红色十字的预览
     auto updatePreview = [&]() {
+        QSignalBlocker blocker(thumbnails);
+        thumbnails->clear();
+        for (int frame = 0; frame < working.frameData.size(); ++frame) {
+            auto *item = new QListWidgetItem(QIcon(QPixmap::fromImage(QImage::fromData(working.frameData[frame].data))), QString::number(frame));
+            thumbnails->addItem(item);
+        }
+        thumbnails->setCurrentRow(frameSpin->value());
+        bool hasFrame = !working.frameData.isEmpty();
+        frameSpin->setEnabled(hasFrame);
+        for (int operation = 2; operation < 5; ++operation)
+            frameRow->itemAt(operation + 2)->widget()->setEnabled(hasFrame && (operation != 3 || working.frameData.size() > 1));
         img = frameSpin->value() < working.frameData.size() ? QImage::fromData(working.frameData[frameSpin->value()].data) : QImage();
         QImage preview = img.copy();
+        if (preview.isNull()) {
+            preview = QImage(160, 100, QImage::Format_ARGB32);
+            preview.fill(Qt::transparent);
+        }
         QPainter p(&preview);
         int ox = xSpin->value(), oy = ySpin->value();
         p.setPen(QPen(Qt::red, 1));
@@ -344,8 +442,17 @@ void ImagezForm::onEditSprite()
         p.drawLine(ox, oy - 10, ox, oy + 10);
         p.end();
         imgLabel->setPixmap(QPixmap::fromImage(preview));
+        imgLabel->setFixedSize(preview.size());
     };
     updatePreview();
+    imgLabel->clicked = [&](QPoint position) {
+        if (img.isNull() || !img.rect().contains(position)) return;
+        xSpin->setValue(position.x());
+        ySpin->setValue(position.y());
+    };
+    connect(thumbnails, &QListWidget::currentRowChanged, &dlg, [frameSpin](int row) {
+        if (row >= 0) frameSpin->setValue(row);
+    });
     connect(frameSpin, QOverload<int>::of(&QSpinBox::valueChanged), &dlg, [&](int) { updatePreview(); });
     for (int operation = 0; operation < 5; ++operation) {
         auto *button = qobject_cast<QPushButton *>(frameRow->itemAt(operation + 2)->widget());
@@ -402,14 +509,14 @@ void ImagezForm::onCopySprite()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
     QImage img = drawImzPNG(m_currentIndex);
-    if (!img.isNull()) {
+    {
         const auto &sprite = m_imz.imzPng[m_currentIndex];
         QByteArray bytes;
         QDataStream stream(&bytes, QIODevice::WriteOnly);
         stream << qint16(sprite.x) << qint16(sprite.y) << qint32(sprite.frameData.size());
         for (const auto &frame : sprite.frameData) stream << frame.data;
         auto *mime = new QMimeData;
-        mime->setImageData(img);
+        if (!img.isNull()) mime->setImageData(img);
         mime->setData("application/x-upedit-sprite", bytes);
         QApplication::clipboard()->setMimeData(mime);
     }
@@ -425,7 +532,7 @@ void ImagezForm::onPasteSprite()
         qint16 x, y;
         qint32 count;
         stream >> x >> y >> count;
-        if (count < 1 || count > 10000) return;
+        if (stream.status() != QDataStream::Ok || count < 0 || count > 10000) return;
         sprite.x = x; sprite.y = y;
         sprite.fileNum = m_imz.imzPng[m_currentIndex].fileNum;
         sprite.frame = count;
@@ -437,6 +544,7 @@ void ImagezForm::onPasteSprite()
             sprite.frameLen[index] = sprite.frameData[index].data.size();
             sprite.len += sprite.frameLen[index];
         }
+        if (stream.status() != QDataStream::Ok || !stream.atEnd()) return;
         m_imz.imzPng[m_currentIndex] = sprite;
         drawImz();
         return;
@@ -471,9 +579,32 @@ void ImagezForm::onDeleteSprite()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
     m_imz.imzPng.removeAt(m_currentIndex);
+    if (m_legacyImz)
+        for (int index = 0; index < m_imz.imzPng.size(); ++index) m_imz.imzPng[index].fileNum = index;
     m_imz.pngNum = m_imz.imzPng.size();
     m_currentIndex = qMin(m_currentIndex, m_imz.pngNum - 1);
     updateScrollRange();
+    drawImz();
+}
+
+void ImagezForm::insertPNG(bool append)
+{
+    QString path = QFileDialog::getOpenFileName(this, tr("选择PNG贴图"), {}, "PNG (*.png)");
+    if (path.isEmpty()) return;
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        QMessageBox::warning(this, tr("插入"), tr("无法读取PNG")); return;
+    }
+    QByteArray bytes = file.readAll();
+    if (file.error() != QFileDevice::NoError || QImage::fromData(bytes, "PNG").isNull()) {
+        QMessageBox::warning(this, tr("插入"), tr("PNG无效，未修改贴图")); return;
+    }
+    m_currentIndex = append ? m_imz.imzPng.size() : qBound(0, m_currentIndex, int(m_imz.imzPng.size()));
+    onInsertSprite();
+    auto &sprite = m_imz.imzPng[m_currentIndex];
+    sprite.frameData[0].data = bytes;
+    sprite.frameLen = {int(bytes.size())};
+    sprite.len = bytes.size();
     drawImz();
 }
 
@@ -492,6 +623,8 @@ void ImagezForm::onInsertSprite()
     newSprite.frameLen = {int(newSprite.frameData[0].data.size())};
     newSprite.len = newSprite.frameLen[0];
     m_imz.imzPng.insert(m_currentIndex, newSprite);
+    if (m_legacyImz)
+        for (int index = 0; index < m_imz.imzPng.size(); ++index) m_imz.imzPng[index].fileNum = index;
     m_imz.pngNum = m_imz.imzPng.size();
     updateScrollRange();
     drawImz();
@@ -506,10 +639,93 @@ void ImagezForm::onExportAllPNG()
     QMessageBox::information(this, tr("导出"), tr("导出完成"));
 }
 
+bool ImagezForm::applyBatchOffset(int first, int last, int axis, int operation, int value)
+{
+    if (first > last) qSwap(first, last);
+    if (first < 0 || last >= m_imz.imzPng.size() || axis < 0 || axis > 2
+        || operation < 0 || operation > 4 || (operation == 4 && value == 0)) return false;
+    auto pictures = m_imz.imzPng;
+    for (int index = first; index <= last; ++index) {
+        for (int component = 0; component < 2; ++component) {
+            if (axis != 2 && component != axis) continue;
+            qint64 result = component == 0 ? pictures[index].x : pictures[index].y;
+            switch (operation) {
+            case 0: result = value; break;
+            case 1: result += value; break;
+            case 2: result -= value; break;
+            case 3: result *= value; break;
+            case 4: result /= value; break;
+            }
+            if (result < -32768 || result > 32767) return false;
+            if (component == 0) pictures[index].x = int(result);
+            else pictures[index].y = int(result);
+        }
+    }
+    m_imz.imzPng = pictures;
+    drawImz();
+    return true;
+}
+
+void ImagezForm::onBatchOffset()
+{
+    if (m_imz.imzPng.isEmpty()) return;
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("批量偏移"));
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *first = new QSpinBox;
+    auto *last = new QSpinBox;
+    first->setRange(0, m_imz.imzPng.size() - 1);
+    last->setRange(0, m_imz.imzPng.size() - 1);
+    last->setValue(m_imz.imzPng.size() - 1);
+    auto *axis = new QComboBox;
+    axis->addItems({tr("X"), tr("Y"), tr("X 和 Y")});
+    auto *operation = new QComboBox;
+    operation->addItems({tr("赋值"), tr("加"), tr("减"), tr("乘"), tr("除")});
+    auto *value = new QSpinBox;
+    value->setRange(-32768, 32767);
+    for (auto *widget : QList<QWidget *>{new QLabel(tr("起始列表位置")), first,
+        new QLabel(tr("结束列表位置")), last, axis, operation, value}) layout->addWidget(widget);
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    layout->addWidget(buttons);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, [&] {
+        if (!applyBatchOffset(first->value(), last->value(), axis->currentIndex(), operation->currentIndex(), value->value())) {
+            QMessageBox::warning(&dialog, tr("批量偏移"), tr("运算越界或除数为零，未修改任何贴图")); return;
+        }
+        dialog.accept();
+    });
+    dialog.exec();
+}
+
+void ImagezForm::onSetSpriteCount()
+{
+    bool accepted = false;
+    int count = QInputDialog::getInt(this, tr("设置总贴图数"), tr("数量"), m_imz.imzPng.size(), 0, 100000, 1, &accepted);
+    if (!accepted || count == m_imz.imzPng.size()) return;
+    if (count < m_imz.imzPng.size()) {
+        if (QMessageBox::question(this, tr("缩减贴图"), tr("删除超出新数量的末尾贴图？")) != QMessageBox::Yes) return;
+        m_imz.imzPng.resize(count);
+    } else {
+        int nextId = 0;
+        for (const auto &sprite : m_imz.imzPng) nextId = qMax(nextId, sprite.fileNum + 1);
+        while (m_imz.imzPng.size() < count) {
+            ImzPng sprite;
+            sprite.fileNum = nextId++;
+            m_imz.imzPng.append(sprite);
+        }
+    }
+    if (m_legacyImz)
+        for (int index = 0; index < count; ++index) m_imz.imzPng[index].fileNum = index;
+    m_imz.pngNum = count;
+    m_currentIndex = qMin(m_currentIndex, count - 1);
+    updateScrollRange();
+    drawImz();
+}
+
 void ImagezForm::onSetFightFrames()
 {
     FightFrameForm dialog(this);
-    QString content;
+    QString content = QString::fromLocal8Bit(m_imz.metadata.value("fightframe.txt"));
     if (QFileInfo(m_currentPath).isDir()) {
         QFile file(QDir(m_currentPath).filePath("fightframe.txt"));
         if (file.open(QIODevice::ReadOnly)) content = QString::fromLocal8Bit(file.readAll());
@@ -527,17 +743,18 @@ void ImagezForm::onSetFightFrames()
         QByteArray data = dialog.content().toLocal8Bit();
         bool saved = false;
         if (QFileInfo(m_currentPath).isDir()) {
-            QFile file(QDir(m_currentPath).filePath("fightframe.txt"));
-            if (file.open(QIODevice::WriteOnly)) {
-                saved = file.write(data) == data.size();
-                file.close();
-            }
+            saved = FileIO::writeFileAll(QDir(m_currentPath).filePath("fightframe.txt"), data);
         } else if (!m_currentPath.isEmpty()) {
-            ZipFile zip;
-            zip.openWrite(m_currentPath.toLocal8Bit().toStdString());
-            if (zip.opened()) {
-                saved = zip.addData("fightframe.txt", data.constData(), data.size()) && zip.commit();
+            Imz updated;
+            if (ImzIO::readImz(m_currentPath, updated)) {
+                updated.metadata.insert("fightframe.txt", data);
+                saved = ImzIO::saveImz(m_currentPath, updated);
             }
+        }
+        if (saved) {
+            bool wasClean = stateBytes() == m_savedState;
+            m_imz.metadata.insert("fightframe.txt", data);
+            if (wasClean) m_savedState = stateBytes();
         }
         if (saved) QMessageBox::information(this, tr("战斗帧"), tr("战斗帧设置已保存"));
         else QMessageBox::warning(this, tr("战斗帧"), tr("战斗帧文件保存失败"));
@@ -555,15 +772,6 @@ void ImagezForm::onPack()
     if (!ImzIO::readImzFromFolder(src, imz) || !ImzIO::saveImz(dst, imz)) {
         QMessageBox::warning(this, tr("打包"), tr("打包失败")); return;
     }
-    QFile metadata(QDir(src).filePath("fightframe.txt"));
-    if (metadata.open(QIODevice::ReadOnly)) {
-        QByteArray bytes = metadata.readAll();
-        ZipFile zip;
-        zip.openWrite(dst.toLocal8Bit().toStdString());
-        if (!zip.addData("fightframe.txt", bytes.constData(), bytes.size()) || !zip.commit()) {
-            QMessageBox::warning(this, tr("打包"), tr("战斗帧配置写入失败")); return;
-        }
-    }
     QMessageBox::information(this, tr("打包"), tr("打包完成"));
 }
 
@@ -577,16 +785,6 @@ void ImagezForm::onUnpack()
     Imz imz;
     if (!ImzIO::readImz(src, imz) || !ImzIO::saveFolder(dst, imz)) {
         QMessageBox::warning(this, tr("解包"), tr("解包失败")); return;
-    }
-    ZipFile zip;
-    zip.openRead(src.toLocal8Bit().toStdString());
-    for (const auto &entry : zip.getFileNames()) {
-        if (entry != "fightframe.txt") continue;
-        std::string bytes = zip.readFile(entry);
-        QFile file(QDir(dst).filePath("fightframe.txt"));
-        if (!file.open(QIODevice::WriteOnly) || file.write(bytes.data(), bytes.size()) != qint64(bytes.size())) {
-            QMessageBox::warning(this, tr("解包"), tr("战斗帧配置写入失败")); return;
-        }
     }
     QMessageBox::information(this, tr("解包"), tr("解包完成"));
 }

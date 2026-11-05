@@ -31,6 +31,9 @@ private slots:
     void onPasteSprite();
     void onDeleteSprite();
     void onInsertSprite();
+    void insertPNG(bool append);
+    void onBatchOffset();
+    void onSetSpriteCount();
     void onExportAllPNG();
     void onSetFightFrames();
     void onPack();
@@ -38,6 +41,10 @@ private slots:
 
 private:
     friend int runSelfTests(const QString &reportPath);
+    QByteArray stateBytes() const;
+    bool applyBatchOffset(int first, int last, int axis, int operation, int value);
+    bool confirmDiscard();
+    QByteArray m_savedState;
     int spriteIndexAt(const QPoint &position) const;
     void readImzFromFile(const QString &path);
     void readImzFromFolder(const QString &dir);
@@ -46,6 +53,7 @@ private:
     QImage drawImzPNG(int index);
 
 protected:
+    void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *e) override;
     void mousePressEvent(QMouseEvent *e) override;
 
@@ -63,5 +71,6 @@ protected:
     int m_currentIndex = -1;
     int m_animFrame = 0;
     QString m_currentPath;
+    bool m_legacyImz = false;
     QStringList m_originalFolderFiles;
 };

@@ -1,4 +1,5 @@
 #include "mapdata.h"
+#include <QtEndian>
 #include "fileio.h"
 #include <QFile>
 #include <cstring>
@@ -38,10 +39,16 @@ QImage MapIO::renderMainMap(const Map &map, const QVector<QImage> &tiles, const 
                             bool ground, bool surface, bool building, int scale, int zoom,
                             const std::function<bool(int)> &progress)
 {
-    if (map.layerNum < 3 || map.x <= 0 || map.y <= 0 || scale <= 0 || zoom <= 0) return {};
+    if (map.layerNum < 3 || map.mapLayer.size() < 3 || map.x <= 0 || map.y <= 0
+        || map.x > 32767 || map.y > 32767 || scale <= 0 || scale > 64 || zoom <= 0 || zoom > 10000) return {};
+    for (int layer = 0; layer < 3; ++layer) {
+        if (map.mapLayer[layer].pic.size() < map.x) return {};
+        for (int column = 0; column < map.x; ++column)
+            if (map.mapLayer[layer].pic[column].size() < map.y) return {};
+    }
     double factor = zoom / 100.0;
-    qint64 width = qint64(((map.x + map.y) * 18 + 80) * scale * factor);
-    qint64 height = qint64(((map.x + map.y) * 9 + 60) * scale * factor);
+    qint64 width = qint64((qint64(map.x + map.y) * 18 + 80) * scale * factor);
+    qint64 height = qint64((qint64(map.x + map.y) * 9 + 60) * scale * factor);
     if (width <= 0 || height <= 0 || width > 32767 || height > 32767 || width * height > 300000000) return {};
     QImage image(int(width), int(height), QImage::Format_ARGB32);
     if (image.isNull()) return {};
@@ -240,28 +247,33 @@ void MapIO::saveMap(const QString &idxFile, const QString &grpFile, const MapStr
 
 bool MapIO::readSingleMap(const QByteArray &data, int offset, Map &m, int layerNum, int width, int height)
 {
-    m.layerNum = layerNum;
-    m.x = width;
-    m.y = height;
-    m.mapLayer.resize(layerNum);
+    if (offset < 0 || offset > data.size() || layerNum <= 0 || layerNum > 64
+        || width <= 0 || height <= 0 || width > 32767 || height > 32767) return false;
+    qint64 valueCount = qint64(layerNum) * width * height;
+    if (valueCount > (data.size() - offset) / 2) return false;
+    Map decoded;
+    decoded.layerNum = layerNum;
+    decoded.x = width;
+    decoded.y = height;
+    decoded.mapLayer.resize(layerNum);
 
-    const int16_t *p = reinterpret_cast<const int16_t *>(data.constData() + offset);
-    int maxIdx = (data.size() - offset) / 2;
-    int idx = 0;
+    const char *bytes = data.constData() + offset;
+    qint64 position = 0;
 
     for (int l = 0; l < layerNum; ++l) {
-        m.mapLayer[l].pic.resize(width);
+        decoded.mapLayer[l].pic.resize(width);
         for (int x = 0; x < width; ++x)
-            m.mapLayer[l].pic[x].resize(height, 0);
+            decoded.mapLayer[l].pic[x].resize(height, 0);
 
         // 按行(y)读取，匹配 Delphi
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
-                if (idx < maxIdx)
-                    m.mapLayer[l].pic[x][y] = p[idx++];
+                decoded.mapLayer[l].pic[x][y] = qFromLittleEndian<qint16>(bytes + position);
+                position += 2;
             }
         }
     }
+    m = decoded;
     return true;
 }
 

@@ -50,6 +50,8 @@ private:
     void closeEvent(QCloseEvent *event) override;
     QByteArray stateBytes() const;
     bool confirmDiscard();
+    bool importXlsx(const QString &filename);
+    bool exportXlsx(const QString &filename);
     QByteArray m_savedState;
     int m_loadedSlot = -1;
     void setupUI();

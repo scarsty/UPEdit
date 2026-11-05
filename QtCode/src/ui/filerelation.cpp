@@ -5,6 +5,9 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QApplication>
+#include <QSettings>
+#include <QDir>
+#include <QRegularExpression>
 
 #ifdef Q_OS_WIN
 #include <QSettings>
@@ -27,6 +30,8 @@ FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
     m_jpgCheck = new QCheckBox(tr("*.jpg — GRP导入"));
     m_gifCheck = new QCheckBox(tr("*.gif — GRP导入"));
     m_imzCheck = new QCheckBox(tr("*.imz — IMZ编辑器"));
+    m_zipCheck = new QCheckBox(tr("*.zip - PNG压缩包编辑器"));
+    m_jpegCheck = new QCheckBox(tr("*.jpeg - GRP导入"));
 
     layout->addWidget(m_grpCheck);
     layout->addWidget(m_idxCheck);
@@ -36,6 +41,8 @@ FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
     layout->addWidget(m_jpgCheck);
     layout->addWidget(m_gifCheck);
     layout->addWidget(m_imzCheck);
+    layout->addWidget(m_zipCheck);
+    layout->addWidget(m_jpegCheck);
 
     auto *btnRow = new QHBoxLayout;
     auto *btnOK = new QPushButton(tr("确定"));
@@ -49,37 +56,45 @@ FileRelation::FileRelation(QWidget *parent) : QDialog(parent)
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
 }
 
-void FileRelation::registerFileType(const QString &ext, const QString &desc, const QString &icon)
+bool FileRelation::registerFileType(QSettings &classes, const QString &ext, const QString &desc, const QString &appPath)
 {
-#ifdef Q_OS_WIN
-    QString appPath = QApplication::applicationFilePath().replace('/', '\\');
+    if (!QRegularExpression("^[a-z0-9]+$").match(ext).hasMatch()
+        || appPath.isEmpty() || appPath.contains('"') || appPath.contains('\n') || appPath.contains('\r')) return false;
     QString progId = "UPEdit." + ext;
 
-    QSettings classes("HKEY_CURRENT_USER\\Software\\Classes", QSettings::NativeFormat);
-    classes.setValue("." + ext + "/Default", progId);
     classes.setValue(progId + "/Default", desc);
-    classes.setValue(progId + "/DefaultIcon/Default", appPath + ",0");
+    classes.setValue(progId + "/DefaultIcon/Default", "\"" + appPath + "\",0");
     classes.setValue(progId + "/shell/open/command/Default",
                     "\"" + appPath + "\" \"%1\"");
-
-    // Notify shell
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
-#else
-    Q_UNUSED(ext); Q_UNUSED(desc); Q_UNUSED(icon);
-#endif
+    classes.sync();
+    if (classes.status() != QSettings::NoError) return false;
+    classes.setValue("." + ext + "/OpenWithProgids/" + progId, QString());
+    classes.setValue("." + ext + "/Default", progId);
+    classes.sync();
+    return classes.status() == QSettings::NoError;
 }
 
 void FileRelation::onConfirm()
 {
-    if (m_grpCheck->isChecked()) registerFileType("grp", "GRP Sprite File", "");
-    if (m_idxCheck->isChecked()) registerFileType("idx", "IDX Index File", "");
-    if (m_picCheck->isChecked()) registerFileType("pic", "PIC Image File", "");
-    if (m_bmpCheck->isChecked()) registerFileType("bmp", "BMP Image File", "");
-    if (m_pngCheck->isChecked()) registerFileType("png", "PNG Image File", "");
-    if (m_jpgCheck->isChecked()) registerFileType("jpg", "JPEG Image File", "");
-    if (m_gifCheck->isChecked()) registerFileType("gif", "GIF Image File", "");
-    if (m_imzCheck->isChecked()) registerFileType("imz", "IMZ Sprite Container", "");
-
-    QMessageBox::information(this, tr("完成"), tr("文件关联设置完成"));
+#ifdef Q_OS_WIN
+    QSettings classes("HKEY_CURRENT_USER\\Software\\Classes", QSettings::NativeFormat);
+    QString appPath = QDir::toNativeSeparators(QApplication::applicationFilePath());
+    const QList<QPair<QCheckBox *, QString>> types = {
+        {m_grpCheck, "grp"}, {m_idxCheck, "idx"}, {m_picCheck, "pic"}, {m_bmpCheck, "bmp"},
+        {m_pngCheck, "png"}, {m_jpgCheck, "jpg"}, {m_jpegCheck, "jpeg"}, {m_gifCheck, "gif"},
+        {m_imzCheck, "imz"}, {m_zipCheck, "zip"}};
+    QStringList failed;
+    for (const auto &type : types)
+        if (type.first->isChecked() && !registerFileType(classes, type.second, "UPEdit " + type.second, appPath))
+            failed.append("." + type.second);
+    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    if (!failed.isEmpty()) {
+        QMessageBox::warning(this, tr("文件关联"), tr("以下类型登记失败：%1").arg(failed.join(", ")));
+        return;
+    }
+    QMessageBox::information(this, tr("完成"), tr("打开方式已登记。Windows 默认应用选择可能仍需在系统设置中确认。"));
     accept();
+#else
+    QMessageBox::warning(this, tr("文件关联"), tr("当前平台不支持此登记方式。"));
+#endif
 }

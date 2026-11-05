@@ -15,7 +15,10 @@
 #include <QApplication>
 #include <QMouseEvent>
 #include <QIntValidator>
+#include <QCloseEvent>
+#include <QScopedValueRollback>
 #include "fileio.h"
+#include "iniconfig.h"
 
 // ========= PNGImport =========
 
@@ -64,24 +67,30 @@ PNGImport::PNGImport(QWidget *parent) : QWidget(parent)
     connect(btnStart, &QPushButton::clicked, this, &PNGImport::onStartImport);
 }
 
-void PNGImport::loadPalette(const QString &path)
+bool PNGImport::loadPalette(const QString &path)
 {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly)) return false;
     QByteArray data = file.readAll();
-    m_palette.resize(256);
-    for (int i = 0; i < 256 && i * 3 + 2 < data.size(); ++i) {
+    if (file.error() != QFileDevice::NoError || data.size() < 768) return false;
+    QVector<QRgb> palette(256);
+    for (int i = 0; i < 256; ++i) {
         int r = (uint8_t)data[i * 3] << 2;
         int g = (uint8_t)data[i * 3 + 1] << 2;
         int b = (uint8_t)data[i * 3 + 2] << 2;
-        m_palette[i] = qRgb(qMin(r, 255), qMin(g, 255), qMin(b, 255));
+        palette[i] = qRgb(qMin(r, 255), qMin(g, 255), qMin(b, 255));
     }
+    m_palette = palette;
+    return true;
 }
 
 void PNGImport::onOpenCol()
 {
     QString f = QFileDialog::getOpenFileName(this, tr("选择COL"), {}, "COL (*.col)");
-    if (!f.isEmpty()) { m_colEdit->setText(f); loadPalette(f); }
+    if (!f.isEmpty()) {
+        if (loadPalette(f)) m_colEdit->setText(f);
+        else QMessageBox::warning(this, tr("COL"), tr("调色板无法读取或不足 256 色"));
+    }
 }
 
 void PNGImport::onOpenIdx()
@@ -140,7 +149,7 @@ void PNGImport::onDeleteEntry()
 
 void PNGImport::onStartImport()
 {
-    if (m_idxEdit->text().isEmpty() || m_grpEdit->text().isEmpty()) return;
+    if (m_entries.isEmpty() || m_idxEdit->text().isEmpty() || m_grpEdit->text().isEmpty()) return;
 
     // 加载现有 GRP
     QVector<GrpPic> grpPics;
@@ -154,6 +163,10 @@ void PNGImport::onStartImport()
 
     for (int i = 0; i < m_entries.size(); ++i) {
         const auto &entry = m_entries[i];
+        if (entry.xOff < SHRT_MIN || entry.xOff > SHRT_MAX || entry.yOff < SHRT_MIN || entry.yOff > SHRT_MAX) {
+            m_progress->setVisible(false);
+            QMessageBox::warning(this, tr("导入"), tr("图片偏移超出 int16 范围")); return;
+        }
         QImage img(entry.fileName);
         if (img.isNull() || (!entry.keepPNG && m_palette.size() != 256)) {
             m_progress->setVisible(false);
@@ -340,6 +353,7 @@ PNGExport::PNGExport(QWidget *parent) : QDialog(parent)
 
 void PNGExport::startExport(const QVector<GrpPic> &pics, const QVector<QRgb> &palette)
 {
+    if (m_exporting) return;
     m_pics = pics;
     m_palette = palette;
     show();
@@ -353,48 +367,80 @@ void PNGExport::onSelectPath()
 
 void PNGExport::onStart()
 {
-    if (m_running) return;
+    if (m_exporting) return;
     QString dir = m_pathEdit->text();
     if (dir.isEmpty() || m_pics.isEmpty()) return;
+    QString indexName = IniConfig::instance().imzIndexFileName;
+    if (indexName.isEmpty() || indexName == "." || indexName == ".."
+        || indexName.contains('/') || indexName.contains('\\') || indexName.contains(':')
+        || indexName.endsWith('.') || indexName.endsWith(' ')
+        || indexName.endsWith(".png", Qt::CaseInsensitive)) {
+        m_statusLabel->setText(tr("索引文件名无效")); return;
+    }
 
+    QScopedValueRollback<bool> exporting(m_exporting, true);
     m_running = true;
     m_progress->setRange(0, m_pics.size());
 
-    QFile ka(dir + "/index.ka");
-    if (!ka.open(QIODevice::WriteOnly)) { m_running = false; m_statusLabel->setText(tr("索引无法写入")); return; }
-    QDataStream ds(&ka);
+    QByteArray metadata;
+    QDataStream ds(&metadata, QIODevice::WriteOnly);
     ds.setByteOrder(QDataStream::LittleEndian);
+    QMap<QString, QByteArray> files;
 
     for (int i = 0; i < m_pics.size() && m_running; ++i) {
         const auto &pic = m_pics[i];
-        // 判断是否为 PNG
-        bool isPNG = pic.data.size() > 4 && (uint8_t)pic.data[1] == 'P' && (uint8_t)pic.data[2] == 'N';
-
-        if (isPNG) {
-            QFile f(dir + "/" + QString::number(i) + ".png");
-            if (!f.open(QIODevice::WriteOnly) || f.write(pic.data) != pic.data.size()) {
-                m_running = false; m_statusLabel->setText(tr("图片写入失败")); return;
+        if (pic.xoff < SHRT_MIN || pic.xoff > SHRT_MAX || pic.yoff < SHRT_MIN || pic.yoff > SHRT_MAX) {
+            m_running = false; m_statusLabel->setText(tr("偏移超出索引范围")); return;
+        }
+        QByteArray bytes;
+        if (GrpIO::isPNG(pic)) {
+            if (QImage::fromData(pic.data, "PNG").isNull()) {
+                m_running = false; m_statusLabel->setText(tr("PNG图片无效")); return;
             }
+            bytes = pic.data;
         } else if (pic.width > 0 && pic.height > 0) {
+            if (m_palette.size() != 256) {
+                m_running = false; m_statusLabel->setText(tr("需要完整的 256 色调色板")); return;
+            }
             uint8_t pr[256]{}, pg[256]{}, pb[256]{};
             for (int j = 0; j < 256 && j < m_palette.size(); ++j) {
                 pr[j] = qRed(m_palette[j]); pg[j] = qGreen(m_palette[j]); pb[j] = qBlue(m_palette[j]);
             }
             QImage img = GrpIO::decodeRLE(pic, pr, pg, pb);
-            if (!img.save(dir + "/" + QString::number(i) + ".png")) {
-                m_running = false; m_statusLabel->setText(tr("图片写入失败")); return;
+            QBuffer buffer(&bytes);
+            if (img.isNull() || !img.save(&buffer, "PNG")) {
+                m_running = false; m_statusLabel->setText(tr("图片解码失败")); return;
             }
         }
-
+        if (bytes.isEmpty() && !pic.data.isEmpty()) {
+            m_running = false; m_statusLabel->setText(tr("图片数据无效")); return;
+        }
+        if (!bytes.isEmpty()) files.insert(QDir(dir).filePath(QString::number(i) + ".png"), bytes);
         ds << (int16_t)pic.xoff << (int16_t)pic.yoff;
         m_progress->setValue(i + 1);
         m_statusLabel->setText(tr("正在导出 %1/%2").arg(i + 1).arg(m_pics.size()));
         QApplication::processEvents();
     }
 
-    bool completed = m_running && ds.status() == QDataStream::Ok && ka.flush();
+    bool completed = m_running && ds.status() == QDataStream::Ok;
+    if (completed) {
+        files.insert(QDir(dir).filePath(indexName), metadata);
+        completed = FileIO::writeFiles(files);
+    }
     m_running = false;
     m_statusLabel->setText(completed ? tr("导出完成") : tr("导出中止或索引写入失败"));
 }
 
 void PNGExport::onStop() { m_running = false; }
+
+void PNGExport::reject()
+{
+    m_running = false;
+    QDialog::reject();
+}
+
+void PNGExport::closeEvent(QCloseEvent *event)
+{
+    m_running = false;
+    QDialog::closeEvent(event);
+}

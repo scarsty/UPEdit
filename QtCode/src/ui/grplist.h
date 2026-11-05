@@ -12,6 +12,7 @@
 // GRP 组贴图浏览器 (对应 Delphi TForm3)
 class GrpList : public QWidget {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit GrpList(QWidget *parent = nullptr);
 
@@ -36,6 +37,10 @@ private slots:
     void onInsertBefore();
     void onExportAllPNG();
     void onReplacePNG();
+    void replacePNG(bool rle);
+    void onCopyCurrent();
+    void onPasteCurrent();
+    void onAppend();
     void onBatchOffset();
     void onPresetChanged(int index);
     void onSectionChanged(int index);
@@ -43,12 +48,18 @@ private slots:
     void onTextColorPick();
 
 protected:
+    void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *e) override;
     void mousePressEvent(QMouseEvent *e) override;
 
 private:
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
+    bool savePictures();
+    QByteArray m_savedState;
+    QString m_loadedIdx, m_loadedGrp;
     void displayGrpList();
-    void loadPalette(const QString &path);
+    bool loadPalette(const QString &path);
     void updateSectionCombo();
     QImage decodeSprite(int index);
 

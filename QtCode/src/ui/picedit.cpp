@@ -15,9 +15,34 @@
 #include <QDir>
 #include <QtEndian>
 #include <limits>
+#include <QCloseEvent>
+
+QByteArray PicEdit::stateBytes() const
+{
+    return encodeFile(m_pics);
+}
+
+bool PicEdit::confirmDiscard()
+{
+    if (stateBytes() == m_savedState) return true;
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存图片文件修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) return false;
+    if (answer == QMessageBox::Save) {
+        onSave();
+        return stateBytes() == m_savedState;
+    }
+    return true;
+}
+
+void PicEdit::closeEvent(QCloseEvent *event)
+{
+    if (confirmDiscard()) event->accept(); else event->ignore();
+}
 
 PicEdit::PicEdit(QWidget *parent) : QWidget(parent)
 {
+    m_savedState = stateBytes();
     auto *mainLayout = new QVBoxLayout(this);
 
     // 顶部工具栏
@@ -128,6 +153,7 @@ void PicEdit::onOpen()
 
 void PicEdit::openFile(const QString &path)
 {
+    if (!confirmDiscard()) return;
     QVector<PicData> pictures;
     if (!decodeFile(FileIO::readFileAll(path), pictures)) {
         QMessageBox::warning(this, tr("打开"), tr("PIC 文件无效或已损坏"));
@@ -135,6 +161,7 @@ void PicEdit::openFile(const QString &path)
     }
     m_filePath = path;
     m_pics = pictures;
+    m_savedState = stateBytes();
     m_indexSpin->setRange(0, qMax(0, m_pics.size() - 1));
     m_currentIndex = 0;
     m_indexSpin->setValue(0);
@@ -245,6 +272,7 @@ void PicEdit::onSave()
         return;
     }
     m_filePath = path;
+    m_savedState = stateBytes();
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -354,7 +382,8 @@ void PicEdit::updateMetadata()
     auto &picture = m_pics[m_currentIndex];
     picture.xoff = m_xoffSpin->value();
     picture.yoff = m_yoffSpin->value();
-    picture.background = m_backgroundCheck->isChecked() ? 1 : 0;
+    if (sender() == m_backgroundCheck)
+        picture.background = m_backgroundCheck->isChecked() ? 1 : 0;
     displayCurrent();
 }
 

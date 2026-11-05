@@ -14,6 +14,9 @@
 #include <QDataStream>
 #include <QCloseEvent>
 #include <QSignalBlocker>
+#include <QTemporaryFile>
+#include <QFileInfo>
+#include "fileio.h"
 
 QByteArray REditWidget::stateBytes() const
 {
@@ -616,14 +619,29 @@ void REditWidget::onExportXlsx()
     QString filename = QFileDialog::getSaveFileName(this, tr("导出 XLSX"), {}, "XLSX (*.xlsx)");
     if (filename.isEmpty()) return;
 
-    IniConfig &cfg = IniConfig::instance();
-    RFileGlobals &g = cfg.rGlobals;
-
-    XlsxWriter writer;
-    if (!writer.create(filename)) {
-        QMessageBox::warning(this, tr("错误"), tr("无法创建文件"));
+    if (!exportXlsx(filename)) {
+        QMessageBox::warning(this, tr("错误"), tr("XLSX 导出失败，目标文件未替换"));
         return;
     }
+    m_statusBar->showMessage(tr("导出完成: %1").arg(filename), 5000);
+}
+
+bool REditWidget::exportXlsx(const QString &filename)
+{
+    if (!XlsxWriter::loadLibrary("xlsxwriter")) return false;
+
+    IniConfig &cfg = IniConfig::instance();
+    RFileGlobals &g = cfg.rGlobals;
+    if (m_rFile.typeNumber < 0 || m_rFile.rType.size() < m_rFile.typeNumber
+        || g.rIni.size() < m_rFile.typeNumber || g.typeName.size() < m_rFile.typeNumber
+        || g.typeDataItem.size() < m_rFile.typeNumber) return false;
+    QTemporaryFile temporary(QFileInfo(filename).absolutePath() + "/upedit-xlsx-XXXXXX.xlsx");
+    if (!temporary.open()) return false;
+    QString temporaryPath = temporary.fileName();
+    if (!temporary.remove()) return false;
+
+    XlsxWriter writer;
+    if (!writer.create(temporaryPath)) return false;
 
     // 遍历所有类型，每个类型一个 sheet (对应 Delphi Button11Click)
     for (int i1 = 0; i1 < m_rFile.typeNumber && i1 < g.rIni.size(); ++i1) {
@@ -659,8 +677,13 @@ void REditWidget::onExportXlsx()
                             auto &ds = rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5];
                             if (ds.dataType == 1)
                                 writer.writeString(row2, i2 + 1, RFileIO::readRDataStr(ds));
-                            else
-                                writer.writeNumber(row2, i2 + 1, RFileIO::readRDataInt(ds));
+                            else {
+                                qint64 value = RFileIO::readRDataInt(ds);
+                                if (value < -999999999999999LL || value > 999999999999999LL)
+                                    writer.writeString(row2, i2 + 1, QString::number(value));
+                                else
+                                    writer.writeNumber(row2, i2 + 1, static_cast<double>(value));
+                            }
                             row2++;
                         }
                     }
@@ -694,8 +717,13 @@ void REditWidget::onExportXlsx()
                             auto &ds = rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5];
                             if (ds.dataType == 1)
                                 writer.writeString(i2 + 1, col2, Encoding::displayStr(RFileIO::readRDataStr(ds)));
-                            else
-                                writer.writeNumber(i2 + 1, col2, RFileIO::readRDataInt(ds));
+                            else {
+                                qint64 value = RFileIO::readRDataInt(ds);
+                                if (value < -999999999999999LL || value > 999999999999999LL)
+                                    writer.writeString(i2 + 1, col2, QString::number(value));
+                                else
+                                    writer.writeNumber(i2 + 1, col2, static_cast<double>(value));
+                            }
                             col2++;
                         }
                     }
@@ -704,7 +732,10 @@ void REditWidget::onExportXlsx()
         }
     }
 
-    m_statusBar->showMessage(tr("导出完成: %1").arg(filename), 5000);
+    bool saved = writer.close();
+    if (saved) saved = FileIO::writeFileAll(filename, FileIO::readFileAll(temporaryPath));
+    QFile::remove(temporaryPath);
+    return saved;
 }
 
 void REditWidget::onImportXlsx()
@@ -717,25 +748,43 @@ void REditWidget::onImportXlsx()
     QString filename = QFileDialog::getOpenFileName(this, tr("导入 XLSX"), {}, "XLSX (*.xlsx)");
     if (filename.isEmpty()) return;
 
+    if (!importXlsx(filename)) {
+        QMessageBox::warning(this, tr("错误"), tr("XLSX 数据或字段范围无效，原数据未修改"));
+        return;
+    }
+    m_editForm->setRFile(&m_rFile);
+    populateTypes();
+    m_statusBar->showMessage(tr("导入完成"), 5000);
+}
+
+bool REditWidget::importXlsx(const QString &filename)
+{
+    if (!XlsxReader::loadLibrary("libxlsxio_read")) return false;
+
     IniConfig &cfg = IniConfig::instance();
     RFileGlobals &g = cfg.rGlobals;
 
     XlsxReader reader;
-    if (!reader.open(filename)) {
-        QMessageBox::warning(this, tr("错误"), tr("无法打开文件"));
-        return;
-    }
+    if (!reader.open(filename) || g.typeNumber < 0 || g.rIni.size() < g.typeNumber
+        || g.typeName.size() < g.typeNumber || g.typeDataItem.size() < g.typeNumber) return false;
 
-    m_rFile.typeNumber = g.typeNumber;
-    m_rFile.rType.resize(g.typeNumber);
+    RFile imported = m_rFile;
+    imported.typeNumber = g.typeNumber;
+    imported.rType.resize(g.typeNumber);
+    bool foundSheet = false;
+    auto assign = [](RDataSingle &field, const QString &text) {
+        if (field.dataType == 1) { RFileIO::writeRDataStr(field, text); return true; }
+        return REditWidget::applyFieldOperation(field, 0, text.isEmpty() ? QString("0") : text);
+    };
 
     // 遍历所有类型，从对应名称的 sheet 导入 (对应 Delphi Button12Click)
     for (int i1 = 0; i1 < g.typeNumber; ++i1) {
         auto rows = reader.readAll(g.typeName[i1]);
         if (rows.isEmpty()) continue;
+        foundSheet = true;
 
         auto &rini = g.rIni[i1];
-        auto &rt = m_rFile.rType[i1];
+        auto &rt = imported.rType[i1];
 
         // 清空已有记录
         rt.dataNum = 0;
@@ -744,7 +793,7 @@ void REditWidget::onImportXlsx()
         if (i1 == 0) {
             int recordCount = 0;
             for (const auto &row : rows) recordCount = qMax(recordCount, row.size() - 1);
-            for (int record = 0; record < recordCount; ++record) RFileIO::addNewRData(&m_rFile, i1, g);
+            for (int record = 0; record < recordCount; ++record) RFileIO::addNewRData(&imported, i1, g);
 
             for (int i2 = 0; i2 < rt.dataNum; ++i2) {
                 int temp = 0;
@@ -763,9 +812,9 @@ void REditWidget::onImportXlsx()
                                 if (lineIdx >= 0 && lineIdx < rt.rData[i2].rDataLine.size()
                                     && arrIdx < rt.rData[i2].rDataLine[lineIdx].rArray.size()
                                     && dsIdx < rt.rData[i2].rDataLine[lineIdx].rArray[arrIdx].dataArray.size()) {
-                                    RFileIO::writeRDataStr(
+                                    if (!assign(
                                         rt.rData[i2].rDataLine[lineIdx].rArray[arrIdx].dataArray[dsIdx],
-                                        rows[temp][i2 + 1]);
+                                        rows[temp][i2 + 1])) return false;
                                 }
                             }
                             temp++;
@@ -777,7 +826,7 @@ void REditWidget::onImportXlsx()
             // 其他类型: 标准 — 行是记录(skip header), 列是字段
             int recordCount = rows.size() - 1; // 减去表头
             for (int r = 0; r < recordCount; ++r)
-                RFileIO::addNewRData(&m_rFile, i1, g);
+                RFileIO::addNewRData(&imported, i1, g);
 
             for (int i2 = 0; i2 < rt.dataNum; ++i2) {
                 int temp = 0;
@@ -786,9 +835,9 @@ void REditWidget::onImportXlsx()
                         for (int i5 = 0; i5 < rt.rData[i2].rDataLine[i3].rArray[i4].dataArray.size(); ++i5) {
                             // standard: strings[row=i2+1][col=temp]
                             if ((i2 + 1) < rows.size() && temp < rows[i2 + 1].size()) {
-                                RFileIO::writeRDataStr(
+                                if (!assign(
                                     rt.rData[i2].rDataLine[i3].rArray[i4].dataArray[i5],
-                                    rows[i2 + 1][temp]);
+                                    rows[i2 + 1][temp])) return false;
                             }
                             temp++;
                         }
@@ -798,10 +847,10 @@ void REditWidget::onImportXlsx()
         }
     }
 
-    RFileIO::calcNamePos(&m_rFile, g);
-    m_editForm->setRFile(&m_rFile);
-    populateTypes();
-    m_statusBar->showMessage(tr("导入完成"), 5000);
+    if (!foundSheet) return false;
+    RFileIO::calcNamePos(&imported, g);
+    m_rFile = imported;
+    return true;
 }
 
 void REditWidget::onSearch()

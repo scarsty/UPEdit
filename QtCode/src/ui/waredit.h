@@ -19,6 +19,7 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void onLoad();
@@ -36,8 +37,8 @@ private:
     friend int runSelfTests(const QString &reportPath);
     struct WarRowInfo { int fieldIdx = -1; int valueIdx = -1; };
     QVector<WarRowInfo> m_rowMap;
-    void readWIni();
-    void readW();
+    bool readWIni();
+    bool readW();
     void displayW();
     void rebuildWSelect();
     void rebuildWarCombo();
@@ -46,12 +47,19 @@ private:
     void readWarMapDef();
     void readWarMapGrp();
     int currentMapIndex() const;
+    bool importExcel(const QString &filename);
+    bool exportExcel(const QString &filename);
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
+    QByteArray m_savedState;
+    bool m_loaded = false;
 
     QComboBox *m_warCombo;
     QTableWidget *m_table;
     QLabel *m_posImage;
     QScrollArea *m_posScroll;
     QCheckBox *m_showMap;
+    QCheckBox *m_keepSelection;
     QSpinBox *m_scaleSpin;
     QStatusBar *m_statusBar;
 

@@ -1,4 +1,24 @@
 #include "imzdata.h"
+#include <QDirIterator>
+#include <QScopeGuard>
+
+static bool safeMetadataPath(const QString &name)
+{
+    if (name.isEmpty() || name.contains('\\') || name.contains(':') || name.startsWith('/')
+        || name.endsWith(".png", Qt::CaseInsensitive)) return false;
+    for (const QString &part : name.split('/')) {
+        if (part.isEmpty() || part == "." || part == ".." || part.endsWith('.') || part.endsWith(' ')
+            || part.startsWith(".upedit-", Qt::CaseInsensitive)) return false;
+        for (QChar character : part)
+            if (character.unicode() < 32 || QStringLiteral("<>\"|?*").contains(character)) return false;
+        QString base = part.section('.', 0, 0).toUpper();
+        if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL"
+            || (base.size() == 4 && (base.startsWith("COM") || base.startsWith("LPT"))
+                && base[3] >= '1' && base[3] <= '9')) return false;
+    }
+    return name.compare("index.ka", Qt::CaseInsensitive) != 0
+        && name.compare("index.txt", Qt::CaseInsensitive) != 0;
+}
 #include "ZipFile.h"
 #include <QDir>
 #include <QFile>
@@ -13,13 +33,90 @@
 #include <QTemporaryDir>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include "fileio.h"
 
-bool ImzIO::readImz(const QString &path, Imz &imz)
+static bool readLegacyImz(const QByteArray &bytes, Imz &result)
+{
+    if (bytes.size() < 4) return false;
+    int count = qFromLittleEndian<qint32>(bytes.constData());
+    if (count < 0 || count > 1000001 || qint64(count) * 4 + 4 > bytes.size()) return false;
+    Imz decoded;
+    decoded.pngNum = count;
+    qint64 expected = 4 + qint64(count) * 4;
+    for (int spriteIndex = 0; spriteIndex < count; ++spriteIndex) {
+        int offset = qFromLittleEndian<qint32>(bytes.constData() + 4 + spriteIndex * 4);
+        qint64 end = spriteIndex + 1 < count
+            ? qFromLittleEndian<qint32>(bytes.constData() + 8 + spriteIndex * 4) : bytes.size();
+        if (offset != expected || end < offset || end > bytes.size() || end - offset < 8) return false;
+        ImzPng sprite;
+        sprite.fileNum = spriteIndex;
+        sprite.x = qFromLittleEndian<qint16>(bytes.constData() + offset);
+        sprite.y = qFromLittleEndian<qint16>(bytes.constData() + offset + 2);
+        sprite.frame = qFromLittleEndian<qint32>(bytes.constData() + offset + 4);
+        if (sprite.frame < 0 || qint64(sprite.frame) * 8 + 8 > end - offset) return false;
+        qint64 frameEnd = qint64(offset) + 8 + qint64(sprite.frame) * 8;
+        for (int frame = 0; frame < sprite.frame; ++frame) {
+            int position = qFromLittleEndian<qint32>(bytes.constData() + offset + 8 + frame * 8);
+            int length = qFromLittleEndian<qint32>(bytes.constData() + offset + 12 + frame * 8);
+            if (position != frameEnd || length < 0 || qint64(position) + length > end) return false;
+            sprite.frameLen.append(length);
+            sprite.frameData.append({bytes.mid(position, length)});
+            frameEnd += length;
+        }
+        if (frameEnd != end) return false;
+        sprite.len = end - offset;
+        decoded.imzPng.append(sprite);
+        expected = end;
+    }
+    if (expected != bytes.size()) return false;
+    result = decoded;
+    return true;
+}
+
+static bool saveLegacyImz(const QString &path, const Imz &imz)
+{
+    if (!imz.metadata.isEmpty()) return false;
+    if (imz.pngNum != imz.imzPng.size() || imz.pngNum < 0 || imz.pngNum > 1000001) return false;
+    qint64 total = 4 + qint64(imz.pngNum) * 4;
+    for (int index = 0; index < imz.imzPng.size(); ++index) {
+        const auto &sprite = imz.imzPng[index];
+        if (sprite.fileNum != index || sprite.frame < 0 || sprite.frame != sprite.frameData.size()) return false;
+        total += 8 + qint64(sprite.frame) * 8;
+        for (const auto &frame : sprite.frameData) total += frame.data.size();
+        if (total > INT_MAX) return false;
+    }
+    QByteArray bytes(int(total), '\0');
+    qToLittleEndian<qint32>(imz.pngNum, bytes.data());
+    int offset = 4 + imz.pngNum * 4;
+    for (int index = 0; index < imz.imzPng.size(); ++index) {
+        const auto &sprite = imz.imzPng[index];
+        qToLittleEndian<qint32>(offset, bytes.data() + 4 + index * 4);
+        qToLittleEndian<qint16>(sprite.x, bytes.data() + offset);
+        qToLittleEndian<qint16>(sprite.y, bytes.data() + offset + 2);
+        qToLittleEndian<qint32>(sprite.frame, bytes.data() + offset + 4);
+        int frameOffset = offset + 8 + sprite.frame * 8;
+        for (int frame = 0; frame < sprite.frame; ++frame) {
+            const auto &data = sprite.frameData[frame].data;
+            qToLittleEndian<qint32>(frameOffset, bytes.data() + offset + 8 + frame * 8);
+            qToLittleEndian<qint32>(data.size(), bytes.data() + offset + 12 + frame * 8);
+            std::copy(data.cbegin(), data.cend(), bytes.begin() + frameOffset);
+            frameOffset += data.size();
+        }
+        offset = frameOffset;
+    }
+    return FileIO::writeFileAll(path, bytes);
+}
+
+static bool readArchiveData(const QString &path, Imz &imz)
 {
     QFileInfo fi(path);
     if (fi.isDir()) {
-        return readImzFromFolder(path, imz);
+        return ImzIO::readImzFromFolder(path, imz);
     }
+    QFile source(path);
+    if (!source.open(QIODevice::ReadOnly)) return false;
+    if (!source.peek(4).startsWith("PK")) return readLegacyImz(source.readAll(), imz);
+    source.close();
 
     // ZIP 格式 (.imz)
     ZipFile zip;
@@ -30,6 +127,16 @@ bool ImzIO::readImz(const QString &path, Imz &imz)
     // 先获取条目总数
     auto entries = zip.getFileNames();
     if (entries.empty()) return false;
+    imz.metadata.clear();
+    for (const auto &entry : entries) {
+        QString name = QString::fromStdString(entry);
+        if (name.endsWith('/')) continue;
+        if (!name.endsWith(".png", Qt::CaseInsensitive) && name != "index.ka" && name != "index.txt") {
+            if (!safeMetadataPath(name)) return false;
+            auto bytes = zip.readFile(entry);
+            imz.metadata.insert(name, QByteArray(bytes.data(), int(bytes.size())));
+        }
+    }
 
     // 读 index.ka 或 index.txt
     std::string idxKaStr = zip.readFile("index.ka");
@@ -126,8 +233,26 @@ bool ImzIO::readImz(const QString &path, Imz &imz)
     return true;
 }
 
+bool ImzIO::readImz(const QString &path, Imz &imz)
+{
+    Imz decoded;
+    if (!readArchiveData(path, decoded)) return false;
+    for (const auto &sprite : decoded.imzPng)
+        for (const auto &frame : sprite.frameData)
+            if (QImage::fromData(frame.data, "PNG").isNull()) return false;
+    imz = decoded;
+    return true;
+}
+
 bool ImzIO::saveImz(const QString &path, const Imz &imz)
 {
+    if (QFileInfo(path).suffix().compare("imz", Qt::CaseInsensitive) == 0) {
+        QFile existing(path);
+        if (!existing.exists() || (existing.open(QIODevice::ReadOnly) && !existing.peek(4).startsWith("PK"))) {
+            existing.close();
+            return saveLegacyImz(path, imz);
+        }
+    }
     if (imz.pngNum != imz.imzPng.size()) return false;
     QSet<int> ids;
     for (const auto &sprite : imz.imzPng) {
@@ -142,9 +267,22 @@ bool ImzIO::saveImz(const QString &path, const Imz &imz)
         if (!original.opened()) return false;
         for (const auto &entry : original.getFileNames()) {
             QString name = QString::fromStdString(entry);
-            if (!name.endsWith(".png", Qt::CaseInsensitive) && name != "index.ka" && name != "index.txt")
+            if (name.endsWith('/')) continue;
+            if (!name.endsWith(".png", Qt::CaseInsensitive) && name != "index.ka" && name != "index.txt") {
+                if (!safeMetadataPath(name)) return false;
                 metadata.insert(entry, original.readFile(entry));
+            }
         }
+    }
+    for (auto entry = imz.metadata.cbegin(); entry != imz.metadata.cend(); ++entry) {
+        if (!safeMetadataPath(entry.key())) return false;
+        metadata.insert(entry.key().toStdString(), std::string(entry.value().constData(), entry.value().size()));
+    }
+    QSet<QString> metadataNames;
+    for (auto entry = metadata.cbegin(); entry != metadata.cend(); ++entry) {
+        QString folded = QString::fromStdString(entry.key()).toCaseFolded();
+        if (metadataNames.contains(folded)) return false;
+        metadataNames.insert(folded);
     }
     QTemporaryFile temporary(QFileInfo(path).absolutePath() + "/upedit-XXXXXX.zip");
     if (!temporary.open()) return false;
@@ -195,9 +333,23 @@ bool ImzIO::saveImz(const QString &path, const Imz &imz)
     return destination.commit();
 }
 
-bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
+static bool readFolderData(const QString &folder, Imz &imz)
 {
     QDir dir(folder);
+    imz.metadata.clear();
+    QDirIterator metadataFiles(folder, QDir::Files | QDir::NoSymLinks, QDirIterator::Subdirectories);
+    while (metadataFiles.hasNext()) {
+        QString absolutePath = metadataFiles.next();
+        QString name = dir.relativeFilePath(absolutePath);
+        if (name.endsWith(".png", Qt::CaseInsensitive) || name == "index.ka" || name == "index.txt"
+            || name == ".upedit-images.json") continue;
+        if (!safeMetadataPath(name)) return false;
+        QFile file(absolutePath);
+        if (!file.open(QIODevice::ReadOnly)) return false;
+        auto bytes = file.readAll();
+        if (file.error() != QFile::NoError) return false;
+        imz.metadata.insert(name, bytes);
+    }
     QStringList allPngs = dir.entryList({"*.png"}, QDir::Files);
 
     // 按 baseId 分组: baseId → [ (frameIdx, filename) ]
@@ -257,8 +409,10 @@ bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
         if (frames.contains(-1)) {
             // 单帧: "{id}.png"
             QFile pngFile(dir.filePath(frames[-1]));
-            if (pngFile.open(QIODevice::ReadOnly)) {
+            if (!pngFile.open(QIODevice::ReadOnly)) return false;
+            {
                 QByteArray pngData = pngFile.readAll();
+                if (pngFile.error() != QFile::NoError) return false;
                 ip.frame = 1;
                 ip.frameLen = {(int)pngData.size()};
                 ip.frameData.resize(1);
@@ -274,8 +428,10 @@ bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
             int fi = 0;
             for (auto fit = frames.constBegin(); fit != frames.constEnd(); ++fit, ++fi) {
                 QFile pngFile(dir.filePath(fit.value()));
-                if (pngFile.open(QIODevice::ReadOnly)) {
+                if (!pngFile.open(QIODevice::ReadOnly)) return false;
+                {
                     QByteArray pngData = pngFile.readAll();
+                    if (pngFile.error() != QFile::NoError) return false;
                     ip.frameLen[fi] = pngData.size();
                     ip.frameData[fi].data = pngData;
                     ip.len += pngData.size();
@@ -304,6 +460,17 @@ bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
     }
 
     return imz.pngNum > 0;
+}
+
+bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
+{
+    Imz decoded;
+    if (!readFolderData(folder, decoded)) return false;
+    for (const auto &sprite : decoded.imzPng)
+        for (const auto &frame : sprite.frameData)
+            if (QImage::fromData(frame.data, "PNG").isNull()) return false;
+    imz = decoded;
+    return true;
 }
 
 bool ImzIO::saveFolder(const QString &folder, const Imz &imz, const QStringList &previousFiles)
@@ -359,12 +526,42 @@ bool ImzIO::saveFolder(const QString &folder, const Imz &imz, const QStringList 
     }
     files.insert("index.ka", index);
     files.insert(manifestName, QJsonDocument(owned).toJson(QJsonDocument::Compact));
+    QSet<QString> metadataNames;
+    for (auto entry = imz.metadata.cbegin(); entry != imz.metadata.cend(); ++entry) {
+        const QString &name = entry.key();
+        if (!safeMetadataPath(name)) return false;
+        QString folded = name.toCaseFolded();
+        if (metadataNames.contains(folded)) return false;
+        metadataNames.insert(folded);
+        files.insert(name, entry.value());
+        affected.insert(name);
+    }
     affected.unite({"index.ka", "index.txt", manifestName});
     QTemporaryDir transaction(directory.absoluteFilePath(".upedit-save-XXXXXX"));
     if (!transaction.isValid()) return false;
     QDir staging(transaction.path());
     if (!staging.mkdir("new") || !staging.mkdir("old")) return false;
+    QStringList createdDirectories;
+    auto cleanupDirectories = qScopeGuard([&] {
+        for (auto entry = createdDirectories.crbegin(); entry != createdDirectories.crend(); ++entry)
+            QDir().rmdir(*entry);
+    });
     for (auto entry = files.constBegin(); entry != files.constEnd(); ++entry) {
+        const QString parent = QFileInfo(entry.key()).path();
+        if (parent != ".") {
+            QString current;
+            for (const QString &part : parent.split('/')) {
+                current = current.isEmpty() ? part : current + "/" + part;
+                QString targetPath = directory.filePath(current);
+                QFileInfo target(targetPath);
+                if (target.isSymLink() || (target.exists() && !target.isDir())) return false;
+                if (!target.exists()) {
+                    if (!QDir().mkdir(targetPath)) return false;
+                    createdDirectories.append(targetPath);
+                }
+            }
+            if (!staging.mkpath("new/" + parent) || !staging.mkpath("old/" + parent)) return false;
+        }
         QFile staged(staging.filePath("new/" + entry.key()));
         if (!staged.open(QIODevice::WriteOnly) || staged.write(entry.value()) != entry.value().size() || !staged.flush()) return false;
     }

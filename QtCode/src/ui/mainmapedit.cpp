@@ -104,8 +104,28 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
 
     // ── 加载数据 ──────────────────────────────────────────
     readMainMapFile();
+    m_tileSourceCombo->setCurrentIndex(IniConfig::instance().mainMapMode + 1);
     readMainMapGrp();
-    connect(m_tileSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { readMainMapGrp(); m_needUpdate = true; });
+    connect(m_tileSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int source) {
+        auto &config = IniConfig::instance();
+        auto previousPics = m_grpPics;
+        auto previousCache = m_tileCache;
+        if (!readMainMapGrp()) {
+            QSignalBlocker blocker(m_tileSourceCombo);
+            m_tileSourceCombo->setCurrentIndex(config.mainMapMode + 1);
+            return;
+        }
+        if (!saveMapMode(config.iniPath, source - 1)) {
+            m_grpPics = previousPics;
+            m_tileCache = previousCache;
+            QSignalBlocker blocker(m_tileSourceCombo);
+            m_tileSourceCombo->setCurrentIndex(config.mainMapMode + 1);
+            QMessageBox::warning(this, tr("贴图来源"), tr("设置保存失败，未切换来源。"));
+            return;
+        }
+        config.mainMapMode = source - 1;
+        m_needUpdate = true;
+    });
     if (m_mapData.num > 0 && !m_mapData.map.isEmpty()) {
         const Map &curMap = m_mapData.map[0];
         int maxDim = qMax(curMap.x, curMap.y);
@@ -164,18 +184,30 @@ void MainMapEdit::readMainMapFile()
     }
 }
 
-void MainMapEdit::readMainMapGrp()
+bool MainMapEdit::readMainMapGrp()
 {
     IniConfig &cfg = IniConfig::instance();
+    auto previousPics = m_grpPics;
+    auto previousCache = m_tileCache;
     int source = m_tileSourceCombo->currentIndex();
     if ((source == 0 || source == 2) && !cfg.mmapImz.isEmpty()
-        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapImz, m_grpPics, m_tileCache)) return;
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapImz, m_grpPics, m_tileCache)) return true;
     if ((source == 0 || source == 3) && !cfg.mmapPNGPath.isEmpty()
-        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapPNGPath, m_grpPics, m_tileCache)) return;
-    if (source == 2 || source == 3) { QMessageBox::warning(this, tr("贴图"), tr("PNG贴图读取失败")); return; }
+        && MapIO::loadPngTiles(cfg.gamePath + cfg.mmapPNGPath, m_grpPics, m_tileCache)) return true;
+    if (source == 2 || source == 3) {
+        m_grpPics = previousPics;
+        m_tileCache = previousCache;
+        QMessageBox::warning(this, tr("贴图"), tr("PNG贴图读取失败"));
+        return false;
+    }
     // 主地图贴图使用 MMAPIDX/MMAPGRP (对应 Delphi MMapfileIDX/MMapfilegrp)
-    GrpIO::readGrp(cfg.gamePath + cfg.mmapFileIdx,
-                    cfg.gamePath + cfg.mmapFileGrp, m_grpPics);
+    if (!GrpIO::readGrp(cfg.gamePath + cfg.mmapFileIdx,
+                    cfg.gamePath + cfg.mmapFileGrp, m_grpPics)) {
+        m_grpPics = previousPics;
+        m_tileCache = previousCache;
+        if (source == 1) QMessageBox::warning(this, tr("贴图"), tr("GRP贴图读取失败"));
+        return false;
+    }
 
     // 调色板使用全局 palette (对应 Delphi readMcol 读 palette)
     uint8_t pr[256]={}, pg[256]={}, pb[256]={};
@@ -190,6 +222,7 @@ void MainMapEdit::readMainMapGrp()
             m_tileCache[i] = GrpIO::decodeRLE(m_grpPics[i], pr, pg, pb);
         }
     }
+    return true;
 }
 
 void MainMapEdit::renderMap()
@@ -380,6 +413,14 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
         // 右键放置选定贴图
         curMap.mapLayer[layer].pic[ix][iy] = m_selectedTileId * 2;
         if (layer == 2) {
+            if (m_selectedTileId == 0) {
+                for (int column = 0; column < curMap.x; ++column)
+                    for (int row = 0; row < curMap.y; ++row)
+                        if (curMap.mapLayer[3].pic[column][row] == ix && curMap.mapLayer[4].pic[column][row] == iy) {
+                            curMap.mapLayer[3].pic[column][row] = 0;
+                            curMap.mapLayer[4].pic[column][row] = 0;
+                        }
+            }
             curMap.mapLayer[3].pic[ix][iy] = m_selectedTileId > 0 ? ix : 0;
             curMap.mapLayer[4].pic[ix][iy] = m_selectedTileId > 0 ? iy : 0;
         }
@@ -399,7 +440,9 @@ void MainMapEdit::handleMouseRelease(QMouseEvent *event)
     QPoint end = screenToMapRel(event->pos().x(), event->pos().y());
     if (m_layer != 4 && end == m_selectionStart) { m_selectionStart = QPoint(-1, -1); return; }
     if (end.x() >= 0) {
-        QRect bounds = QRect(m_selectionStart, end).normalized();
+        QPoint first(qMin(m_selectionStart.x(), end.x()), qMin(m_selectionStart.y(), end.y()));
+        QPoint last(qMax(m_selectionStart.x(), end.x()), qMax(m_selectionStart.y(), end.y()));
+        QRect bounds(first, last);
         m_moduleMap = MapIO::extractRegion(m_mapData.map[0], bounds);
         m_selectedTileId = -1;
         for (int column = 0; column < m_moduleMap.x; ++column)

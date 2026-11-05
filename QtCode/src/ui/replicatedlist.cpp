@@ -11,6 +11,24 @@
 #include "fileio.h"
 #include <QSignalBlocker>
 #include <QIntValidator>
+#include <QCloseEvent>
+
+QByteArray ReplicatedList::stateBytes() const
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    stream << m_leaveList << m_effectList << m_matchList << m_expList;
+    return bytes;
+}
+
+void ReplicatedList::closeEvent(QCloseEvent *event)
+{
+    if (stateBytes() == m_savedState) { event->accept(); return; }
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存关联列表修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Discard || (answer == QMessageBox::Save && saveData())) event->accept();
+    else event->ignore();
+}
 
 ReplicatedList::ReplicatedList(QWidget *parent) : QWidget(parent)
 {
@@ -121,14 +139,18 @@ ReplicatedList::ReplicatedList(QWidget *parent) : QWidget(parent)
 void ReplicatedList::loadData()
 {
     IniConfig &cfg = IniConfig::instance();
+    m_loadValid = true;
     auto readSmallIntFile = [&](const QString &name, int count) -> QVector<int16_t> {
         QFile file(cfg.gamePath + "/" + name);
         QVector<int16_t> data(count, 0);
-        if (file.open(QIODevice::ReadOnly)) {
-            QDataStream ds(&file);
-            ds.setByteOrder(QDataStream::LittleEndian);
-            for (int i = 0; i < count && !ds.atEnd(); ++i) ds >> data[i];
+        if (name.isEmpty() || !file.open(QIODevice::ReadOnly) || file.size() != count * 2) {
+            m_loadValid = false;
+            return data;
         }
+        QDataStream ds(&file);
+        ds.setByteOrder(QDataStream::LittleEndian);
+        for (int index = 0; index < count; ++index) ds >> data[index];
+        if (ds.status() != QDataStream::Ok || file.error() != QFileDevice::NoError) m_loadValid = false;
         return data;
     };
 
@@ -136,6 +158,7 @@ void ReplicatedList::loadData()
     m_effectList = readSmallIntFile(cfg.effectListFile, 200);
     m_matchList = readSmallIntFile(cfg.matchListFile, 300);
     m_expList = readSmallIntFile(cfg.expListFile, 100);
+    m_savedState = stateBytes();
 
     if (!m_leaveList.isEmpty()) displayLeave(0);
     if (!m_effectList.isEmpty()) displayEffect(0);
@@ -181,6 +204,15 @@ void ReplicatedList::onExpScroll(int val) { displayExp(val); }
 
 void ReplicatedList::onSave()
 {
+    if (saveData()) QMessageBox::information(this, tr("保存"), tr("保存成功"));
+}
+
+bool ReplicatedList::saveData()
+{
+    if (!m_loadValid) {
+        QMessageBox::warning(this, tr("保存"), tr("关联列表未完整加载，禁止覆盖原文件"));
+        return false;
+    }
     IniConfig &cfg = IniConfig::instance();
     QMap<QString, QByteArray> files;
     bool valid = true;
@@ -200,9 +232,10 @@ void ReplicatedList::onSave()
     writeSmallIntFile(cfg.expListFile, m_expList);
     if (!valid || !FileIO::writeFiles(files)) {
         QMessageBox::warning(this, tr("保存"), tr("路径未配置、重复或写入失败，未完成保存"));
-        return;
+        return false;
     }
-    QMessageBox::information(this, tr("保存"), tr("保存成功"));
+    m_savedState = stateBytes();
+    return true;
 }
 
 QString ReplicatedList::calRName(int typeIndex, int dataIndex)

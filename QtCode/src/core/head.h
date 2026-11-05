@@ -11,6 +11,7 @@
 #include <QByteArray>
 #include <QString>
 #include <QVector>
+#include <QMap>
 #include <QPixmap>
 #include <cstdint>
 
@@ -354,6 +355,7 @@ struct ImzPng {
 struct Imz {
     int pngNum = 0;
     QVector<ImzPng> imzPng;
+    QMap<QString, QByteArray> metadata;
 };
 
 struct ScenePNGBuf {

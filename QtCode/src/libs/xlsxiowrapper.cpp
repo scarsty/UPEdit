@@ -29,8 +29,14 @@ bool XlsxReader::loadLibrary(const QString &dllPath)
     fn_next_row   = reinterpret_cast<FnNextRow>(s_lib.resolve("xlsxioread_sheet_next_row"));
     fn_next_cell  = reinterpret_cast<FnNextCell>(s_lib.resolve("xlsxioread_sheet_next_cell"));
     fn_free       = reinterpret_cast<FnFree>(s_lib.resolve("xlsxioread_free"));
+#ifdef Q_OS_WIN
+    if (!fn_free) {
+        static QLibrary runtime("ucrtbase");
+        if (runtime.load()) fn_free = reinterpret_cast<FnFree>(runtime.resolve("free"));
+    }
+#endif
 
-    s_loaded = (fn_open && fn_close);
+    s_loaded = (fn_open && fn_close && fn_sheet_open && fn_sheet_close && fn_next_row && fn_next_cell && fn_free);
     return s_loaded;
 }
 
@@ -119,7 +125,7 @@ bool XlsxWriter::loadLibrary(const QString &dllPath)
     fn_write_string  = reinterpret_cast<FnWriteString>(s_lib.resolve("worksheet_write_string"));
     fn_write_number  = reinterpret_cast<FnWriteNumber>(s_lib.resolve("worksheet_write_number"));
 
-    s_loaded = (fn_new && fn_close);
+    s_loaded = (fn_new && fn_close && fn_add_worksheet && fn_write_string && fn_write_number);
     return s_loaded;
 }
 
@@ -127,15 +133,20 @@ bool XlsxWriter::create(const QString &filename)
 {
     if (!s_loaded || !fn_new) return false;
     close();
+    m_failed = false;
     QByteArray utf8 = filename.toUtf8();
     m_workbook = fn_new(utf8.constData());
     return m_workbook != nullptr;
 }
 
-void XlsxWriter::close()
+bool XlsxWriter::close()
 {
     m_worksheet = nullptr;
-    if (m_workbook && fn_close) { fn_close(m_workbook); m_workbook = nullptr; }
+    if (m_workbook && fn_close) {
+        if (fn_close(m_workbook) != 0) m_failed = true;
+        m_workbook = nullptr;
+    }
+    return !m_failed;
 }
 
 bool XlsxWriter::addWorksheet(const QString &name)
@@ -143,20 +154,21 @@ bool XlsxWriter::addWorksheet(const QString &name)
     if (!m_workbook || !fn_add_worksheet) return false;
     QByteArray utf8 = name.isEmpty() ? QByteArray() : name.toUtf8();
     m_worksheet = fn_add_worksheet(m_workbook, utf8.isEmpty() ? nullptr : utf8.constData());
+    if (!m_worksheet) m_failed = true;
     return m_worksheet != nullptr;
 }
 
 void XlsxWriter::writeString(int row, int col, const QString &value)
 {
-    if (!m_worksheet || !fn_write_string) return;
+    if (!m_worksheet || !fn_write_string || row < 0 || row >= 1048576 || col < 0 || col >= 16384) { m_failed = true; return; }
     QByteArray utf8 = value.toUtf8();
-    fn_write_string(m_worksheet, static_cast<uint32_t>(row), static_cast<uint16_t>(col),
-                    utf8.constData(), nullptr);
+    if (fn_write_string(m_worksheet, static_cast<uint32_t>(row), static_cast<uint16_t>(col),
+                    utf8.constData(), nullptr) != 0) m_failed = true;
 }
 
 void XlsxWriter::writeNumber(int row, int col, double value)
 {
-    if (!m_worksheet || !fn_write_number) return;
-    fn_write_number(m_worksheet, static_cast<uint32_t>(row), static_cast<uint16_t>(col),
-                    value, nullptr);
+    if (!m_worksheet || !fn_write_number || row < 0 || row >= 1048576 || col < 0 || col >= 16384) { m_failed = true; return; }
+    if (fn_write_number(m_worksheet, static_cast<uint32_t>(row), static_cast<uint16_t>(col),
+                    value, nullptr) != 0) m_failed = true;
 }

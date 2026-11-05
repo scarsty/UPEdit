@@ -30,8 +30,8 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
     m_toolCombo->addItems({tr("画笔"), tr("吸色"), tr("左吸色／右绘制"), tr("替换为透明色")});
     toolPanel->addWidget(m_toolCombo);
 
-    m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(-9999, 9999);
-    m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(-9999, 9999);
+    m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(-32768, 32767);
+    m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(-32768, 32767);
 
     toolPanel->addWidget(new QLabel(tr("缩放:")));
     toolPanel->addWidget(m_zoomCombo);

@@ -12,7 +12,7 @@
 #include <QRegularExpression>
 #include "fileio.h"
 
-bool saveRunSettings(const QString &path, const QMap<QString, int> &values)
+static bool saveIniValues(const QString &path, const QString &sectionName, const QMap<QString, QString> &values)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return false;
@@ -35,26 +35,26 @@ bool saveRunSettings(const QString &path, const QMap<QString, int> &values)
         auto match = section.match(line);
         if (!match.hasMatch()) continue;
         if (begin >= 0) { end = index; break; }
-        if (match.captured(1).compare("run", Qt::CaseInsensitive) == 0) begin = index;
+        if (match.captured(1).compare(sectionName, Qt::CaseInsensitive) == 0) begin = index;
     }
     if (begin < 0) {
         if (!lines.isEmpty() && !lines.last().isEmpty()) lines.append(QString());
-        lines.append(QStringLiteral("[run]") + (newline == "\r\n" ? "\r" : ""));
+        lines.append("[" + sectionName + "]" + (newline == "\r\n" ? "\r" : ""));
         begin = lines.size() - 1;
         end = lines.size();
     }
     for (auto value = values.cbegin(); value != values.cend(); ++value) {
         if (!QRegularExpression("^[A-Za-z][A-Za-z0-9_]*$").match(value.key()).hasMatch()) return false;
-        QRegularExpression key("^(\\s*" + QRegularExpression::escape(value.key()) + "\\s*=\\s*)[^;#\\r]*(.*)$", QRegularExpression::CaseInsensitiveOption);
+        QRegularExpression key("^(\\s*" + QRegularExpression::escape(value.key()) + "\\s*=\\s*)(?:\"[^\"]*\"|[^\";#\\r])*(.*)$", QRegularExpression::CaseInsensitiveOption);
         bool found = false;
         for (int index = begin + 1; index < end; ++index) {
             auto match = key.match(lines[index]);
             if (!match.hasMatch()) continue;
-            lines[index] = match.captured(1) + QString::number(value.value()) + match.captured(2);
+            lines[index] = match.captured(1) + value.value() + match.captured(2);
             found = true;
         }
         if (!found) {
-            lines.insert(end++, value.key() + "=" + QString::number(value.value()) + (newline == "\r\n" ? "\r" : ""));
+            lines.insert(end++, value.key() + "=" + value.value() + (newline == "\r\n" ? "\r" : ""));
         }
     }
     QStringEncoder encoder(utf16 ? QStringConverter::Utf16LE : QStringConverter::Utf8);
@@ -63,6 +63,48 @@ bool saveRunSettings(const QString &path, const QMap<QString, int> &values)
     if (utf16 && !updated.startsWith(QByteArray::fromHex("fffe"))) updated.prepend(QByteArray::fromHex("fffe"));
     if (utf8Bom && !updated.startsWith(QByteArray::fromHex("efbbbf"))) updated.prepend(QByteArray::fromHex("efbbbf"));
     return FileIO::writeFileAll(path, updated);
+}
+
+bool saveRunSettings(const QString &path, const QMap<QString, int> &values)
+{
+    QMap<QString, QString> strings;
+    for (auto value = values.cbegin(); value != values.cend(); ++value)
+        strings.insert(value.key(), QString::number(value.value()));
+    return saveIniValues(path, "run", strings);
+}
+
+bool saveRunPath(const QString &path, const QString &gamePath)
+{
+    if (gamePath.isEmpty() || gamePath.contains('\r') || gamePath.contains('\n')
+        || gamePath.contains('"') || gamePath.contains(QChar(0))) return false;
+    QString value = QDir::fromNativeSeparators(gamePath);
+    if (value.contains(';') || value.contains('#') || value.contains(',') || value != value.trimmed())
+        value = '"' + value + '"';
+    return saveIniValues(path, "run", {{"gamepath", value}});
+}
+
+bool saveMapMode(const QString &path, int mode)
+{
+    if (mode < -1 || mode > 2) return false;
+    return saveFileSettings(path, {{"MMapMode", mode}});
+}
+
+bool saveTalkArrange(const QString &path, int width)
+{
+    return saveIniValues(path, "KDEF", {{"talkarrange", QString::number(width)}});
+}
+
+bool saveWarSelection(const QString &path, bool keep)
+{
+    return saveIniValues(path, "W_Modify", {{"selectcontinue", keep ? "1" : "0"}});
+}
+
+bool saveFileSettings(const QString &path, const QMap<QString, int> &values)
+{
+    QMap<QString, QString> strings;
+    for (auto value = values.cbegin(); value != values.cend(); ++value)
+        strings.insert(value.key(), QString::number(value.value()));
+    return saveIniValues(path, "file", strings);
 }
 
 // QSettings IniFormat 会将含逗号的值自动拆为 QStringList,
@@ -90,28 +132,23 @@ bool prepareIniPath(const QString &originalPath,
     QFile f(originalPath);
     if (!f.open(QIODevice::ReadOnly)) return false;
     QByteArray raw = f.readAll();
+    if (f.error() != QFile::NoError) return false;
     f.close();
 
     bool isUtf16LE = (raw.size() >= 2
                       && static_cast<uint8_t>(raw[0]) == 0xFF
                       && static_cast<uint8_t>(raw[1]) == 0xFE);
 
-    if (isUtf16LE) {
-        QString content = QString::fromUtf16(
-            reinterpret_cast<const char16_t *>(raw.constData()),
-            raw.size() / 2);
-        if (!content.isEmpty() && content[0] == QChar(0xFEFF))
-            content = content.mid(1);
-
-        content.replace("\\", "\\\\");
-        tmpFile.setAutoRemove(true);
-        if (!tmpFile.open()) return false;
-        tmpFile.write(content.toUtf8());
-        tmpFile.flush();
-        outPath = tmpFile.fileName();
-    } else {
-        outPath = originalPath;
-    }
+    if (isUtf16LE && raw.size() % 2 != 0) return false;
+    QStringDecoder decoder(isUtf16LE ? QStringConverter::Utf16LE : QStringConverter::Utf8);
+    QString content = decoder(raw);
+    if (decoder.hasError()) return false;
+    if (content.startsWith(QChar(0xFEFF))) content.remove(0, 1);
+    content.replace("\\", "\\\\");
+    QByteArray prepared = content.toUtf8();
+    tmpFile.setAutoRemove(true);
+    if (!tmpFile.open() || tmpFile.write(prepared) != prepared.size() || !tmpFile.flush()) return false;
+    outPath = tmpFile.fileName();
     return true;
 }
 
@@ -127,8 +164,22 @@ void IniConfig::load(const QString &path)
 
     QSettings ini(settingsPath, QSettings::IniFormat);
 
+    memoryList = {};
+    int memoryCount = qBound(0, ini.value("50memory/memnum", 0).toInt(), 65536);
+    for (int index = 0; index < memoryCount; ++index) {
+        QString entry = iniStr(ini, QString("50memory/mem%1").arg(index)).trimmed();
+        int separator = entry.indexOf(QRegularExpression("\\s"));
+        if (separator < 0) continue;
+        bool valid = false;
+        quint32 address = entry.left(separator).toUInt(&valid, 16);
+        if (!valid) continue;
+        memoryList.addr.append(address);
+        memoryList.note.append(entry.mid(separator).trimmed());
+    }
+    memoryList.num = memoryList.addr.size();
+
     // ── [run] section ───────────────────────────────────
-    gamePath    = ini.value("run/gamepath", "\\").toString();
+    gamePath    = iniStr(ini, "run/gamepath", "\\");
     if (!gamePath.isEmpty() && !gamePath.endsWith('\\') && !gamePath.endsWith('/'))
         gamePath += "\\";
 
@@ -137,6 +188,8 @@ void IniConfig::load(const QString &path)
     talkInvert  = ini.value("run/talkinvert", 0).toInt();
     language    = ini.value("run/language", 0).toInt();
     tileScale   = ini.value("run/TileScale", 1).toInt();
+    mainMapMode = qBound(-1, ini.value("File/MMapMode", ini.value("file/MMapMode", -1)).toInt(), 2);
+    imzIndexFileName = ini.value("File/ImzIndexFileName", ini.value("file/ImzIndexFileName", "index.ka")).toString();
     checkUpdate = ini.value("run/checkupdate", 0).toInt();
     fmCursor    = ini.value("run/fmcursor", 1).toInt();
     gameVersion = ini.value("run/GameVersion", 0).toInt();

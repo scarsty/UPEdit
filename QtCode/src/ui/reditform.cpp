@@ -1,4 +1,7 @@
 #include "reditform.h"
+#include "redit.h"
+#include <QMessageBox>
+#include <QSignalBlocker>
 #include "iniconfig.h"
 #include "rfile.h"
 #include "encoding.h"
@@ -146,7 +149,11 @@ void REditForm::onCellChanged(int row, int column)
             for (int inc = 0; inc < line.rArray[dn].dataArray.size(); ++inc) {
                 if (curRow == row) {
                     QString newVal = m_table->item(row, column)->text();
-                    RFileIO::writeRDataStr(line.rArray[dn].dataArray[inc], newVal);
+                    auto &field = line.rArray[dn].dataArray[inc];
+                    if (!REditWidget::applyFieldOperation(field, 0, newVal)) {
+                        QSignalBlocker blocker(m_table);
+                        m_table->item(row, column)->setText(RFileIO::readRDataStr(field));
+                    }
                     return;
                 }
                 curRow++;
@@ -230,7 +237,10 @@ void REditForm::onCellDoubleClicked(int row, int /*column*/)
         QString selected = QInputDialog::getItem(this, tr("选择引用"), typeName, items, curIdx, false, &ok);
         if (ok) {
             int idx = items.indexOf(selected);
-            RFileIO::writeRDataInt(single, idx - 1);
+            if (idx < 0 || !REditWidget::applyFieldOperation(single, 0, QString::number(idx - 1))) {
+                QMessageBox::warning(this, tr("选择引用"), tr("引用编号超出此字段的数值范围。"));
+                return;
+            }
             displayRecord(m_typeIndex, m_recordIndex);
         }
     } else {
@@ -239,8 +249,8 @@ void REditForm::onCellDoubleClicked(int row, int /*column*/)
         bool ok;
         QString title = (single.dataType == 0) ? tr("修改数值") : tr("修改字符串");
         QString newVal = QInputDialog::getText(this, title, tr("修改此项:"), QLineEdit::Normal, curVal, &ok);
-        if (ok && !newVal.isEmpty()) {
-            RFileIO::writeRDataStr(single, newVal);
+        if (ok) {
+            REditWidget::applyFieldOperation(single, 0, newVal);
             displayRecord(m_typeIndex, m_recordIndex);
         }
     }

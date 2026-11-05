@@ -21,6 +21,7 @@
 #include <QSaveFile>
 #include <QtEndian>
 #include <QCloseEvent>
+#include <QSaveFile>
 #include <cstring>
 
 SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
@@ -130,6 +131,8 @@ SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(btnImport, &QPushButton::clicked, this, &SceneMapEdit::onImportScene);
     connect(btnExport, &QPushButton::clicked, this, &SceneMapEdit::onExportScene);
     connect(btnExportImg, &QPushButton::clicked, this, &SceneMapEdit::onExportImage);
+    btnUndo->setShortcut(QKeySequence("Ctrl+Z"));
+    btnRedo->setShortcut(QKeySequence("Ctrl+Shift+Z"));
     connect(btnUndo, &QPushButton::clicked, this, &SceneMapEdit::onUndo);
     connect(btnRedo, &QPushButton::clicked, this, &SceneMapEdit::onRedo);
     connect(btnEvtConfirm, &QPushButton::clicked, this, &SceneMapEdit::onEventConfirm);
@@ -289,11 +292,6 @@ void SceneMapEdit::loadEventToEditor(int eventIndex, int ix, int iy)
 
 int SceneMapEdit::displayedEventPic(const SceneEvent &evt) const
 {
-    if (evt.beginPic1 < evt.endPic) {
-        int span = evt.endPic - evt.beginPic1;
-        if (span > 0)
-            return evt.beginPic1 + (evt.picDelay * 2) % span;
-    }
     return evt.beginPic1;
 }
 
@@ -476,7 +474,10 @@ void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
             return;
         }
     }
-    if ((layer == 4 || layer == 6) && btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
+    if (layer == 4 || layer == 6) {
+        if (btn == Qt::LeftButton || btn == Qt::RightButton) m_selectionStart = QPoint(ix, iy);
+        return;
+    }
     if (layer == 5 && !m_mapData.map.isEmpty()) {
         if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
         if (btn == Qt::RightButton && m_moduleMap.layerNum > 0) {
@@ -492,19 +493,13 @@ void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
         auto &eventLayer = m_mapData.map[0].mapLayer[3];
         if (m_deleteMode->isChecked()) {
             eventLayer.pic[ix][iy] = -1;
-            bool referenced = false;
-            for (const auto &column : eventLayer.pic)
-                for (int reference : column) if (reference == eventIndex) referenced = true;
-            if (eventIndex >= 0 && !referenced) {
-                events[eventIndex] = {};
-                events[eventIndex].num = events[eventIndex].event1 = events[eventIndex].event2 = events[eventIndex].event3 = -1;
-            }
             m_selectedEventIndex = -1;
             addUndoSave();
             renderMap();
             return;
         }
         if (eventIndex < 0) {
+            if (btn != Qt::RightButton) return;
             QSet<int> used;
             for (const auto &column : eventLayer.pic) for (int reference : column) if (reference >= 0) used.insert(reference);
             for (int candidate = 0; candidate < 200; ++candidate)
@@ -845,7 +840,10 @@ void SceneMapEdit::onExportImage()
         painter.end();
         image = opaque;
     }
-    if (!image.save(f)) QMessageBox::warning(this, tr("导出"), tr("图片写入失败"));
+    QSaveFile output(f);
+    QByteArray format = QFileInfo(f).suffix().toLatin1();
+    if (!output.open(QIODevice::WriteOnly) || !image.save(&output, format.constData()) || !output.commit())
+        QMessageBox::warning(this, tr("导出"), tr("图片写入失败"));
 }
 
 void SceneMapEdit::handleMouseMove(QMouseEvent *event)
@@ -865,13 +863,28 @@ void SceneMapEdit::syncCurrentScene()
 
 void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
 {
-    if (event->button() != Qt::LeftButton || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
-    QPoint end = screenToIso(event->pos().x(), event->pos().y());
-    QRect bounds = QRect(m_selectionStart, end).normalized().intersected(QRect(0, 0, 64, 64));
+    if (m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
     int layer = m_layerCombo->currentIndex();
+    if (event->button() != Qt::LeftButton && !(event->button() == Qt::RightButton && (layer == 4 || layer == 6))) return;
+    QPoint end = screenToIso(event->pos().x(), event->pos().y());
+    QPoint first(qMin(m_selectionStart.x(), end.x()), qMin(m_selectionStart.y(), end.y()));
+    QPoint last(qMax(m_selectionStart.x(), end.x()), qMax(m_selectionStart.y(), end.y()));
+    QRect bounds = QRect(first, last).intersected(QRect(0, 0, 64, 64));
     if (bounds.isEmpty()) { m_selectionStart = QPoint(-1, -1); return; }
     if (layer <= 2 && bounds.size() == QSize(1, 1)) { m_selectionStart = QPoint(-1, -1); return; }
     if (layer == 4 || layer == 6) {
+        if (end == m_selectionStart) {
+            auto &height = m_mapData.map[0].mapLayer[layer == 4 ? 4 : 5].pic[first.x()][first.y()];
+            int value = int(height) + (event->button() == Qt::LeftButton ? 1 : -1);
+            if (value >= -32768 && value <= 32767) {
+                height = value;
+                m_altitude->setValue(value);
+                addUndoSave();
+            }
+            m_selectionStart = QPoint(-1, -1);
+            renderMap();
+            return;
+        }
         for (int column = bounds.left(); column <= bounds.right(); ++column)
             for (int row = bounds.top(); row <= bounds.bottom(); ++row)
                 m_mapData.map[0].mapLayer[layer == 4 ? 4 : 5].pic[column][row] = m_altitude->value();
@@ -905,34 +918,43 @@ void SceneMapEdit::onImportModule()
         QMessageBox::warning(this, tr("导入"), tr("场景模块格式不正确"));
         return;
     }
-    m_moduleMap = module;
-    m_moduleEvents.clear();
+    QMap<int, SceneEvent> moduleEvents;
     QFile eventFile(path + ".events");
     if (eventFile.exists()) {
-        if (!eventFile.open(QIODevice::ReadOnly)) { m_moduleMap = {}; QMessageBox::warning(this, tr("导入"), tr("事件文件无法读取")); return; }
-        if (eventFile.size() > 64 * 64 * 6 * 2 + 6000) { m_moduleMap = {}; QMessageBox::warning(this, tr("导入"), tr("事件文件过大")); return; }
+        if (!eventFile.open(QIODevice::ReadOnly)) { QMessageBox::warning(this, tr("导入"), tr("事件文件无法读取")); return; }
+        if (eventFile.size() > 64 * 64 * 6 * 2 + 6000) { QMessageBox::warning(this, tr("导入"), tr("事件文件过大")); return; }
         QDataStream stream(&eventFile);
         stream.setByteOrder(QDataStream::LittleEndian);
         QByteArray mapBytes;
         quint32 count = 0;
         stream >> mapBytes >> count;
         if (mapBytes != MapIO::encodeMap(module, true) || count > 200) {
-            m_moduleMap = {}; QMessageBox::warning(this, tr("导入"), tr("事件文件与模块不匹配")); return;
+            QMessageBox::warning(this, tr("导入"), tr("事件文件与模块不匹配")); return;
         }
         for (quint32 index = 0; index < count; ++index) {
             qint16 reference;
             SceneEvent event;
             stream >> reference >> event.canWalk >> event.num >> event.event1 >> event.event2 >> event.event3
                 >> event.beginPic1 >> event.endPic >> event.beginPic2 >> event.picDelay >> event.xPos >> event.yPos;
-            if (stream.status() != QDataStream::Ok || reference < 0 || reference >= 200 || m_moduleEvents.contains(reference)) {
-                m_moduleMap = {}; m_moduleEvents.clear(); QMessageBox::warning(this, tr("导入"), tr("事件文件损坏")); return;
+            if (stream.status() != QDataStream::Ok || reference < 0 || reference >= 200 || moduleEvents.contains(reference)) {
+                QMessageBox::warning(this, tr("导入"), tr("事件文件损坏")); return;
             }
-            m_moduleEvents.insert(reference, event);
+            moduleEvents.insert(reference, event);
         }
+        if (stream.status() != QDataStream::Ok || !stream.atEnd()) {
+            QMessageBox::warning(this, tr("导入"), tr("事件文件损坏")); return;
+        }
+        for (const auto &column : module.mapLayer[3].pic)
+            for (int reference : column)
+                if (reference < -1 || reference >= 200 || (reference >= 0 && !moduleEvents.contains(reference))) {
+                    QMessageBox::warning(this, tr("导入"), tr("模块包含未定义的事件引用")); return;
+                }
     } else {
-        for (auto &column : m_moduleMap.mapLayer[3].pic) column.fill(-1);
+        for (auto &column : module.mapLayer[3].pic) column.fill(-1);
         QMessageBox::information(this, tr("导入"), tr("旧版模块不含事件定义，已跳过事件层"));
     }
+    m_moduleMap = module;
+    m_moduleEvents = moduleEvents;
     m_layerCombo->setCurrentIndex(5);
     m_statusBar->showMessage(tr("模块已载入，右键粘贴"));
 }
@@ -963,6 +985,8 @@ void SceneMapEdit::onExportModule()
         MapStruct previous = m_mapData;
         DFile previousEvents = m_dFile;
         int previousScene = m_currentScene;
+        int previousLayers = m_exportLayers;
+        bool previousExporting = m_exporting;
         m_dFile.mapEvent.resize(1);
         for (auto entry = m_moduleEvents.constBegin(); entry != m_moduleEvents.constEnd(); ++entry)
             m_dFile.mapEvent[0].sceneEvent[entry.key()] = entry.value();
@@ -976,9 +1000,12 @@ void SceneMapEdit::onExportModule()
         m_mapData = previous;
         m_dFile = previousEvents;
         m_currentScene = previousScene;
-        m_exporting = false;
+        m_exporting = previousExporting;
+        m_exportLayers = previousLayers;
         renderMap();
-        if (!preview.save(path + ".png")) QMessageBox::warning(this, tr("导出"), tr("模块已保存，但预览图写入失败"));
+        QSaveFile output(path + ".png");
+        if (!output.open(QIODevice::WriteOnly) || !preview.save(&output, "PNG") || !output.commit())
+            QMessageBox::warning(this, tr("导出"), tr("模块已保存，但预览图写入失败"));
     }
 }
 

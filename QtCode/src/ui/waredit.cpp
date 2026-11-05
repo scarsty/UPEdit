@@ -1,4 +1,5 @@
 #include "waredit.h"
+#include <QtEndian>
 #include "fileio.h"
 #include <QBuffer>
 #include <QMouseEvent>
@@ -19,6 +20,34 @@
 #include <QDataStream>
 #include <QSettings>
 #include <QInputDialog>
+#include <QCloseEvent>
+
+QByteArray WarEdit::stateBytes() const
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    stream << m_warFile.records.size();
+    for (const auto &record : m_warFile.records) {
+        stream << record.fields.size();
+        for (const auto &field : record.fields) stream << field.values << field.rawBytes;
+    }
+    return bytes;
+}
+
+bool WarEdit::confirmDiscard()
+{
+    if ((!m_loaded && m_warFile.records.isEmpty()) || stateBytes() == m_savedState) return true;
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存战斗数据修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) return false;
+    if (answer == QMessageBox::Save) { onSave(); return stateBytes() == m_savedState; }
+    return true;
+}
+
+void WarEdit::closeEvent(QCloseEvent *event)
+{
+    if (confirmDiscard()) event->accept(); else event->ignore();
+}
 
 static QString warFieldDisplayName(const WTermini &wt, int flatIndex)
 {
@@ -61,6 +90,20 @@ WarEdit::WarEdit(QWidget *parent) : QWidget(parent)
     auto *rightLayout = new QVBoxLayout(rightPanel);
     m_showMap = new QCheckBox(tr("显示地图"));
     m_showMap->setChecked(true);
+    m_keepSelection = new QCheckBox(tr("移动后保留选择"));
+    QTemporaryFile selectionSettings;
+    QString selectionPath;
+    if (prepareIniPath(IniConfig::instance().iniPath, selectionSettings, selectionPath)) {
+        QSettings settings(selectionPath, QSettings::IniFormat);
+        m_keepSelection->setChecked(settings.value("W_Modify/selectcontinue", 0).toInt() == 1);
+    }
+    connect(m_keepSelection, &QCheckBox::toggled, this, [this](bool keep) {
+        if (!saveWarSelection(IniConfig::instance().iniPath, keep)) {
+            QSignalBlocker blocker(m_keepSelection);
+            m_keepSelection->setChecked(!keep);
+            QMessageBox::warning(this, tr("战斗位置"), tr("选择模式保存失败，设置未修改"));
+        }
+    });
     m_scaleSpin = new QSpinBox; m_scaleSpin->setRange(1, 8); m_scaleSpin->setValue(1);
     m_posScroll = new QScrollArea;
     m_posImage = new QLabel;
@@ -69,6 +112,7 @@ WarEdit::WarEdit(QWidget *parent) : QWidget(parent)
 
     auto *rTop = new QHBoxLayout;
     rTop->addWidget(m_showMap);
+    rTop->addWidget(m_keepSelection);
     rTop->addWidget(new QLabel(tr("缩放:")));
     rTop->addWidget(m_scaleSpin);
     rTop->addStretch();
@@ -97,28 +141,36 @@ WarEdit::WarEdit(QWidget *parent) : QWidget(parent)
     connect(m_table, &QTableWidget::itemChanged, this, &WarEdit::onTableItemChanged);
 
     // 自动加载战斗数据
-    onLoad();
+    if (readWIni() && readW()) {
+        readWarMapDef();
+        readWarMapGrp();
+        if (!m_warFile.records.isEmpty()) onWarChanged(0);
+    }
 }
 
-void WarEdit::readWIni()
+bool WarEdit::readWIni()
 {
     IniConfig &cfg = IniConfig::instance();
     // Read W_Modify section from INI
     QTemporaryFile temporary;
     QString iniPath;
-    if (!prepareIniPath(cfg.iniPath, temporary, iniPath)) return;
+    if (!prepareIniPath(cfg.iniPath, temporary, iniPath)) return false;
     QSettings ini(iniPath, QSettings::IniFormat);
     ini.beginGroup("W_Modify");
 
-    m_wIni.wTerm.clear();
-    m_wSelect.clear();
-    m_mapFieldPos = -1;
-
+    QVector<WTermini> definitions;
     int fieldCount = ini.value("typedataitem", 0).toInt();
+    if (fieldCount <= 0 || fieldCount > 32767) return false;
     for (int i = 0; i < fieldCount; ++i) {
         QString val = ini.value(QString("data(%1)").arg(i)).toString();
         QStringList parts = val.split(' ', Qt::SkipEmptyParts);
-        if (parts.size() < 7) continue;
+        if (parts.size() < 7) return false;
+        for (int part : {0, 1, 2, 3, 4, 5, 8, 9, 10}) {
+            if (part >= parts.size()) continue;
+            bool valid = false;
+            int value = parts[part].toInt(&valid);
+            if (!valid || value < -32768 || value > 32767) return false;
+        }
 
         WTermini wt;
         wt.datanum = parts[0].toInt();
@@ -132,29 +184,57 @@ void WarEdit::readWIni()
         if (parts.size() > 8) wt.ismapnum = parts[8].toInt();
         if (parts.size() > 9) wt.labeltype = parts[9].toInt();
         if (parts.size() > 10) wt.labelnum = parts[10].toInt();
-        m_wIni.wTerm.append(wt);
-        if (m_mapFieldPos < 0 && wt.ismapnum == 1)
-            m_mapFieldPos = m_wIni.wTerm.size() - 1;
+        definitions.append(wt);
     }
 
     ini.endGroup();
+    WIni expanded;
+    int mapField = -1;
+    for (int field = 0; field < definitions.size(); ++field) {
+        const auto &group = definitions[field];
+        if (group.datanum < 0 || group.incnum < 0) return false;
+        if (group.datanum == 0) continue;
+        if (group.incnum == 0 || field + group.incnum > definitions.size()
+            || qint64(expanded.wTerm.size()) + qint64(group.datanum) * group.incnum > 32767) return false;
+        for (int repeat = 0; repeat < group.datanum; ++repeat) {
+            for (int member = 0; member < group.incnum; ++member) {
+                WTermini term = definitions[field + member];
+                if (term.datalen <= 0 || (term.isstr != 0 && term.isstr != 1)
+                    || (term.isstr == 0 && term.datalen != 1 && term.datalen != 2
+                        && term.datalen != 4 && term.datalen != 8)) return false;
+                term.datanum = term.incnum = 1;
+                if (group.datanum > 1) term.name += QString::number(repeat);
+                if (mapField < 0 && term.ismapnum == 1) mapField = expanded.wTerm.size();
+                expanded.wTerm.append(term);
+            }
+        }
+    }
+    if (expanded.wTerm.isEmpty()) return false;
+    m_wIni = expanded;
+    m_wSelect.clear();
+    m_mapFieldPos = mapField;
+    return true;
 }
 
-void WarEdit::readW()
+bool WarEdit::readW()
 {
     IniConfig &cfg = IniConfig::instance();
     QString warPath = cfg.gamePath + "/" + cfg.warData;
 
     QFile file(warPath);
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly)) return false;
     QByteArray data = file.readAll();
 
     // 计算记录大小
-    int recSize = 0;
-    for (const auto &wt : m_wIni.wTerm)
-        recSize += wt.datanum * wt.incnum * wt.datalen;
-
-    if (recSize <= 0) return;
+    qint64 recordSize = 0;
+    for (const auto &wt : m_wIni.wTerm) {
+        if (wt.datanum < 0 || wt.incnum < 0 || wt.datalen <= 0
+            || (wt.isstr != 1 && wt.datalen != 1 && wt.datalen != 2 && wt.datalen != 4 && wt.datalen != 8)) return false;
+        recordSize += qint64(wt.datanum) * wt.incnum * wt.datalen;
+        if (recordSize > INT_MAX) return false;
+    }
+    if (file.error() != QFile::NoError || recordSize <= 0 || data.size() % recordSize != 0) return false;
+    int recSize = int(recordSize);
     int warCount = data.size() / recSize;
 
     m_warFile.typeCount = warCount;
@@ -202,17 +282,35 @@ void WarEdit::readW()
 
     rebuildWSelect();
     rebuildWarCombo();
+    m_savedState = stateBytes();
+    m_loaded = true;
+    return true;
 }
 
 void WarEdit::onLoad()
 {
-    readWIni();
-    readW();
+    if (!confirmDiscard()) return;
+    WIni previousSchema = m_wIni;
+    QVector<WSelect> previousSelection = m_wSelect;
+    int previousMap = m_mapFieldPos;
+    bool previousAutoFriend = m_autoWarFriend;
+    if (!readWIni() || !readW()) {
+        m_wIni = previousSchema;
+        m_wSelect = previousSelection;
+        m_mapFieldPos = previousMap;
+        m_autoWarFriend = previousAutoFriend;
+        QMessageBox::warning(this, tr("读取"), tr("战斗数据读取失败，当前会话未改变。"));
+        return;
+    }
     readWarMapDef();
     readWarMapGrp();
     if (!m_warFile.records.isEmpty()) {
         m_warCombo->setCurrentIndex(0);
         onWarChanged(0);
+    } else {
+        m_currentWar = -1;
+        m_table->setRowCount(0);
+        drawWarPos();
     }
 }
 
@@ -405,22 +503,22 @@ void WarEdit::readWarMapDef()
     IniConfig &cfg = IniConfig::instance();
     QByteArray idxData = FileIO::readFileAll(cfg.gamePath + "/" + cfg.warMapDefIdx);
     QByteArray grpData = FileIO::readFileAll(cfg.gamePath + "/" + cfg.warMapDefGrp);
-    if (idxData.isEmpty() || grpData.isEmpty()) return;
-
-    const uint32_t *offsets = reinterpret_cast<const uint32_t *>(idxData.constData());
-    int totalEntries = idxData.size() / 4;
-    int mapCount = 0;
-    for (int i = 0; i < totalEntries; ++i) {
-        if (offsets[i] > 0) ++mapCount;
-        else break;
+    if (idxData.isEmpty() || idxData.size() % 4 != 0 || grpData.isEmpty()) return;
+    MapStruct decoded;
+    quint32 previous = 0;
+    bool padding = false;
+    for (int entry = 0; entry < idxData.size() / 4; ++entry) {
+        quint32 end = qFromLittleEndian<quint32>(idxData.constData() + entry * 4);
+        if (end == 0) { padding = true; continue; }
+        if (padding || end > quint64(grpData.size()) || end < previous || end - previous != 16384) return;
+        Map map;
+        if (!MapIO::readSingleMap(grpData, int(previous), map, 2, 64, 64)) return;
+        decoded.map.append(map);
+        previous = end;
     }
-
-    m_warMapData.num = mapCount;
-    m_warMapData.map.resize(mapCount);
-    for (int i = 0; i < mapCount; ++i) {
-        int startOff = (i == 0) ? 0 : static_cast<int>(offsets[i - 1]);
-        MapIO::readSingleMap(grpData, startOff, m_warMapData.map[i], 2, 64, 64);
-    }
+    if (previous != quint64(grpData.size()) || decoded.map.isEmpty()) return;
+    decoded.num = decoded.map.size();
+    m_warMapData = decoded;
 }
 
 void WarEdit::drawWarPos()
@@ -565,6 +663,10 @@ bool WarEdit::eventFilter(QObject *watched, QEvent *event)
         auto &values = record.fields[selection.pos1].values;
         if (selection.pos2 >= 0 && selection.pos2 < values.size()) values[selection.pos2] = selection.labelnum == xLabel ? x : y;
     }
+    if (!m_keepSelection->isChecked()) {
+        m_selectedPerson = -1;
+        m_selectedFaction = 0;
+    }
     displayW();
     countWarPos();
     drawWarPos();
@@ -594,31 +696,6 @@ void WarEdit::readWarMapGrp()
 
 void WarEdit::onSave()
 {
-    // 从表格回写到m_warFile
-    if (m_currentWar < 0) return;
-    auto &rec = m_warFile.records[m_currentWar];
-    int row = 0;
-    for (int f = 0; f < m_wIni.wTerm.size() && f < rec.fields.size(); ++f) {
-        const auto &wt = m_wIni.wTerm[f];
-        for (int d = 0; d < rec.fields[f].values.size(); ++d) {
-            auto *item = m_table->item(row, 1);
-            if (item) {
-                if (wt.isstr == 1) {
-                    // 字符串字段: 编码回写到 rawBytes
-                    if (d < rec.fields[f].rawBytes.size()) {
-                        rec.fields[f].rawBytes[d].fill(0, wt.datalen);
-                        Encoding::writeInStr(item->text(),
-                            rec.fields[f].rawBytes[d].data(), wt.datalen);
-                    }
-                } else {
-                    rec.fields[f].values[d] = item->text().toLongLong();
-                }
-            }
-            row++;
-        }
-    }
-    rebuildWarCombo();
-
     // 写入二进制文件
     IniConfig &cfg = IniConfig::instance();
     QString warPath = cfg.gamePath + "/" + cfg.warData;
@@ -650,6 +727,8 @@ void WarEdit::onSave()
     if (cfg.warData.isEmpty() || !FileIO::writeFileAll(warPath, bytes)) {
         QMessageBox::warning(this, tr("保存"), tr("保存失败")); return;
     }
+    m_savedState = stateBytes();
+    m_loaded = true;
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -691,11 +770,24 @@ void WarEdit::onExportExcel()
     QString filename = QFileDialog::getSaveFileName(this, tr("导出Excel"), {}, tr("Excel 文件 (*.xlsx)"));
     if (filename.isEmpty()) return;
 
-    XlsxWriter writer;
-    if (!writer.create(filename) || !writer.addWorksheet("Sheet1")) {
-        QMessageBox::warning(this, tr("导出失败"), tr("无法创建 Excel 文件。"));
+    if (!exportExcel(filename)) {
+        QMessageBox::warning(this, tr("导出失败"), tr("Excel 写入失败，目标文件未替换。"));
         return;
     }
+    QMessageBox::information(this, tr("导出成功"), tr("战斗数据已导出为 Excel。"));
+}
+
+bool WarEdit::exportExcel(const QString &filename)
+{
+    if (!XlsxWriter::loadLibrary("xlsxwriter")) return false;
+    QTemporaryFile temporary(QFileInfo(filename).absolutePath() + "/upedit-war-XXXXXX.xlsx");
+    if (!temporary.open()) return false;
+    QString temporaryPath = temporary.fileName();
+    if (!temporary.remove()) return false;
+
+    XlsxWriter writer;
+    if (!writer.create(temporaryPath)) return false;
+    writer.addWorksheet("Sheet1");
 
     int col = 0;
     for (const auto &wt : m_wIni.wTerm) {
@@ -718,15 +810,20 @@ void WarEdit::onExportExcel()
                         value = Encoding::readOutStr(field.rawBytes[d].constData(), field.rawBytes[d].size());
                     writer.writeString(row + 1, col++, value);
                 } else {
-                    double value = (d < field.values.size()) ? static_cast<double>(field.values[d]) : 0.0;
-                    writer.writeNumber(row + 1, col++, value);
+                    qint64 value = (d < field.values.size()) ? field.values[d] : 0;
+                    if (value < -999999999999999LL || value > 999999999999999LL)
+                        writer.writeString(row + 1, col++, QString::number(value));
+                    else
+                        writer.writeNumber(row + 1, col++, static_cast<double>(value));
                 }
             }
         }
     }
 
-    writer.close();
-    QMessageBox::information(this, tr("导出成功"), tr("战斗数据已导出为 Excel。"));
+    bool saved = writer.close();
+    if (saved) saved = FileIO::writeFileAll(filename, FileIO::readFileAll(temporaryPath));
+    QFile::remove(temporaryPath);
+    return saved;
 }
 
 void WarEdit::onImportExcel()
@@ -734,21 +831,29 @@ void WarEdit::onImportExcel()
     QString filename = QFileDialog::getOpenFileName(this, tr("导入Excel"), {}, tr("Excel 文件 (*.xlsx)"));
     if (filename.isEmpty()) return;
 
-    XlsxReader reader;
-    if (!reader.open(filename)) {
-        QMessageBox::warning(this, tr("导入失败"), tr("无法打开 Excel 文件。"));
+    if (!importExcel(filename)) {
+        QMessageBox::warning(this, tr("导入失败"), tr("Excel 数据或字段范围无效，原数据未修改。"));
         return;
     }
+    rebuildWarCombo();
+    m_warCombo->setCurrentIndex(0);
+    onWarChanged(0);
+    QMessageBox::information(this, tr("导入成功"), tr("战斗数据已从 Excel 导入。"));
+}
+
+bool WarEdit::importExcel(const QString &filename)
+{
+    if (!XlsxReader::loadLibrary("libxlsxio_read") || m_wIni.wTerm.isEmpty()) return false;
+
+    XlsxReader reader;
+    if (!reader.open(filename)) return false;
 
     QVector<QStringList> rows = reader.readAll("Sheet1");
     if (rows.isEmpty())
         rows = reader.readAll();
     reader.close();
 
-    if (rows.size() <= 1) {
-        QMessageBox::warning(this, tr("导入失败"), tr("Excel 中没有可导入的数据行。"));
-        return;
-    }
+    if (rows.size() <= 1) return false;
 
     QVector<WRecord> records;
     for (int row = 1; row < rows.size(); ++row) {
@@ -767,6 +872,7 @@ void WarEdit::onImportExcel()
         int col = 0;
         for (int f = 0; f < m_wIni.wTerm.size(); ++f) {
             const auto &wt = m_wIni.wTerm[f];
+            if (wt.datanum < 0 || wt.incnum < 0 || wt.datalen <= 0) return false;
             int count = wt.datanum * wt.incnum;
             rec.fields[f].values.resize(count, 0);
             if (wt.isstr == 1)
@@ -778,26 +884,24 @@ void WarEdit::onImportExcel()
                     Encoding::writeInStr(cell, rec.fields[f].rawBytes[d].data(), wt.datalen);
                 } else {
                     bool ok = false;
-                    qlonglong value = cell.toLongLong(&ok);
-                    rec.fields[f].values[d] = ok ? value : 0;
+                    qlonglong value = cell.isEmpty() ? 0 : cell.toLongLong(&ok);
+                    if (!cell.isEmpty() && !ok) return false;
+                    int bits = wt.datalen * 8;
+                    if (bits != 8 && bits != 16 && bits != 32 && bits != 64) return false;
+                    if (bits < 64 && (value < -(qint64(1) << (bits - 1)) || value > (qint64(1) << (bits - 1)) - 1)) return false;
+                    rec.fields[f].values[d] = value;
                 }
             }
         }
         records.append(rec);
     }
 
-    if (records.isEmpty()) {
-        QMessageBox::warning(this, tr("导入失败"), tr("Excel 中没有有效记录。"));
-        return;
-    }
+    if (records.isEmpty()) return false;
 
     m_warFile.records = records;
     m_warFile.typeCount = records.size();
     m_warFile.wType.dataNum = records.size();
-    rebuildWarCombo();
-    m_warCombo->setCurrentIndex(0);
-    onWarChanged(0);
-    QMessageBox::information(this, tr("导入成功"), tr("战斗数据已从 Excel 导入。"));
+    return true;
 }
 
 void WarEdit::onTableItemChanged(QTableWidgetItem *item)
@@ -822,8 +926,16 @@ void WarEdit::onTableItemChanged(QTableWidgetItem *item)
     } else {
         bool ok = false;
         qlonglong value = item->text().toLongLong(&ok);
-        if (ok)
-            rec.fields[f].values[d] = value;
+        if (wt.datalen == 1) ok = ok && value >= -128 && value <= 127;
+        else if (wt.datalen == 2) ok = ok && value >= -32768 && value <= 32767;
+        else if (wt.datalen == 4) ok = ok && value >= INT_MIN && value <= INT_MAX;
+        else if (wt.datalen != 8) ok = false;
+        if (!ok) {
+            QSignalBlocker blocker(m_table);
+            item->setText(QString::number(rec.fields[f].values[d]));
+            return;
+        }
+        rec.fields[f].values[d] = value;
     }
 
     if (wt.isname == 1)
@@ -876,7 +988,8 @@ void WarEdit::onCellDoubleClicked(int row, int /*column*/)
         QString selected = QInputDialog::getItem(this, tr("选择引用"), typeName, items, curIdx, false, &ok);
         if (ok) {
             int idx = items.indexOf(selected);
-            rec.fields[f].values[d] = idx - 1;
+            if (idx >= 0 && m_table->item(row, 1))
+                m_table->item(row, 1)->setText(QString::number(idx - 1));
         }
     } else {
         // 非引用字段: 弹出编辑对话框 (匹配 Delphi InputBox)
@@ -891,8 +1004,8 @@ void WarEdit::onCellDoubleClicked(int row, int /*column*/)
         } else {
             QString curVal = QString::number(rec.fields[f].values[d]);
             QString newVal = QInputDialog::getText(this, tr("修改数值"), tr("修改此项:"), QLineEdit::Normal, curVal, &ok);
-            if (ok)
-                rec.fields[f].values[d] = newVal.toLongLong();
+            if (ok && m_table->item(row, 1))
+                m_table->item(row, 1)->setText(newVal);
         }
     }
     if (wt.isname == 1)

@@ -101,7 +101,10 @@ bool TakeIn::eventFilter(QObject *watched, QEvent *event)
     } else if (event->type() == QEvent::MouseButtonRelease) {
         auto *mouse = static_cast<QMouseEvent *>(event);
         if (mouse->button() == Qt::LeftButton && m_cropStart.x() >= 0) {
-            QRect crop = QRect(m_cropStart, mouse->position().toPoint()).normalized().intersected(m_sourceImage.rect());
+            QPoint end = mouse->position().toPoint();
+            QPoint first(qMin(m_cropStart.x(), end.x()), qMin(m_cropStart.y(), end.y()));
+            QPoint last(qMax(m_cropStart.x(), end.x()), qMax(m_cropStart.y(), end.y()));
+            QRect crop = QRect(first, last).intersected(m_sourceImage.rect());
             m_cropStart = QPoint(-1, -1);
             if (crop.width() > 1 && crop.height() > 1) {
                 m_sourceImage = m_sourceImage.copy(crop);
@@ -166,14 +169,21 @@ void TakeIn::onSetTransColor()
 
 void TakeIn::onConfirmSize()
 {
-    int w = m_widthEdit->text().toInt();
-    int h = m_heightEdit->text().toInt();
-    if (w > 0 && h > 0 && !m_sourceImage.isNull()) {
-        QImage cropped = m_sourceImage.copy(0, 0, w, h);
-        m_sourceImage = cropped;
-        m_imageLabel->setPixmap(QPixmap::fromImage(cropped));
-        m_imageLabel->resize(cropped.size());
+    if (m_sourceImage.isNull()) return;
+    bool validWidth, validHeight;
+    int width = m_widthEdit->text().toInt(&validWidth);
+    int height = m_heightEdit->text().toInt(&validHeight);
+    if (!validWidth || !validHeight || width <= 0 || height <= 0
+        || width > SHRT_MAX || height > SHRT_MAX || qint64(width) * height > 67108864) {
+        QMessageBox::warning(this, tr("尺寸"), tr("尺寸必须是有效正整数，单边不超过 32767，总像素不超过 67108864"));
+        return;
     }
+    QImage cropped = m_sourceImage.copy(0, 0, width, height);
+    if (cropped.isNull()) {
+        QMessageBox::warning(this, tr("尺寸"), tr("无法分配图片内存")); return;
+    }
+    m_sourceImage = cropped;
+    displayImage();
 }
 
 void TakeIn::onImportToGrp()

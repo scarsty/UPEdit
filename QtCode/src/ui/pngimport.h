@@ -12,6 +12,7 @@
 // PNG 批量导入 (对应 Delphi TForm94)
 class PNGImport : public QWidget {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit PNGImport(QWidget *parent = nullptr);
 
@@ -25,7 +26,7 @@ private slots:
     void onStartImport();
 
 private:
-    void loadPalette(const QString &path);
+    bool loadPalette(const QString &path);
     void importPNG(int index);
 
     QLineEdit *m_colEdit, *m_idxEdit, *m_grpEdit;
@@ -73,9 +74,14 @@ private:
 // PNG 批量导出 (对应 Delphi TForm88)
 class PNGExport : public QDialog {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit PNGExport(QWidget *parent = nullptr);
     void startExport(const QVector<GrpPic> &pics, const QVector<QRgb> &palette);
+    void reject() override;
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void onSelectPath();
@@ -87,6 +93,7 @@ private:
     QProgressBar *m_progress;
     QLabel *m_statusLabel;
     bool m_running = false;
+    bool m_exporting = false;
     QVector<GrpPic> m_pics;
     QVector<QRgb> m_palette;
 };

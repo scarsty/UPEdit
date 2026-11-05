@@ -12,6 +12,7 @@
 // PIC 图片编辑器 (对应 Delphi TForm4)
 class PicEdit : public QWidget {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit PicEdit(QWidget *parent = nullptr);
     void openFile(const QString &path);
@@ -24,6 +25,7 @@ public:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
     void onOpen();
@@ -38,6 +40,8 @@ private slots:
     void onIndexChanged(int val);
 
 private:
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
     void displayCurrent();
     void drawThumbnails();
     void insertImage(bool append);
@@ -54,4 +58,5 @@ private:
     QVector<PicData> m_pics;
     int m_currentIndex = 0;
     QString m_filePath;
+    QByteArray m_savedState;
 };

@@ -27,6 +27,13 @@ private:
     friend int runSelfTests(const QString &reportPath);
     void drawPNG();
     QImage imageFor(const GrpPic &picture) const;
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
+    bool saveHeads();
+    void closeEvent(QCloseEvent *event) override;
+    QByteArray m_savedState;
+    QString m_loadedIdx, m_loadedGrp;
+    bool m_exporting = false;
     uint8_t m_red[256]{}, m_green[256]{}, m_blue[256]{};
     bool m_paletteReady = false;
 

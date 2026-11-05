@@ -10,6 +10,7 @@
 // 地图导出对话框 (对应 Delphi TForm93)
 class OutputMap : public QDialog {
     Q_OBJECT
+    friend int runSelfTests(const QString &reportPath);
 public:
     explicit OutputMap(QWidget *parent = nullptr);
     void setMapImage(const QImage &image) { m_mapImage = image; }

@@ -17,6 +17,49 @@
 #include <QColorDialog>
 #include <QGroupBox>
 #include <QSettings>
+#include <QTemporaryFile>
+#include <QDataStream>
+#include <QCloseEvent>
+#include <QApplication>
+#include <QClipboard>
+#include <QMimeData>
+
+QByteArray GrpList::stateBytes() const
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    for (const auto &picture : m_grpPics)
+        stream << picture.data << picture.xoff << picture.yoff;
+    return bytes;
+}
+
+bool GrpList::savePictures()
+{
+    QString index = m_loadedIdx.isEmpty() ? m_idxEdit->text().trimmed() : m_loadedIdx;
+    QString data = m_loadedGrp.isEmpty() ? m_grpEdit->text().trimmed() : m_loadedGrp;
+    if (index.isEmpty() || data.isEmpty() || !GrpIO::saveGrp(index, data, m_grpPics)) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败，原文件已保留"));
+        return false;
+    }
+    m_loadedIdx = index;
+    m_loadedGrp = data;
+    m_savedState = stateBytes();
+    return true;
+}
+
+bool GrpList::confirmDiscard()
+{
+    if (m_loadedIdx.isEmpty() || stateBytes() == m_savedState) return true;
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存图片组修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Save) return savePictures();
+    return answer == QMessageBox::Discard;
+}
+
+void GrpList::closeEvent(QCloseEvent *event)
+{
+    if (confirmDiscard()) event->accept(); else event->ignore();
+}
 
 static const int SQUARE_H = 100;
 static const int TITLE_H  = 10;
@@ -52,11 +95,15 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
     {
         IniConfig &cfg = IniConfig::instance();
         // 从 INI 读取保存的颜色
-        QSettings ini(cfg.iniPath, QSettings::IniFormat);
-        int bgVal = ini.value("file/GRPListBackGround", -1).toInt();
-        int txtVal = ini.value("file/GRPListTextCol", -1).toInt();
-        if (bgVal >= 0) m_bgColor = QColor::fromRgb(bgVal & 0xFF, (bgVal >> 8) & 0xFF, (bgVal >> 16) & 0xFF);
-        if (txtVal >= 0) m_textColor = QColor::fromRgb(txtVal & 0xFF, (txtVal >> 8) & 0xFF, (txtVal >> 16) & 0xFF);
+        QTemporaryFile temporary;
+        QString preparedPath;
+        if (prepareIniPath(cfg.iniPath, temporary, preparedPath)) {
+            QSettings ini(preparedPath, QSettings::IniFormat);
+            int bgVal = ini.value("file/GRPListBackGround", -1).toInt();
+            int txtVal = ini.value("file/GRPListTextCol", -1).toInt();
+            if (bgVal >= 0) m_bgColor = QColor::fromRgb(bgVal & 0xFF, (bgVal >> 8) & 0xFF, (bgVal >> 16) & 0xFF);
+            if (txtVal >= 0) m_textColor = QColor::fromRgb(txtVal & 0xFF, (txtVal >> 8) & 0xFF, (txtVal >> 16) & 0xFF);
+        }
     }
 
     auto *colorGroup = new QGroupBox(tr("背景和字体颜色"));
@@ -103,9 +150,14 @@ GrpList::GrpList(QWidget *parent) : QWidget(parent)
     m_contextMenu = new QMenu(this);
     m_contextMenu->addAction(tr("编辑"), this, &GrpList::onEditCurrent);
     m_contextMenu->addAction(tr("替换PNG"), this, &GrpList::onReplacePNG);
+    m_contextMenu->addAction(tr("替换PNG并转RLE"), this, [this] { replacePNG(true); });
+    m_contextMenu->addAction(tr("复制贴图"), this, &GrpList::onCopyCurrent);
+    m_contextMenu->addAction(tr("粘贴贴图"), this, &GrpList::onPasteCurrent);
     m_contextMenu->addSeparator();
     m_contextMenu->addAction(tr("插入"), this, &GrpList::onInsertBefore);
     m_contextMenu->addAction(tr("删除"), this, &GrpList::onDeleteCurrent);
+    m_contextMenu->addAction(tr("追加空贴图"), this, &GrpList::onAppend);
+    m_contextMenu->addAction(tr("批量偏移"), this, &GrpList::onBatchOffset);
     m_contextMenu->addSeparator();
     m_contextMenu->addAction(tr("导出全部PNG"), this, &GrpList::onExportAllPNG);
 
@@ -156,14 +208,21 @@ void GrpList::onOpenGrp()
 void GrpList::onOpenCol()
 {
     QString f = QFileDialog::getOpenFileName(this, tr("选择COL文件"), {}, "COL (*.col)");
-    if (!f.isEmpty()) { m_colEdit->setText(f); loadPalette(f); }
+    if (f.isEmpty()) return;
+    if (!loadPalette(f)) {
+        QMessageBox::warning(this, tr("调色板"), tr("COL 文件读取失败或不足 768 字节"));
+        return;
+    }
+    m_colEdit->setText(f);
+    displayGrpList();
 }
 
-void GrpList::loadPalette(const QString &path)
+bool GrpList::loadPalette(const QString &path)
 {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return;
+    if (!file.open(QIODevice::ReadOnly)) return false;
     QByteArray data = file.readAll();
+    if (file.error() != QFileDevice::NoError || data.size() < 768) return false;
     m_palette.resize(256);
     for (int i = 0; i < 256 && i * 3 + 2 < data.size(); ++i) {
         int r = (uint8_t)data[i * 3 + 0] << 2;
@@ -171,18 +230,20 @@ void GrpList::loadPalette(const QString &path)
         int b = (uint8_t)data[i * 3 + 2] << 2;
         m_palette[i] = qRgb(qMin(r, 255), qMin(g, 255), qMin(b, 255));
     }
+    return true;
 }
 
 void GrpList::loadGrpFiles(const QString &idxPath, const QString &grpPath, const QString &colPath)
 {
     m_idxEdit->setText(idxPath);
     m_grpEdit->setText(grpPath);
-    if (!colPath.isEmpty()) { m_colEdit->setText(colPath); loadPalette(colPath); }
+    if (!colPath.isEmpty()) m_colEdit->setText(colPath);
     onDisplay();
 }
 
 void GrpList::onDisplay()
 {
+    if (!confirmDiscard()) return;
     QString idxPath = m_idxEdit->text().trimmed();
     QString grpPath = m_grpEdit->text().trimmed();
     if (idxPath.isEmpty() || grpPath.isEmpty()) return;
@@ -190,6 +251,11 @@ void GrpList::onDisplay()
     if (!GrpIO::readGrp(idxPath, grpPath, m_grpPics)) {
         QMessageBox::warning(this, tr("打开"), tr("图片组索引或数据无效，保留当前列表")); return;
     }
+
+    m_loadedIdx = idxPath;
+    m_loadedGrp = grpPath;
+    m_savedState = stateBytes();
+    if (!m_colEdit->text().isEmpty()) loadPalette(m_colEdit->text());
 
     m_beginPic = 0;
     m_endPic = m_grpPics.size() - 1;
@@ -247,15 +313,22 @@ void GrpList::onSectionChanged(int index)
         if (presetIdx >= 0 && presetIdx < cfg.grpListSection.size()) {
             int secIdx = index - 1; // 减去"全部"项
             const auto &sec = cfg.grpListSection[presetIdx];
-            if (secIdx >= 0 && secIdx < sec.num) {
+            if (secIdx >= 0 && secIdx < sec.num && secIdx < sec.beginNum.size() && secIdx < sec.endNum.size()) {
                 m_beginPic = sec.beginNum[secIdx];
                 m_endPic = (sec.endNum[secIdx] == -2) ? m_grpPics.size() - 1 : sec.endNum[secIdx];
             }
         }
     }
 
+    if (m_grpPics.isEmpty()) {
+        m_beginPic = 0;
+        m_endPic = -1;
+    } else {
+        m_beginPic = qBound(0, m_beginPic, int(m_grpPics.size()) - 1);
+        m_endPic = qBound(m_beginPic, m_endPic, int(m_grpPics.size()) - 1);
+    }
     m_scrollOffset = 0;
-    m_nowPic = m_beginPic;
+    m_nowPic = m_endPic >= m_beginPic ? m_beginPic : -1;
     int totalInRange = m_endPic - m_beginPic + 1;
     int totalRows = (totalInRange + m_cols - 1) / m_cols;
     int visRows = m_imageLabel->height() / SQUARE_H + 1;
@@ -274,7 +347,7 @@ void GrpList::updateSectionCombo()
     IniConfig &cfg = IniConfig::instance();
     if (presetIdx >= 0 && presetIdx < cfg.grpListSection.size()) {
         const auto &sec = cfg.grpListSection[presetIdx];
-        for (int i = 0; i < sec.num; ++i) {
+        for (int i = 0; i < sec.num && i < sec.tag.size() && i < sec.beginNum.size() && i < sec.endNum.size(); ++i) {
             m_sectionCombo->addItem(sec.tag[i]);
         }
     }
@@ -369,6 +442,7 @@ void GrpList::mousePressEvent(QMouseEvent *e)
 
     int col = pos.x() / squareW;
     int row = pos.y() / SQUARE_H;
+    if (col >= m_cols) return;
     int idx = m_beginPic + (m_scrollOffset + row) * m_cols + col;
     if (idx >= m_beginPic && idx <= m_endPic && idx < m_grpPics.size()) {
         m_nowPic = idx;
@@ -397,14 +471,7 @@ QImage GrpList::decodeSprite(int index)
 
 void GrpList::onSave()
 {
-    QString idxPath = m_idxEdit->text().trimmed();
-    QString grpPath = m_grpEdit->text().trimmed();
-    if (idxPath.isEmpty() || grpPath.isEmpty()) return;
-
-    if (!GrpIO::saveGrp(idxPath, grpPath, m_grpPics)) {
-        QMessageBox::warning(this, tr("保存"), tr("保存失败，原文件已保留"));
-        return;
-    }
+    if (!savePictures()) return;
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -416,9 +483,11 @@ void GrpList::onScroll(int value)
 
 void GrpList::onContextMenu(const QPoint &pos)
 {
+    if (!m_imageLabel->rect().contains(pos)) return;
     int squareW = m_imageLabel->width() / m_cols;
     if (squareW < 10) squareW = 10;
     int col = pos.x() / squareW, row = pos.y() / SQUARE_H;
+    if (col >= m_cols) return;
     int idx = m_beginPic + (m_scrollOffset + row) * m_cols + col;
     if (idx >= m_beginPic && idx <= m_endPic && idx < m_grpPics.size())
         m_nowPic = idx;
@@ -464,6 +533,11 @@ void GrpList::onInsertBefore()
 
 void GrpList::onReplacePNG()
 {
+    replacePNG(false);
+}
+
+void GrpList::replacePNG(bool rle)
+{
     if (m_nowPic < 0 || m_nowPic >= m_grpPics.size()) return;
     QString f = QFileDialog::getOpenFileName(this, tr("选择PNG"), {}, "PNG (*.png)");
     if (f.isEmpty()) return;
@@ -471,7 +545,31 @@ void GrpList::onReplacePNG()
     if (!file.open(QIODevice::ReadOnly)) return;
     QByteArray data = file.readAll();
     QImage img; img.loadFromData(data, "PNG");
-    if (img.isNull()) { QMessageBox::warning(this, tr("替换"), tr("PNG 文件无效")); return; }
+    if (file.error() != QFileDevice::NoError || img.isNull()) { QMessageBox::warning(this, tr("替换"), tr("PNG 文件无效")); return; }
+    if (rle) {
+        if (m_palette.size() != 256) {
+            QMessageBox::warning(this, tr("替换"), tr("转 RLE 需要完整的 256 色调色板")); return;
+        }
+        uint8_t red[256]{}, green[256]{}, blue[256]{};
+        for (int index = 0; index < 256; ++index) {
+            red[index] = qRed(m_palette[index]);
+            green[index] = qGreen(m_palette[index]);
+            blue[index] = qBlue(m_palette[index]);
+        }
+        img = img.convertToFormat(QImage::Format_ARGB32);
+        QRgb transparent = IniConfig::instance().usualTrans & 0xffffff;
+        for (int row = 0; row < img.height(); ++row)
+            for (int column = 0; column < img.width(); ++column)
+                if ((img.pixel(column, row) & 0xffffff) == transparent)
+                    img.setPixelColor(column, row, Qt::transparent);
+        GrpPic picture = GrpIO::encodeRLE(img, red, green, blue);
+        if (picture.data.isEmpty()) {
+            QMessageBox::warning(this, tr("替换"), tr("图片超出 RLE 编码范围")); return;
+        }
+        m_grpPics[m_nowPic] = picture;
+        displayGrpList();
+        return;
+    }
     m_grpPics[m_nowPic].data = data;
     m_grpPics[m_nowPic].size = data.size();
     m_grpPics[m_nowPic].xoff = 0;
@@ -479,6 +577,48 @@ void GrpList::onReplacePNG()
     m_grpPics[m_nowPic].width = img.width();
     m_grpPics[m_nowPic].height = img.height();
     displayGrpList();
+}
+
+void GrpList::onCopyCurrent()
+{
+    if (m_nowPic < 0 || m_nowPic >= m_grpPics.size()) return;
+    const auto &picture = m_grpPics[m_nowPic];
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    stream << quint32(1) << picture.data << picture.xoff << picture.yoff << picture.width << picture.height;
+    auto *mime = new QMimeData;
+    mime->setData("application/x-upedit-grp-record", bytes);
+    QApplication::clipboard()->setMimeData(mime);
+}
+
+void GrpList::onPasteCurrent()
+{
+    if (m_nowPic < 0 || m_nowPic >= m_grpPics.size()) return;
+    QByteArray bytes = QApplication::clipboard()->mimeData()->data("application/x-upedit-grp-record");
+    if (bytes.isEmpty()) return;
+    QDataStream stream(bytes);
+    quint32 version = 0;
+    GrpPic picture;
+    stream >> version >> picture.data >> picture.xoff >> picture.yoff >> picture.width >> picture.height;
+    if (version != 1 || stream.status() != QDataStream::Ok || !stream.atEnd()
+        || picture.xoff < -32768 || picture.xoff > 32767 || picture.yoff < -32768 || picture.yoff > 32767) return;
+    picture.size = picture.data.size();
+    if (!picture.data.isEmpty()) {
+        uint8_t colors[256]{};
+        QImage decoded = GrpIO::isPNG(picture) ? GrpIO::decodePNG(picture)
+            : GrpIO::decodeRLE(picture, colors, colors, colors);
+        if (decoded.isNull()) return;
+        picture.width = decoded.width();
+        picture.height = decoded.height();
+    }
+    m_grpPics[m_nowPic] = picture;
+    displayGrpList();
+}
+
+void GrpList::onAppend()
+{
+    m_grpPics.append(GrpPic());
+    onSectionChanged(m_sectionCombo->currentIndex());
 }
 
 void GrpList::onExportAllPNG()
@@ -518,17 +658,16 @@ void GrpList::onBgColorPick()
 {
     QColor color = QColorDialog::getColor(m_bgColor, this, tr("选择背景色"));
     if (color.isValid()) {
+        int iniColor = color.red() | (color.green() << 8) | (color.blue() << 16);
+        if (!saveFileSettings(IniConfig::instance().iniPath, {{"GRPListBackGround", iniColor}})) {
+            QMessageBox::warning(this, tr("背景色"), tr("设置保存失败，未修改颜色。"));
+            return;
+        }
         m_bgColor = color;
         QPalette pal = m_bgColorPanel->palette();
         pal.setColor(QPalette::Window, m_bgColor);
         m_bgColorPanel->setPalette(pal);
         displayGrpList();
-        // 保存到 INI (对应 Delphi Button6Click)
-        // Delphi 颜色格式: BBGGRR
-        int iniColor = m_bgColor.red() | (m_bgColor.green() << 8) | (m_bgColor.blue() << 16);
-        IniConfig &cfg = IniConfig::instance();
-        QSettings ini(cfg.iniPath, QSettings::IniFormat);
-        ini.setValue("file/GRPListBackGround", iniColor);
     }
 }
 
@@ -536,15 +675,15 @@ void GrpList::onTextColorPick()
 {
     QColor color = QColorDialog::getColor(m_textColor, this, tr("选择字体色"));
     if (color.isValid()) {
+        int iniColor = color.red() | (color.green() << 8) | (color.blue() << 16);
+        if (!saveFileSettings(IniConfig::instance().iniPath, {{"GRPListTextCol", iniColor}})) {
+            QMessageBox::warning(this, tr("字体色"), tr("设置保存失败，未修改颜色。"));
+            return;
+        }
         m_textColor = color;
         QPalette pal = m_textColorPanel->palette();
         pal.setColor(QPalette::Window, m_textColor);
         m_textColorPanel->setPalette(pal);
         displayGrpList();
-        // 保存到 INI (对应 Delphi Button7Click)
-        int iniColor = m_textColor.red() | (m_textColor.green() << 8) | (m_textColor.blue() << 16);
-        IniConfig &cfg = IniConfig::instance();
-        QSettings ini(cfg.iniPath, QSettings::IniFormat);
-        ini.setValue("file/GRPListTextCol", iniColor);
     }
 }

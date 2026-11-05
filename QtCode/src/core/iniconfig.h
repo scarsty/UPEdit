@@ -14,6 +14,11 @@
 class QTemporaryFile;
 bool prepareIniPath(const QString &originalPath, QTemporaryFile &tmpFile, QString &outPath);
 bool saveRunSettings(const QString &path, const QMap<QString, int> &values);
+bool saveRunPath(const QString &path, const QString &gamePath);
+bool saveMapMode(const QString &path, int mode);
+bool saveFileSettings(const QString &path, const QMap<QString, int> &values);
+bool saveTalkArrange(const QString &path, int width);
+bool saveWarSelection(const QString &path, bool keep);
 
 class IniConfig {
 public:
@@ -26,6 +31,7 @@ public:
     QString updatePath;
     QString gamePath;
     QString palette;
+    QString imzIndexFileName = "index.ka";
     int     grpListNum  = 0;
     QVector<QString> grpListIdx;
     QVector<QString> grpListGrp;
@@ -45,6 +51,7 @@ public:
     int     gameVersion = 0;
     int     fmCursor    = 1;
     int     tileScale   = 1;
+    int     mainMapMode = -1;
 
     // R 文件相关
     int     rFileNum = 0;
@@ -56,6 +63,7 @@ public:
     QString kdefIdx, kdefGrp;
     QString kdefPath;  // KDEF 事件二进制文件
     QString nameIdx, nameGrp;
+    K50MemoryList memoryList;
 
     // 战斗文件
     WIni    wIni;

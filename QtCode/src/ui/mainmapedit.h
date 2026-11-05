@@ -30,7 +30,7 @@ protected:
 
 private:
     void readMainMapFile();
-    void readMainMapGrp();
+    bool readMainMapGrp();
     void updateTilePreview();
 
     QPoint mapToScreen(int ix, int iy) const;

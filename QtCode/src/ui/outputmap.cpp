@@ -9,6 +9,7 @@
 #include <QMessageBox>
 #include <QImage>
 #include <QFileInfo>
+#include <QSaveFile>
 #include <QPainter>
 #include "mapdata.h"
 #include "iniconfig.h"
@@ -24,6 +25,7 @@ void OutputMap::reject()
 
 void OutputMap::setMapData(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures, int scale)
 {
+    if (m_exporting) return;
     m_map = map;
     m_tiles = tiles;
     m_pictures = pictures;
@@ -142,8 +144,9 @@ void OutputMap::onExport()
                 };
                 const auto *name = field(type.namePos), *x = field(6), *y = field(7);
                 if (!name || !x || !y) continue;
-                int column = int(RFileIO::readRDataInt(*x)), row = int(RFileIO::readRDataInt(*y));
-                if (column <= 0 || row <= 0) continue;
+                qint64 columnValue = RFileIO::readRDataInt(*x), rowValue = RFileIO::readRDataInt(*y);
+                if (columnValue <= 0 || rowValue <= 0 || columnValue >= m_map.x || rowValue >= m_map.y) continue;
+                int column = int(columnValue), row = int(rowValue);
                 double factor = zoom / 100.0;
                 int originX = ((m_map.x + m_map.y) * 18 + 80) * m_scale / 2 + 18 * m_scale;
                 painter.drawText(QPointF((originX + (column - row) * 18 * m_scale) * factor,
@@ -159,7 +162,9 @@ void OutputMap::onExport()
         painter.end();
         image = opaque;
     }
-    if (!image.save(savePath)) {
+    QSaveFile output(savePath);
+    QByteArray format = QFileInfo(savePath).suffix().toLatin1();
+    if (!output.open(QIODevice::WriteOnly) || !image.save(&output, format.constData()) || !output.commit()) {
         m_logText->append(tr("导出失败: %1").arg(savePath));
         QMessageBox::warning(this, tr("导出"), tr("无法写入文件"));
         return;
