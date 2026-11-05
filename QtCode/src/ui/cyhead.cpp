@@ -1,5 +1,8 @@
 #include "cyhead.h"
 #include "grpdata.h"
+#include "iniconfig.h"
+#include "fileio.h"
+#include <QBuffer>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFileDialog>
@@ -79,14 +82,32 @@ void CYHead::onOpenGrp()
 
 void CYHead::onLoad()
 {
-    GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), m_heads);
+    QVector<GrpPic> pictures;
+    if (!GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), pictures)) {
+        QMessageBox::warning(this, tr("打开"), tr("读取图片组失败")); return;
+    }
+    const auto &config = IniConfig::instance();
+    QByteArray palette = FileIO::readFileAll(config.gamePath + "/" + config.palette);
+    m_paletteReady = palette.size() >= 768;
+    if (!m_paletteReady) {
+        for (const auto &picture : pictures) if (!GrpIO::isPNG(picture)) {
+            QMessageBox::warning(this, tr("调色板"), tr("RLE 头像需要有效的游戏调色板（至少 768 字节）")); return;
+        }
+    } else for (int index = 0; index < 256; ++index) {
+        m_red[index] = qMin(255, int(uint8_t(palette[index * 3])) * 4);
+        m_green[index] = qMin(255, int(uint8_t(palette[index * 3 + 1])) * 4);
+        m_blue[index] = qMin(255, int(uint8_t(palette[index * 3 + 2])) * 4);
+    }
+    m_heads = pictures;
     m_currentIndex = 0;
     drawPNG();
 }
 
 void CYHead::onSave()
 {
-    GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), m_heads);
+    if (!GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), m_heads)) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败，原文件未替换")); return;
+    }
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -95,22 +116,16 @@ void CYHead::drawPNG()
     m_indexLabel->setText(QString("%1/%2").arg(m_currentIndex + 1).arg(m_heads.size()));
     if (m_currentIndex < 0 || m_currentIndex >= m_heads.size()) return;
 
-    const auto &pic = m_heads[m_currentIndex];
-    QImage img;
-    // 判断 PNG
-    if (pic.data.size() > 4 && (uint8_t)pic.data[1] == 'P') {
-        img.loadFromData(pic.data);
-    } else {
-        // RLE8 解码（无palette→黑白）
-        if (pic.width > 0 && pic.height > 0) {
-            uint8_t gr[256], gg[256], gb[256];
-            for (int i = 0; i < 256; ++i) { gr[i] = gg[i] = gb[i] = (uint8_t)i; }
-            img = GrpIO::decodeRLE(pic, gr, gg, gb);
-        }
-    }
+    QImage img = imageFor(m_heads[m_currentIndex]);
 
     if (!img.isNull())
         m_imageLabel->setPixmap(QPixmap::fromImage(img));
+}
+
+QImage CYHead::imageFor(const GrpPic &picture) const
+{
+    if (GrpIO::isPNG(picture)) return GrpIO::decodePNG(picture);
+    return m_paletteReady ? GrpIO::decodeRLE(picture, m_red, m_green, m_blue) : QImage();
 }
 
 void CYHead::onPrev() { if (m_currentIndex > 0) { m_currentIndex--; drawPNG(); } }
@@ -127,9 +142,12 @@ void CYHead::onReplacePNG()
     QFile file(f);
     if (!file.open(QIODevice::ReadOnly)) return;
     QImage img(f);
+    if (img.isNull()) { QMessageBox::warning(this, tr("替换"), tr("无效的 PNG 图片")); return; }
     m_heads[m_currentIndex].data = file.readAll();
     m_heads[m_currentIndex].width = img.width();
     m_heads[m_currentIndex].height = img.height();
+    m_heads[m_currentIndex].size = m_heads[m_currentIndex].data.size();
+    m_heads[m_currentIndex].xoff = m_heads[m_currentIndex].yoff = 0;
     drawPNG();
 }
 
@@ -146,14 +164,11 @@ void CYHead::onExportAll()
         const auto &pic = m_heads[i];
         QString fname = dir + "/" + tr("头像%1.png").arg(i);
 
-        if (pic.data.size() > 4 && (uint8_t)pic.data[1] == 'P') {
-            QFile f(fname);
-            if (f.open(QIODevice::WriteOnly)) f.write(pic.data);
-        } else if (pic.width > 0 && pic.height > 0) {
-            uint8_t gr[256], gg[256], gb[256];
-            for (int j = 0; j < 256; ++j) { gr[j] = gg[j] = gb[j] = (uint8_t)j; }
-            QImage img = GrpIO::decodeRLE(pic, gr, gg, gb);
-            img.save(fname);
+        QImage image = imageFor(pic);
+        QByteArray bytes;
+        QBuffer buffer(&bytes);
+        if (image.isNull() || !image.save(&buffer, "PNG") || !FileIO::writeFileAll(fname, bytes)) {
+            QMessageBox::warning(this, tr("导出"), tr("导出头像 %1 失败").arg(i)); return;
         }
         progress.setValue(i + 1);
     }

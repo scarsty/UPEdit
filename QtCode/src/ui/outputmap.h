@@ -14,12 +14,14 @@ public:
     explicit OutputMap(QWidget *parent = nullptr);
     void setMapImage(const QImage &image) { m_mapImage = image; }
     void setMapData(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures, int scale);
+    void reject() override;
 
 private slots:
     void onExport();
     void onSelectFont();
 
 private:
+    bool m_exporting = false;
     QCheckBox *m_drawNamesCheck;
     QCheckBox *m_groundCheck, *m_surfaceCheck, *m_buildingCheck;
     QLineEdit *m_fileEdit, *m_zoomEdit;

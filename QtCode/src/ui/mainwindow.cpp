@@ -13,6 +13,7 @@
 #include "pngimport.h"
 #include "cyhead.h"
 #include "replicatedlist.h"
+#include "takein.h"
 #include "setlanguage.h"
 #include "filerelation.h"
 #include "iniconfig.h"
@@ -28,6 +29,7 @@
 #include <QFileDialog>
 #include <QMdiSubWindow>
 #include <QCloseEvent>
+#include <QFileInfo>
 
 
 const QString MainWindow::TITLE    = QStringLiteral("UPedit Formal Ver ");
@@ -101,6 +103,7 @@ void MainWindow::createMenus()
     // PNG批量导入导出已整合到PNG-图像编辑中
     editMenu->addAction(tr("PNG批量导出"), this, &MainWindow::onOpenPNGExport);
     editMenu->addAction(tr("PNG批量导入"), this, &MainWindow::onOpenPNGImport);
+    editMenu->addAction(tr("普通图片导入 GRP"), this, &MainWindow::onOpenTakeIn);
     editMenu->addAction(tr("苍炎头像(&C)"), this, &MainWindow::onOpenCYHead);
     editMenu->addSeparator();
     editMenu->addAction(tr("关键值关联"), this, &MainWindow::onOpenReplicatedList);
@@ -207,25 +210,29 @@ void MainWindow::onSetPath()
 }
 
 void MainWindow::onExit()     { close(); }
+void MainWindow::onOpenTakeIn() { showOrCreateMdi(m_takeIn, m_mdiArea, tr("普通图片导入 GRP")); }
+
+void MainWindow::openAssociatedFile(const QString &path)
+{
+    QFileInfo file(path);
+    QString extension = file.suffix().toLower();
+    if (extension == "grp" || extension == "idx") {
+        QString base = file.absolutePath() + "/" + file.completeBaseName();
+        onOpenGrpList();
+        m_grpList->loadGrpFiles(base + ".idx", base + ".grp", IniConfig::instance().gamePath + "/" + IniConfig::instance().palette);
+    } else if (extension == "pic") {
+        onOpenPicEdit(); m_picEdit->openFile(file.absoluteFilePath());
+    } else if (extension == "imz" || extension == "zip") {
+        onOpenImzEdit(); m_imagez->openImzFile(file.absoluteFilePath());
+    } else if (QStringList{"png", "bmp", "jpg", "jpeg", "gif"}.contains(extension)) {
+        onOpenTakeIn(); m_takeIn->openImage(file.absoluteFilePath());
+    }
+}
 
 void MainWindow::onOpenREdit()      { showOrCreateMdi(m_rEdit, m_mdiArea, tr("R-数据编辑")); }
 void MainWindow::onOpenGrpEdit()    { showOrCreateMdi(m_grpEdit, m_mdiArea, tr("GRP-贴图编辑")); }
 void MainWindow::onOpenGrpList()    {
     showOrCreateMdi(m_grpList, m_mdiArea, tr("GRP-贴图列表"));
-    // 连接右键"编辑"信号 → 打开 GrpEdit
-    static bool connected = false;
-    if (!connected && m_grpList) {
-        connect(m_grpList, &GrpList::editSprite, this, [this](int index) {
-            onOpenGrpEdit();
-            if (m_grpEdit && m_grpList) {
-                auto pics = m_grpList->grpPics();
-                auto pal  = m_grpList->palette();
-                if (index >= 0 && index < pics.size())
-                    m_grpEdit->setSprite(pics[index], pal);
-            }
-        });
-        connected = true;
-    }
 }
 void MainWindow::onOpenPicEdit()    { showOrCreateMdi(m_picEdit, m_mdiArea, tr("单图编辑")); }
 void MainWindow::onOpenWarEdit()    { showOrCreateMdi(m_warEdit, m_mdiArea, tr("战斗数据编辑")); }
@@ -234,7 +241,15 @@ void MainWindow::onOpenSceneMapEdit() { showOrCreateMdi(m_sceneMap, m_mdiArea, t
 void MainWindow::onOpenMainMapEdit()  { showOrCreateMdi(m_mainMap, m_mdiArea, tr("主地图编辑")); }
 void MainWindow::onOpenKDEFEdit()   { showOrCreateMdi(m_kdefEdit, m_mdiArea, tr("KDEF-事件编辑")); }
 void MainWindow::onOpenImzEdit()    { showOrCreateMdi(m_imagez, m_mdiArea, tr("PNG-图像编辑")); }
-void MainWindow::onOpenPNGExport()  { showOrCreateMdi(m_pngExport, m_mdiArea, tr("PNG批量导出")); }
+void MainWindow::onOpenPNGExport()  {
+    onOpenGrpList();
+    if (m_grpList->grpPics().isEmpty()) {
+        QMessageBox::information(this, tr("导出"), tr("请先在贴图列表读取 IDX/GRP"));
+        return;
+    }
+    showOrCreateMdi(m_pngExport, m_mdiArea, tr("PNG批量导出"));
+    m_pngExport->startExport(m_grpList->grpPics(), m_grpList->palette());
+}
 void MainWindow::onOpenPNGImport()  { showOrCreateMdi(m_pngImport, m_mdiArea, tr("PNG批量导入")); }
 void MainWindow::onOpenCYHead()     { showOrCreateMdi(m_cyHead, m_mdiArea, tr("苍炎头像")); }
 void MainWindow::onOpenReplicatedList() { showOrCreateMdi(m_repList, m_mdiArea, tr("关键值关联")); }

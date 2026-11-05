@@ -24,7 +24,11 @@ private slots:
     void onExportAll();
 
 private:
+    friend int runSelfTests(const QString &reportPath);
     void drawPNG();
+    QImage imageFor(const GrpPic &picture) const;
+    uint8_t m_red[256]{}, m_green[256]{}, m_blue[256]{};
+    bool m_paletteReady = false;
 
     QLineEdit *m_idxEdit, *m_grpEdit;
     QLabel *m_imageLabel;

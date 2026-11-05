@@ -1,4 +1,6 @@
 #include "imagezform.h"
+#include "fileio.h"
+#include <QMimeData>
 #include "fightframeform.h"
 #include "imzdata.h"
 #include "iniconfig.h"
@@ -293,6 +295,7 @@ void ImagezForm::onEditSprite()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
     ImzPng &ip = m_imz.imzPng[m_currentIndex];
+    ImzPng working = ip;
 
     QImage img = drawImzPNG(m_currentIndex);
     if (img.isNull()) return;
@@ -302,6 +305,14 @@ void ImagezForm::onEditSprite()
     auto *lay = new QVBoxLayout(&dlg);
 
     auto *imgLabel = new QLabel;
+    auto *frameSpin = new QSpinBox;
+    frameSpin->setRange(0, qMax(0, working.frameData.size() - 1));
+    frameSpin->setValue(m_animFrame % qMax(1, working.frameData.size()));
+    auto *frameRow = new QHBoxLayout;
+    frameRow->addWidget(new QLabel(tr("帧")));
+    frameRow->addWidget(frameSpin);
+    for (const auto &title : {tr("插入"), tr("追加"), tr("替换"), tr("删除"), tr("导出")})
+        frameRow->addWidget(new QPushButton(title));
     auto *formLay = new QHBoxLayout;
     auto *xSpin = new QSpinBox; xSpin->setRange(-9999, 9999); xSpin->setValue(ip.x);
     auto *ySpin = new QSpinBox; ySpin->setRange(-9999, 9999); ySpin->setValue(ip.y);
@@ -318,11 +329,13 @@ void ImagezForm::onEditSprite()
     btnBox->addWidget(btnCancel);
 
     lay->addWidget(imgLabel, 1);
+    lay->addLayout(frameRow);
     lay->addLayout(formLay);
     lay->addLayout(btnBox);
 
     // 绘制带红色十字的预览
     auto updatePreview = [&]() {
+        img = frameSpin->value() < working.frameData.size() ? QImage::fromData(working.frameData[frameSpin->value()].data) : QImage();
         QImage preview = img.copy();
         QPainter p(&preview);
         int ox = xSpin->value(), oy = ySpin->value();
@@ -333,6 +346,36 @@ void ImagezForm::onEditSprite()
         imgLabel->setPixmap(QPixmap::fromImage(preview));
     };
     updatePreview();
+    connect(frameSpin, QOverload<int>::of(&QSpinBox::valueChanged), &dlg, [&](int) { updatePreview(); });
+    for (int operation = 0; operation < 5; ++operation) {
+        auto *button = qobject_cast<QPushButton *>(frameRow->itemAt(operation + 2)->widget());
+        connect(button, &QPushButton::clicked, &dlg, [&, operation] {
+            int index = frameSpin->value();
+            if (operation == 3) {
+                if (working.frameData.size() <= 1) return;
+                working.frameData.removeAt(index);
+            } else if (operation == 4) {
+                QString path = QFileDialog::getSaveFileName(&dlg, tr("导出帧"), {}, "PNG (*.png)");
+                if (!path.isEmpty() && !FileIO::writeFileAll(path, working.frameData[index].data))
+                    QMessageBox::warning(&dlg, tr("导出"), tr("写入失败"));
+                return;
+            } else {
+                QString path = QFileDialog::getOpenFileName(&dlg, tr("选择帧图片"), {}, "PNG (*.png)");
+                if (path.isEmpty()) return;
+                QByteArray bytes = FileIO::readFileAll(path);
+                if (QImage::fromData(bytes, "PNG").isNull()) { QMessageBox::warning(&dlg, tr("图片"), tr("PNG 无效")); return; }
+                if (operation == 2) working.frameData[index].data = bytes;
+                else {
+                    if (operation == 1) index = working.frameData.size();
+                    working.frameData.insert(index, {});
+                    working.frameData[index].data = bytes;
+                }
+            }
+            frameSpin->setRange(0, working.frameData.size() - 1);
+            frameSpin->setValue(qMin(index, working.frameData.size() - 1));
+            updatePreview();
+        });
+    }
 
     connect(xSpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](int) { updatePreview(); });
     connect(ySpin, QOverload<int>::of(&QSpinBox::valueChanged), [&](int) { updatePreview(); });
@@ -341,8 +384,16 @@ void ImagezForm::onEditSprite()
 
     dlg.resize(qMax(400, img.width() + 40), qMax(300, img.height() + 120));
     if (dlg.exec() == QDialog::Accepted) {
+        ip = working;
         ip.x = (int16_t)xSpin->value();
         ip.y = (int16_t)ySpin->value();
+        ip.frame = ip.frameData.size();
+        ip.frameLen.resize(ip.frame);
+        ip.len = 0;
+        for (int frame = 0; frame < ip.frame; ++frame) {
+            ip.frameLen[frame] = ip.frameData[frame].data.size();
+            ip.len += ip.frameLen[frame];
+        }
         drawImz();
     }
 }
@@ -351,12 +402,45 @@ void ImagezForm::onCopySprite()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
     QImage img = drawImzPNG(m_currentIndex);
-    if (!img.isNull()) QApplication::clipboard()->setImage(img);
+    if (!img.isNull()) {
+        const auto &sprite = m_imz.imzPng[m_currentIndex];
+        QByteArray bytes;
+        QDataStream stream(&bytes, QIODevice::WriteOnly);
+        stream << qint16(sprite.x) << qint16(sprite.y) << qint32(sprite.frameData.size());
+        for (const auto &frame : sprite.frameData) stream << frame.data;
+        auto *mime = new QMimeData;
+        mime->setImageData(img);
+        mime->setData("application/x-upedit-sprite", bytes);
+        QApplication::clipboard()->setMimeData(mime);
+    }
 }
 
 void ImagezForm::onPasteSprite()
 {
-    if (m_currentIndex < 0) return;
+    if (m_currentIndex < 0 || m_currentIndex >= m_imz.imzPng.size()) return;
+    const QMimeData *mime = QApplication::clipboard()->mimeData();
+    if (mime->hasFormat("application/x-upedit-sprite")) {
+        QDataStream stream(mime->data("application/x-upedit-sprite"));
+        ImzPng sprite;
+        qint16 x, y;
+        qint32 count;
+        stream >> x >> y >> count;
+        if (count < 1 || count > 10000) return;
+        sprite.x = x; sprite.y = y;
+        sprite.fileNum = m_imz.imzPng[m_currentIndex].fileNum;
+        sprite.frame = count;
+        sprite.frameData.resize(count);
+        sprite.frameLen.resize(count);
+        for (int index = 0; index < count; ++index) {
+            stream >> sprite.frameData[index].data;
+            if (stream.status() != QDataStream::Ok || QImage::fromData(sprite.frameData[index].data, "PNG").isNull()) return;
+            sprite.frameLen[index] = sprite.frameData[index].data.size();
+            sprite.len += sprite.frameLen[index];
+        }
+        m_imz.imzPng[m_currentIndex] = sprite;
+        drawImz();
+        return;
+    }
     QImage img = QApplication::clipboard()->image();
     if (img.isNull()) return;
 
@@ -369,7 +453,8 @@ void ImagezForm::onPasteSprite()
     if (m_currentIndex < m_imz.imzPng.size()) {
         if (m_imz.imzPng[m_currentIndex].frameData.isEmpty())
             m_imz.imzPng[m_currentIndex].frameData.resize(1);
-        m_imz.imzPng[m_currentIndex].frameData[0].data = pngData;
+        auto &frames = m_imz.imzPng[m_currentIndex].frameData;
+        frames[m_animFrame % frames.size()].data = pngData;
         auto &sprite = m_imz.imzPng[m_currentIndex];
         sprite.frame = sprite.frameData.size();
         sprite.frameLen.resize(sprite.frame);

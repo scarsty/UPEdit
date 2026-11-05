@@ -9,9 +9,11 @@
 #include "rfile.h"
 #include <QString>
 #include <QVector>
+#include <QMap>
 
 class QTemporaryFile;
 bool prepareIniPath(const QString &originalPath, QTemporaryFile &tmpFile, QString &outPath);
+bool saveRunSettings(const QString &path, const QMap<QString, int> &values);
 
 class IniConfig {
 public:

@@ -1,5 +1,7 @@
 #include "setlanguage.h"
 #include "iniconfig.h"
+#include "encoding.h"
+#include <QMessageBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -90,6 +92,7 @@ SetLanguage::SetLanguage(QWidget *parent) : QDialog(parent)
     if (cfg.talkInvert) m_invertYes->setChecked(true);
     else m_invertNo->setChecked(true);
     m_tileScaleEdit->setText(QString::number(cfg.tileScale));
+    (cfg.checkUpdate == 1 ? m_updateCheck : cfg.checkUpdate == 2 ? m_updateSilent : m_updateNone)->setChecked(true);
 
     connect(btnOK, &QPushButton::clicked, this, &SetLanguage::onConfirm);
     connect(btnCancel, &QPushButton::clicked, this, &QDialog::reject);
@@ -98,6 +101,9 @@ SetLanguage::SetLanguage(QWidget *parent) : QDialog(parent)
 void SetLanguage::onConfirm()
 {
     IniConfig &cfg = IniConfig::instance();
+
+    int previousData = cfg.dataCode, previousTalk = cfg.talkCode;
+    int previousInvert = cfg.talkInvert, previousScale = cfg.tileScale;
 
     if (m_dataGBK->isChecked()) cfg.dataCode = CodeGBK;
     else if (m_dataBIG5->isChecked()) cfg.dataCode = CodeBIG5;
@@ -114,14 +120,17 @@ void SetLanguage::onConfirm()
     if (cfg.tileScale < 1) cfg.tileScale = 1;
     if (cfg.tileScale > 8) cfg.tileScale = 8;
 
-    // 保存到 INI
-    QSettings ini(cfg.iniPath, QSettings::IniFormat);
-    ini.beginGroup("run");
-    ini.setValue("datacode", (int)cfg.dataCode);
-    ini.setValue("talkcode", (int)cfg.talkCode);
-    ini.setValue("talkinvert", cfg.talkInvert ? 1 : 0);
-    ini.setValue("TileScale", cfg.tileScale);
-    ini.endGroup();
+    int update = m_updateCheck->isChecked() ? 1 : m_updateSilent->isChecked() ? 2 : 0;
+    if (!saveRunSettings(cfg.iniPath, {{"datacode", cfg.dataCode}, {"talkcode", cfg.talkCode},
+            {"talkinvert", cfg.talkInvert}, {"TileScale", cfg.tileScale}, {"checkupdate", update}})) {
+        cfg.dataCode = previousData; cfg.talkCode = previousTalk;
+        cfg.talkInvert = previousInvert; cfg.tileScale = previousScale;
+        QMessageBox::warning(this, tr("设置"), tr("无法保存配置，设置未应用")); return;
+    }
+    cfg.checkUpdate = update;
+    Encoding::dataCode = cfg.dataCode;
+    Encoding::talkCode = cfg.talkCode;
+    Encoding::talkInvert = cfg.talkInvert;
 
     accept();
 }

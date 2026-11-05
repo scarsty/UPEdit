@@ -2,76 +2,70 @@
 #include "fileio.h"
 #include <QImage>
 #include <cstring>
+#include <QtEndian>
+#include <QFileInfo>
 
 bool GrpIO::readGrp(const QString &idxFile, const QString &grpFile, QVector<GrpPic> &pics)
 {
-    QByteArray idxData = FileIO::readFileAll(idxFile);
-    QByteArray grpData = FileIO::readFileAll(grpFile);
-    if (idxData.isEmpty()) return false;
-
-    // idx 文件格式: 每 4 字节一个累积偏移 (Delphi: offset[i] = 到第 i 帧末尾的累积位置)
-    int count = idxData.size() / 4;
-    if (count <= 0) return false;
-
-    const int32_t *offsets = reinterpret_cast<const int32_t *>(idxData.constData());
-    pics.resize(count);
-
-    int32_t prevOffset = 0;
-    int grpPos = 0;  // 当前在 grp 文件中的读取位置
-
-    for (int i = 0; i < count; ++i) {
-        int32_t sz = offsets[i] - prevOffset;
-        prevOffset = offsets[i];
-
-        if (sz <= 0 || grpPos + sz > grpData.size()) {
-            pics[i].size = 0;
-            grpPos += qMax(sz, 0);
-            continue;
-        }
-
-        pics[i].size = sz;
-        pics[i].data = grpData.mid(grpPos, sz);
-        grpPos += sz;
-
-        // 从帧数据中解析 8 字节头 (pw:2 + ph:2 + xs:2 + ys:2)
-        if (isPNG(pics[i])) {
-            // PNG: 从 IHDR 解析宽高
-            if (sz >= 24) {
-                const uint8_t *d = reinterpret_cast<const uint8_t *>(pics[i].data.constData());
-                pics[i].width  = (d[16] << 24) | (d[17] << 16) | (d[18] << 8) | d[19];
-                pics[i].height = (d[20] << 24) | (d[21] << 16) | (d[22] << 8) | d[23];
-                pics[i].xoff = 0;
-                pics[i].yoff = 0;
-            }
-        } else if (sz >= 8) {
-            const int16_t *hdr = reinterpret_cast<const int16_t *>(pics[i].data.constData());
-            pics[i].width  = hdr[0]; // pw
-            pics[i].height = hdr[1]; // ph
-            pics[i].xoff   = hdr[2]; // xs
-            pics[i].yoff   = hdr[3]; // ys
+    QFile indexFile(idxFile), dataFile(grpFile);
+    if (!indexFile.open(QIODevice::ReadOnly) || !dataFile.open(QIODevice::ReadOnly)) return false;
+    QByteArray index = indexFile.readAll(), data = dataFile.readAll();
+    if (indexFile.error() != QFileDevice::NoError || dataFile.error() != QFileDevice::NoError
+        || index.size() % 4 != 0 || index.size() / 4 > 1000000) return false;
+    QVector<GrpPic> decoded(index.size() / 4);
+    qint32 begin = 0;
+    for (int entry = 0; entry < decoded.size(); ++entry) {
+        qint32 end = qFromLittleEndian<qint32>(index.constData() + entry * 4);
+        if (end < begin || end > data.size()) return false;
+        auto &picture = decoded[entry];
+        picture.data = data.mid(begin, end - begin);
+        picture.size = picture.data.size();
+        begin = end;
+        if (picture.data.isEmpty()) continue;
+        if (isPNG(picture)) {
+            QImage image = decodePNG(picture);
+            if (image.isNull()) return false;
+            picture.width = image.width();
+            picture.height = image.height();
+        } else {
+            if (picture.data.size() < 8) return false;
+            picture.width = qFromLittleEndian<qint16>(picture.data.constData());
+            picture.height = qFromLittleEndian<qint16>(picture.data.constData() + 2);
+            picture.xoff = qFromLittleEndian<qint16>(picture.data.constData() + 4);
+            picture.yoff = qFromLittleEndian<qint16>(picture.data.constData() + 6);
+            if (picture.width < 0 || picture.height < 0) return false;
         }
     }
+    if (begin != data.size()) return false;
+    pics = decoded;
     return true;
 }
 
-void GrpIO::saveGrp(const QString &idxFile, const QString &grpFile, const QVector<GrpPic> &pics)
+bool GrpIO::saveGrp(const QString &idxFile, const QString &grpFile, const QVector<GrpPic> &pics)
 {
     QByteArray grpData;
     QByteArray idxData(pics.size() * 4, '\0');
     int32_t *offsets = reinterpret_cast<int32_t *>(idxData.data());
 
     for (int i = 0; i < pics.size(); ++i) {
-        grpData.append(pics[i].data);
-        offsets[i] = static_cast<int32_t>(grpData.size()); // 累积偏移 = 到当前帧末尾的位置
+        QByteArray data = pics[i].data;
+        if (!isPNG(pics[i]) && data.size() >= 8) {
+            if (pics[i].xoff < SHRT_MIN || pics[i].xoff > SHRT_MAX || pics[i].yoff < SHRT_MIN || pics[i].yoff > SHRT_MAX) return false;
+            qToLittleEndian<qint16>(pics[i].xoff, data.data() + 4);
+            qToLittleEndian<qint16>(pics[i].yoff, data.data() + 6);
+        }
+        if (qint64(grpData.size()) + data.size() > INT_MAX) return false;
+        grpData.append(data);
+        qToLittleEndian<qint32>(grpData.size(), reinterpret_cast<char *>(offsets) + i * 4);
     }
 
-    FileIO::writeFileAll(grpFile, grpData);
-    FileIO::writeFileAll(idxFile, idxData);
+    if (QFileInfo(idxFile).absoluteFilePath().compare(QFileInfo(grpFile).absoluteFilePath(), Qt::CaseInsensitive) == 0) return false;
+    return FileIO::writeFiles({{grpFile, grpData}, {idxFile, idxData}});
 }
 
 QImage GrpIO::decodeRLE(const GrpPic &pic, const uint8_t r[256], const uint8_t g[256], const uint8_t b[256])
 {
-    if (pic.size < 8 || pic.data.isEmpty())
+    if (pic.data.size() < 8)
         return {};
 
     const uint8_t *p = reinterpret_cast<const uint8_t *>(pic.data.constData());
@@ -81,26 +75,23 @@ QImage GrpIO::decodeRLE(const GrpPic &pic, const uint8_t r[256], const uint8_t g
     int16_t ph = *reinterpret_cast<const int16_t *>(p + 2);
     // xs, ys 是偏移量, 已在 readGrp 中提取到 pic.xoff/yoff
 
-    if (pw <= 0 || ph <= 0) return {};
+    if (pw <= 0 || ph <= 0 || qint64(pw) * ph > 16777216) return {};
 
     QImage img(pw, ph, QImage::Format_ARGB32);
     img.fill(Qt::transparent);
 
     const uint8_t *pData = p + 8; // 跳过 8 字节头
-    int remaining = pic.size - 8;
+    int remaining = pic.data.size() - 8;
 
     for (int iy = 0; iy < ph; ++iy) {
-        if (remaining <= 0) break;
+        if (remaining <= 0) return {};
 
         // 每行首先读 1 字节 linesize
         uint8_t linesize = *pData++;
         remaining--;
 
-        if (linesize == 0 || remaining < linesize) {
-            pData += qMin((int)linesize, remaining);
-            remaining -= qMin((int)linesize, remaining);
-            continue;
-        }
+        if (remaining < linesize) return {};
+        if (linesize == 0) continue;
 
         // 状态机: state=2→跳过, state=1→读像素计数, state>2→绘制像素
         int state = 2;
@@ -116,7 +107,8 @@ QImage GrpIO::decodeRLE(const GrpPic &pic, const uint8_t r[256], const uint8_t g
                 state = 1;
             } else if (state == 1) {
                 // temp = 接下来要绘制的不透明像素数
-                state = 2 + temp;
+                if (pData + temp > lineEnd || ix + temp > pw) return {};
+                state = temp == 0 ? 2 : 2 + temp;
             } else {
                 // state > 2: 绘制 1 个像素
                 if (ix >= 0 && ix < pw && iy < ph) {
@@ -135,7 +127,7 @@ QImage GrpIO::decodeRLE(const GrpPic &pic, const uint8_t r[256], const uint8_t g
 GrpPic GrpIO::encodeRLE(const QImage &img, const uint8_t r[256], const uint8_t g[256], const uint8_t b[256])
 {
     GrpPic result;
-    if (img.isNull()) return result;
+    if (img.isNull() || img.width() > SHRT_MAX || img.height() > SHRT_MAX) return result;
 
     auto findNearest = [&](QRgb c) -> uint8_t {
         int best = 0;
@@ -184,9 +176,10 @@ GrpPic GrpIO::encodeRLE(const QImage &img, const uint8_t r[256], const uint8_t g
         }
 
         // linesize 必须 <= 255 (1 字节)
-        uint8_t linesize = qMin(static_cast<int>(lineData.size()), 255);
+        if (lineData.size() > 255) return {};
+        uint8_t linesize = static_cast<uint8_t>(lineData.size());
         data.append(static_cast<char>(linesize));
-        data.append(lineData.left(linesize));
+        data.append(lineData);
     }
 
     result.data = data;
@@ -200,7 +193,7 @@ GrpPic GrpIO::encodeRLE(const QImage &img, const uint8_t r[256], const uint8_t g
 
 bool GrpIO::isPNG(const GrpPic &pic)
 {
-    return pic.size >= 8 && FileIO::isPNG(pic.data.constData());
+    return pic.data.size() >= 8 && FileIO::isPNG(pic.data.constData());
 }
 
 QImage GrpIO::decodePNG(const GrpPic &pic)

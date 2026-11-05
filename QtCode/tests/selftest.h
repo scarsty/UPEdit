@@ -7,10 +7,24 @@
 #include "imagezform.h"
 #include "fileio.h"
 #include "iniconfig.h"
+#include "picedit.h"
+#include "grpdata.h"
+#include "kdefedit.h"
+#include "sqlite3wrapper.h"
+#include "waredit.h"
+#include "redit.h"
+#include "takein.h"
+#include "cyhead.h"
+#include <limits>
+#include <QStringConverter>
+#include <QTimer>
+#include <QMessageBox>
+#include <QBuffer>
 #include <QScopedValueRollback>
 #include <QMouseEvent>
 #include "ZipFile.h"
 #include <QTemporaryDir>
+#include <QTemporaryFile>
 #include <QFile>
 #include <QTextStream>
 #include <QtEndian>
@@ -31,6 +45,304 @@ inline int runSelfTests(const QString &reportPath)
     try {
         QTemporaryDir temporary;
         require(temporary.isValid(), "Temporary directory unavailable");
+        {
+            for (bool utf16 : {false, true}) {
+                QString text = QString::fromUtf8("; config \xe4\xb8\xad\xe6\x96\x87\r\n[run]\r\ngamepath=D:\\games\\kys\\\r\ndatacode=1; keep\r\n[file]\r\nFile0=a,b,c");
+                QStringEncoder encoder(utf16 ? QStringConverter::Utf16LE : QStringConverter::Utf8);
+                QByteArray bytes = encoder(text);
+                bytes.prepend(QByteArray::fromHex(utf16 ? "fffe" : "efbbbf"));
+                QString path = temporary.filePath(utf16 ? "settings16.ini" : "settings8.ini");
+                require(FileIO::writeFileAll(path, bytes), "Cannot create settings fixture");
+                require(saveRunSettings(path, {{"datacode", 3}, {"talkcode", 2}}), "Settings save failed");
+                QByteArray saved = FileIO::readFileAll(path);
+                require(saved.startsWith(QByteArray::fromHex(utf16 ? "fffe" : "efbbbf")), "Settings BOM lost");
+                QStringDecoder decoder(utf16 ? QStringConverter::Utf16LE : QStringConverter::Utf8);
+                QString result = decoder(saved);
+                require(!decoder.hasError() && result.contains("datacode=3; keep\r\n")
+                    && result.contains("talkcode=2\r\n[file]") && result.contains("gamepath=D:\\games\\kys\\\r\n")
+                    && result.endsWith("File0=a,b,c"), "Settings changed unrelated text or sections");
+            }
+        }
+        output << "PASS: UTF16/UTF8 settings BOM, paths, comments and unrelated sections\n";
+        {
+            QString path = temporary.filePath("missing-run.ini");
+            require(FileIO::writeFileAll(path, "[file]\npath=C:\\test") && saveRunSettings(path, {{"datacode", 3}}),
+                "Cannot add missing run section");
+            QTemporaryFile converted;
+            QString settingsPath;
+            require(prepareIniPath(path, converted, settingsPath), "Cannot read updated settings");
+            QSettings settings(settingsPath, QSettings::IniFormat);
+            require(settings.value("run/datacode").toInt() == 3, "Missing run section appended to previous key");
+        }
+        {
+            QImage picture(3, 2, QImage::Format_ARGB32);
+            picture.fill(Qt::green);
+            QByteArray png;
+            QBuffer buffer(&png);
+            require(picture.save(&buffer, "PNG"), "PIC fixture encoding failed");
+            QVector<PicEdit::PicData> source{{-17, 29, 1, png}, {5, -8, 0, QByteArray("unknown")}};
+            QByteArray bytes = PicEdit::encodeFile(source);
+            require(qFromLittleEndian<qint32>(bytes.constData()) == 2
+                && qFromLittleEndian<qint32>(bytes.constData() + 4) == 24 + png.size()
+                && qFromLittleEndian<qint32>(bytes.constData() + 8) == bytes.size(), "PIC cumulative offsets incorrect");
+            QVector<PicEdit::PicData> restored;
+            require(PicEdit::decodeFile(bytes, restored) && restored.size() == 2
+                && restored[0].xoff == -17 && restored[0].yoff == 29 && restored[0].background == 1
+                && restored[0].data == png && PicEdit::encodeFile(restored) == bytes, "PIC metadata/data roundtrip failed");
+            require(!PicEdit::decodeFile(bytes.chopped(1), restored) && restored.size() == 2, "Truncated PIC changed current data");
+            qToLittleEndian<qint32>(13, bytes.data() + 4);
+            require(!PicEdit::decodeFile(bytes, restored), "Invalid PIC offset accepted");
+            require(PicEdit::decodeFile(PicEdit::encodeFile({}), restored) && restored.isEmpty(), "Empty PIC failed");
+        }
+        output << "PASS: Delphi PIC cumulative offsets, metadata, opaque bytes, truncation and empty files\n";
+        {
+            uint8_t red[256]{}, green[256]{}, blue[256]{};
+            red[1] = 255;
+            QImage image(3, 2, QImage::Format_ARGB32);
+            image.fill(Qt::red);
+            GrpPic sprite = GrpIO::encodeRLE(image, red, green, blue);
+            sprite.xoff = -12;
+            sprite.yoff = 23;
+            QString indexPath = temporary.filePath("sprites.idx"), dataPath = temporary.filePath("sprites.grp");
+            require(GrpIO::saveGrp(indexPath, dataPath, {sprite}), "GRP save failed");
+            QVector<GrpPic> restored;
+            require(GrpIO::readGrp(indexPath, dataPath, restored) && restored.size() == 1
+                && restored[0].xoff == -12 && restored[0].yoff == 23
+                && GrpIO::decodeRLE(restored[0], red, green, blue).pixelColor(1, 1) == QColor(Qt::red), "GRP offsets or pixels lost");
+            require(!GrpIO::saveGrp(indexPath, indexPath, {sprite}), "Identical GRP paths accepted");
+            QByteArray invalidIndex(4, '\0');
+            qToLittleEndian<qint32>(sprite.data.size() + 1, invalidIndex.data());
+            require(FileIO::writeFileAll(indexPath, invalidIndex), "Cannot create invalid GRP index");
+            require(!GrpIO::readGrp(indexPath, dataPath, restored) && restored.size() == 1
+                && restored[0].xoff == -12, "Invalid GRP index replaced current data");
+            QImage wide(300, 1, QImage::Format_ARGB32);
+            wide.fill(Qt::transparent);
+            wide.setPixelColor(299, 0, Qt::red);
+            GrpPic sparse = GrpIO::encodeRLE(wide, red, green, blue);
+            QImage decoded = GrpIO::decodeRLE(sparse, red, green, blue);
+            require(!decoded.isNull() && decoded.pixelColor(299, 0) == QColor(Qt::red)
+                && decoded.pixelColor(255, 0).alpha() == 0, "Long transparent RLE segment failed");
+            wide.fill(Qt::red);
+            require(GrpIO::encodeRLE(wide, red, green, blue).data.isEmpty(), "Oversized RLE row silently truncated");
+            sparse.data.chop(1);
+            require(GrpIO::decodeRLE(sparse, red, green, blue).isNull(), "Truncated RLE decoded using stale size");
+        }
+        output << "PASS: GRP paired save, persisted offsets and decoded pixels\n";
+        {
+            TakeIn editor;
+            editor.m_sourceImage = QImage(12, 10, QImage::Format_ARGB32);
+            editor.m_sourceImage.fill(Qt::green);
+            editor.m_sourceImage.setPixelColor(3, 4, Qt::red);
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(3, 4), QPointF(3, 4), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_imageLabel, &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(7, 8), QPointF(7, 8), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_imageLabel, &release);
+            require(editor.m_sourceImage.size() == QSize(5, 5) && editor.m_sourceImage.pixelColor(0, 0) == QColor(Qt::red),
+                "Image crop mouse selection did not modify import source");
+            CYHead heads;
+            heads.m_paletteReady = true;
+            heads.m_red[1] = 255;
+            QImage image(2, 2, QImage::Format_ARGB32);
+            image.fill(Qt::red);
+            auto sprite = GrpIO::encodeRLE(image, heads.m_red, heads.m_green, heads.m_blue);
+            require(heads.imageFor(sprite).pixelColor(0, 0) == QColor(Qt::red), "Portrait ignored actual palette");
+        }
+        output << "PASS: image crop mouse selection and portrait palette pixels\n";
+        {
+            QVector<QByteArray> source{QByteArray::fromHex("0100ffff0200"), QByteArray(), QByteArray::fromHex("ffff")};
+            QByteArray index, data;
+            require(KDEFEdit::encodeRecords(source, index, data), "KDEF record encoding failed");
+            require(index == QByteArray::fromHex("060000000600000008000000"), "KDEF cumulative offsets incorrect");
+            QVector<QByteArray> restored;
+            require(KDEFEdit::decodeRecords(index, data, restored) && restored == source, "KDEF IDX boundaries lost");
+            require(!KDEFEdit::decodeRecords(index, data.chopped(1), restored) && restored == source, "Truncated KDEF accepted");
+        }
+        output << "PASS: KDEF/talk IDX boundaries, embedded terminators and empty records\n";
+        {
+            KDEFEdit editor;
+            KDEFEdit::KDEFInstrDef jump;
+            jump.code = 1;
+            jump.paramNames = {"target"};
+            jump.yesJump = 0;
+            editor.m_instrDefs = {jump};
+            KDEFEdit::KDEFEvent event;
+            event.eventId = 0;
+            event.instructions = {{1, {1}, 1}, {2, {}, 2}, {-1, {}, 3}};
+            editor.m_events = {event};
+            editor.m_nextIdentity = 4;
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            editor.onCopyInstruction();
+            editor.onPasteInstruction();
+            const auto &instructions = editor.m_events[0].instructions;
+            require(instructions.size() == 4 && instructions[0].params[0] == 3
+                && instructions[1].params[0] == 1, "Copied KDEF jump lost target identity");
+            editor.displayInstructionDetail(2);
+            editor.onMoveUp();
+            require(editor.m_events[0].instructions[0].params[0] == 3
+                && editor.m_events[0].instructions[2].params[0] == 0, "Reordered KDEF jump lost target");
+        }
+        output << "PASS: KDEF copy and reorder preserve jump target identities\n";
+        {
+            KDEFEdit editor;
+            KDEFEdit::KDEFInstrDef definition;
+            definition.code = 7;
+            definition.paramNames = {"mode"};
+            definition.quoteTypes = {5};
+            definition.quoteCounts = {0};
+            editor.m_instrDefs = {definition};
+            editor.m_guideChoices = {{{0, "off"}, {5, "on"}}};
+            KDEFEdit::KDEFEvent event;
+            event.eventId = 0;
+            event.instructions = {{7, {0}, 1}, {8, {9}, 2}};
+            editor.m_events = {event};
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            auto *combo = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(combo && combo->count() == 2, "KDEF guide choices missing");
+            combo->setCurrentIndex(1);
+            require(editor.m_events[0].instructions[0].params[0] == 5, "KDEF guide selection not committed");
+            editor.displayInstructionDetail(1);
+            require(!editor.m_paramTable->cellWidget(0, 1), "Old KDEF guide widget leaked into numeric instruction");
+            editor.m_paramTable->item(0, 1)->setText("123");
+            require(editor.m_events[0].instructions[1].params[0] == 123
+                && editor.m_events[0].instructions[0].params[0] == 5, "KDEF parameter switch changed wrong instruction");
+            editor.m_loaded = true;
+            editor.m_savedState = editor.stateBytes();
+            require(editor.confirmDiscard(), "Unmodified KDEF prompted");
+            editor.m_events[0].instructions[1].params[0] = 124;
+            QByteArray dirty = editor.stateBytes();
+            QTimer::singleShot(0, [] {
+                for (QWidget *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget)) message->button(QMessageBox::Cancel)->click();
+            });
+            require(!editor.confirmDiscard() && editor.stateBytes() == dirty, "Cancel discarded KDEF changes");
+        }
+        output << "PASS: KDEF guide selection, numeric editing and instruction switch isolation\n";
+        {
+            require(SQLite3Database::loadLibrary("sqlite3"), "SQLite runtime unavailable");
+            RFileGlobals schema;
+            schema.typeNumber = 1;
+            schema.typeName = {"records"};
+            schema.typeDataItem = {2};
+            schema.rIni.resize(1);
+            RTermini textTerm;
+            textTerm.datanum = textTerm.incnum = 1;
+            textTerm.datalen = 32;
+            textTerm.isstr = 1;
+            textTerm.name = "name";
+            RTermini numberTerm = textTerm;
+            numberTerm.isstr = 0;
+            numberTerm.datalen = 4;
+            numberTerm.name = "value";
+            schema.rIni[0].rTerm = {textTerm, numberTerm};
+            RFile source;
+            source.typeNumber = 1;
+            source.rType.resize(1);
+            RFileIO::addNewRData(&source, 0, schema);
+            RFileIO::writeRDataStr(source.rType[0].rData[0].rDataLine[0].rArray[0].dataArray[0], "A'B\"C");
+            RFileIO::writeRDataInt(source.rType[0].rData[0].rDataLine[1].rArray[0].dataArray[0], -123);
+            QString path = temporary.filePath("records.db");
+            require(RFileIO::saveDB(path, &source, schema), "SQLite staged save failed");
+            {
+                SQLite3Database database;
+                require(database.open(path), "Cannot inspect SQLite fixture");
+                auto statement = database.prepare("select name,value from records");
+                require(statement.isValid() && statement.step() == SQLite3Statement::SQLITE_ROW
+                    && statement.columnText(0) == "A'B\"C" && statement.columnInt(1) == -123, "SQLite values changed");
+            }
+            QByteArray original = FileIO::readFileAll(path);
+            schema.rIni[0].rTerm[1].name = "name";
+            require(!RFileIO::saveDB(path, &source, schema) && FileIO::readFileAll(path) == original, "Failed SQL damaged original database");
+        }
+        output << "PASS: SQLite staged save, quoted text and SQL failure preservation\n";
+        {
+            WarEdit editor;
+            editor.m_wIni.wTerm.resize(6);
+            const int labels[] = {1, 2, 3, 4, 5, 6};
+            for (int field = 0; field < 6; ++field) {
+                auto &term = editor.m_wIni.wTerm[field];
+                term.datanum = term.incnum = 1;
+                term.datalen = 2;
+                term.labelnum = labels[field];
+                term.labeltype = field == 2 || field == 3 || field == 5 ? 2 : 1;
+            }
+            editor.m_warFile.records.resize(2);
+            for (auto &record : editor.m_warFile.records) {
+                record.fields.resize(6);
+                for (auto &field : record.fields) field.values = {0};
+                record.fields[0].values[0] = 2;
+                record.fields[1].values[0] = 3;
+                record.fields[2].values[0] = 6;
+                record.fields[3].values[0] = 7;
+            }
+            editor.m_warTileCache.resize(1);
+            editor.rebuildWSelect();
+            editor.onWarChanged(0);
+            auto click = [&](int x, int y) {
+                QPointF point = (editor.m_positionOrigin + QPointF((x - y) * 18 * editor.m_scaleSpin->value(),
+                    (x + y) * 9 * editor.m_scaleSpin->value())) * editor.m_positionScale;
+                QMouseEvent event(QEvent::MouseButtonPress, point, point, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(editor.m_posImage, &event);
+            };
+            click(2, 3);
+            click(4, 5);
+            require(editor.m_warFile.records[0].fields[0].values[0] == 4
+                && editor.m_warFile.records[0].fields[1].values[0] == 5
+                && editor.m_warFriend[0].x == 4 && editor.m_warFriend[0].y == 5, "War mouse move did not refresh friend coordinates");
+            editor.onWarChanged(1);
+            require(editor.m_selectedPerson == -1, "War selection leaked across records");
+        }
+        output << "PASS: war position mouse selection, movement, redraw and record switch\n";
+        {
+            RDataSingle field;
+            field.dataLen = 8;
+            const qint64 minimum = (std::numeric_limits<qint64>::min)();
+            const qint64 maximum = (std::numeric_limits<qint64>::max)();
+            for (auto boundary : {minimum, maximum}) {
+                RFileIO::writeRDataInt(field, boundary);
+                QByteArray original = field.data;
+                require(!REditWidget::applyFieldOperation(field, boundary == minimum ? 2 : 1, "1")
+                    && field.data == original, "Overflow changed field");
+                require(!REditWidget::applyFieldOperation(field, 3, "2") && field.data == original, "Multiplication overflow accepted");
+                require(!REditWidget::applyFieldOperation(field, 4, "0") && field.data == original, "Division by zero accepted");
+            }
+            RFileIO::writeRDataInt(field, minimum);
+            require(!REditWidget::applyFieldOperation(field, 4, "-1"), "Minimum divided by minus one accepted");
+            RFileIO::writeRDataInt(field, -12);
+            require(REditWidget::applyFieldOperation(field, 3, "-3") && RFileIO::readRDataInt(field) == 36, "Signed multiplication failed");
+            field.dataLen = 2;
+            RFileIO::writeRDataInt(field, 32767);
+            require(!REditWidget::applyFieldOperation(field, 1, "1") && RFileIO::readRDataInt(field) == 32767, "Short integer overflow accepted");
+            require(REditWidget::applyFieldOperation(field, 0, "-32768") && RFileIO::readRDataInt(field) == -32768, "Short integer assignment failed");
+        }
+        output << "PASS: R batch arithmetic boundaries, signed multiplication and failure preservation\n";
+        {
+            auto &config = IniConfig::instance();
+            QScopedValueRollback<int> count(config.rFileNum, 0);
+            QScopedValueRollback<QVector<QString>> dataPaths(config.rFileName, {"missing.grp"});
+            QScopedValueRollback<QVector<QString>> indexPaths(config.rIdxFileName, {"missing.idx"});
+            REditWidget editor;
+            editor.m_rFile.typeNumber = 1;
+            editor.m_rFile.rType.resize(1);
+            editor.m_loadedSlot = 0;
+            editor.m_savedState = editor.stateBytes();
+            require(editor.confirmDiscard(), "Unchanged R record prompted");
+            editor.m_rFile.rType[0].rData.resize(1);
+            QByteArray dirty = editor.stateBytes();
+            require(dirty != editor.m_savedState, "R record insertion not detected");
+            QTimer::singleShot(0, [] {
+                for (QWidget *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget)) message->button(QMessageBox::Cancel)->click();
+            });
+            require(!editor.confirmDiscard() && editor.stateBytes() == dirty, "Cancel discarded R edits");
+            config.rFileNum = 1;
+            RFileGlobals previous = config.rGlobals;
+            editor.loadProgress(0);
+            require(editor.stateBytes() == dirty && config.rGlobals.typeNumber == previous.typeNumber,
+                "Failed R loading destroyed working record or schema");
+        }
+        output << "PASS: R unsaved detection, cancel dialog and failed-load preservation\n";
         for (int layers : {2, 5, 6}) {
             Map source;
             require(MapIO::readSingleMap(QByteArray(2 * 3 * layers * 2, '\0'), 0, source, layers, 2, 3), "Map initialization failed");
@@ -65,6 +377,18 @@ inline int runSelfTests(const QString &reportPath)
         QImage hidden = MapIO::renderMainMap(visual, tiles, {}, false, false, false);
         require(!visible.isNull() && visible.size() == QSize(170, 105), "Full map dimensions wrong");
         require(visible.pixelColor(85, 57).alpha() == 255 && hidden.pixelColor(85, 57).alpha() == 0, "Layer selection or pixels wrong");
+        int lastProgress = -1;
+        bool cancelled = false;
+        QImage interrupted = MapIO::renderMainMap(visual, tiles, {}, true, true, true, 1, 100, [&](int progress) {
+            require(progress >= lastProgress, "Map progress moved backwards");
+            lastProgress = progress;
+            if (progress >= 30) { cancelled = true; return false; }
+            return true;
+        });
+        require(cancelled && interrupted.isNull(), "Cancelled map rendering returned partial output");
+        require(!MapIO::renderMainMap(visual, tiles, {}, true, true, true, 1, 100, [&](int progress) {
+            lastProgress = progress; return true;
+        }).isNull() && lastProgress == 100, "Map completion progress missing");
         output << "PASS: full-map dimensions, visible sprite pixels and layer toggles\n";
         DFile events;
         events.mapNum = 2;
@@ -107,6 +431,24 @@ inline int runSelfTests(const QString &reportPath)
             require(scene.mapLayer[5].pic[4][5] == -27, "Export/save cache omitted latest edits");
         }
         output << "PASS: scene switching, undo/redo and export cache synchronization\n";
+        {
+            SceneMapEdit editor;
+            editor.m_sceneCount = 1;
+            editor.m_sceneRawData = QByteArray(64 * 64 * 6 * 2, '\0');
+            editor.m_dFile.mapEvent.resize(1);
+            editor.onLoadScene(0);
+            auto &map = editor.m_mapData.map[0];
+            for (int layer = 0; layer < 6; ++layer) map.mapLayer[layer].pic[2][3] = layer + 10;
+            editor.m_moduleMap = MapIO::extractRegion(map, QRect(2, 3, 1, 1));
+            editor.m_layerCombo->setCurrentIndex(1);
+            require(editor.pasteModule(QPoint(8, 9)), "Single scene layer paste failed");
+            const auto &result = editor.m_mapData.map[0];
+            require(result.mapLayer[1].pic[8][9] == 11 && result.mapLayer[4].pic[8][9] == 14
+                && result.mapLayer[0].pic[8][9] == 0 && result.mapLayer[2].pic[8][9] == 0
+                && result.mapLayer[3].pic[8][9] == 0 && result.mapLayer[5].pic[8][9] == 0,
+                "Single scene layer paste changed unrelated layers");
+        }
+        output << "PASS: scene single building layer and elevation isolation\n";
         {
             SceneMapEdit editor;
             editor.m_sceneCount = 1;

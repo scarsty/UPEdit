@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QTimer>
 #include "mainwindow.h"
 #include "iniconfig.h"
 #include "tests/selftest.h"
@@ -13,6 +14,7 @@ int main(int argc, char *argv[])
     app.setApplicationVersion("1.0.0");
     if (app.arguments().size() > 2 && app.arguments()[1] == "--self-test")
         return runSelfTests(app.arguments()[2]);
+    QString argument = app.arguments().size() > 1 ? QFileInfo(app.arguments()[1]).absoluteFilePath() : QString();
 
     // 设置工作目录为可执行文件所在目录
     QDir::setCurrent(QApplication::applicationDirPath());
@@ -24,7 +26,7 @@ int main(int argc, char *argv[])
 
     QStringList args = app.arguments();
     if (args.size() > 1) {
-        QString arg1 = args[1];
+        QString arg1 = argument;
         if (arg1.endsWith(".ini", Qt::CaseInsensitive)) {
             QFileInfo fi(arg1);
             startPath   = fi.absolutePath() + "/";
@@ -45,6 +47,8 @@ int main(int argc, char *argv[])
     MainWindow w;
 
     w.show();
+    if (!argument.isEmpty() && !argument.endsWith(".ini", Qt::CaseInsensitive))
+        QTimer::singleShot(0, &w, [&w, argument] { w.openAssociatedFile(argument); });
 
     return app.exec();
 }

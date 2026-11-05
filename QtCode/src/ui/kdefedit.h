@@ -12,6 +12,8 @@ class KDEFEdit : public QWidget {
     Q_OBJECT
 public:
     explicit KDEFEdit(QWidget *parent = nullptr);
+    static bool decodeRecords(const QByteArray &index, const QByteArray &data, QVector<QByteArray> &records);
+    static bool encodeRecords(const QVector<QByteArray> &records, QByteArray &index, QByteArray &data);
 
 private slots:
     void onLoadKDEF();
@@ -27,6 +29,12 @@ private slots:
     void onPasteInstruction();
 
 private:
+    friend int runSelfTests(const QString &reportPath);
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
+    void closeEvent(QCloseEvent *event) override;
+    QByteArray m_savedState;
+    bool m_loaded = false;
     void loadKDEFIni();
     void readKDEFFile();
     void displayEventList();
@@ -35,6 +43,8 @@ private:
     QString getKDEFName(int code) const;
     int getParamCount(int code) const;
     QString getParamName(int code, int paramIndex) const;
+    void mutateInstructions(int operation);
+    void editTalks();
 
     QComboBox *m_sceneCombo;
     QTableWidget *m_eventTable;     // 事件列表
@@ -47,13 +57,19 @@ private:
         int code;
         QString name;
         QStringList paramNames;
+        int yesJump = -1, noJump = -1;
+        QString guide;
+        QVector<int> quoteTypes, quoteCounts;
     };
     QVector<KDEFInstrDef> m_instrDefs;
+    QVector<QVector<QPair<int, QString>>> m_guideChoices;
+    QStringList m_subInstructions;
 
     // 事件数据
     struct KDEFInstruction {
         int code = 0;
         QVector<int16_t> params;
+        int identity = 0;
     };
     struct KDEFEvent {
         int eventId = -1;
@@ -63,4 +79,6 @@ private:
     int m_currentEvent = -1;
     int m_currentInstr = -1;
     QVector<KDEFInstruction> m_clipboard;
+    int m_clipboardEvent = -1;
+    int m_nextIdentity = 1;
 };

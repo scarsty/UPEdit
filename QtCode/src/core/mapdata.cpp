@@ -35,7 +35,8 @@ bool MapIO::loadPngTiles(const QString &path, QVector<GrpPic> &pictures, QVector
 }
 
 QImage MapIO::renderMainMap(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures,
-                            bool ground, bool surface, bool building, int scale, int zoom)
+                            bool ground, bool surface, bool building, int scale, int zoom,
+                            const std::function<bool(int)> &progress)
 {
     if (map.layerNum < 3 || map.x <= 0 || map.y <= 0 || scale <= 0 || zoom <= 0) return {};
     double factor = zoom / 100.0;
@@ -60,14 +61,17 @@ QImage MapIO::renderMainMap(const Map &map, const QVector<QImage> &tiles, const 
     };
     for (int layer = 0; layer < 2; ++layer) {
         if ((layer == 0 && !ground) || (layer == 1 && !surface)) continue;
-        for (int diagonal = 0; diagonal < map.x + map.y - 1; ++diagonal)
+        for (int diagonal = 0; diagonal < map.x + map.y - 1; ++diagonal) {
+            if (progress && !progress((layer * 30) + diagonal * 30 / (map.x + map.y - 1))) return {};
             for (int column = qMax(0, diagonal - map.y + 1); column <= qMin(map.x - 1, diagonal); ++column)
                 draw(layer, column, diagonal - column);
+        }
     }
     if (building) {
         struct Building { int column; int row; int depth; };
         QVector<Building> ordered;
-        for (int column = 0; column < map.x; ++column)
+        for (int column = 0; column < map.x; ++column) {
+            if (progress && !progress(60 + column * 15 / map.x)) return {};
             for (int row = 0; row < map.y; ++row) {
                 int id = map.mapLayer[2].pic[column][row] / 2;
                 if (id <= 0 || id >= tiles.size() || tiles[id].isNull()) continue;
@@ -76,9 +80,15 @@ QImage MapIO::renderMainMap(const Map &map, const QVector<QImage> &tiles, const 
                     - (tiles[id].height() + span - 1) / span + 2;
                 ordered.append({column, row, depth});
             }
+            }
         std::stable_sort(ordered.begin(), ordered.end(), [](const Building &left, const Building &right) { return left.depth < right.depth; });
-        for (const auto &entry : ordered) draw(2, entry.column, entry.row);
+        for (int index = 0; index < ordered.size(); ++index) {
+            if (progress && index % 128 == 0 && !progress(75 + index * 24 / qMax(1, ordered.size()))) return {};
+            const auto &entry = ordered[index];
+            draw(2, entry.column, entry.row);
+        }
     }
+    if (progress && !progress(100)) return {};
     return image;
 }
 

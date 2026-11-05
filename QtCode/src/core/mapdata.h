@@ -8,6 +8,7 @@
 #include "head.h"
 #include <QString>
 #include <QImage>
+#include <functional>
 
 namespace MapIO {
     bool loadPngTiles(const QString &path, QVector<GrpPic> &pictures, QVector<QImage> &tiles);
@@ -16,7 +17,8 @@ namespace MapIO {
     Map extractRegion(const Map &map, const QRect &region);
     void pasteRegion(Map &map, const Map &region, const QPoint &anchor);
     QImage renderMainMap(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures,
-                         bool ground, bool surface, bool building, int scale = 1, int zoom = 100);
+                         bool ground, bool surface, bool building, int scale = 1, int zoom = 100,
+                         const std::function<bool(int)> &progress = {});
     // 从 idx+grp 读取地图结构
     bool readMap(const QString &idxFile, const QString &grpFile, MapStruct &ms);
     // 保存地图

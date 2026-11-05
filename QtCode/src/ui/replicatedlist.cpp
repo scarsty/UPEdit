@@ -8,6 +8,9 @@
 #include <QDataStream>
 #include <QMessageBox>
 #include <QFile>
+#include "fileio.h"
+#include <QSignalBlocker>
+#include <QIntValidator>
 
 ReplicatedList::ReplicatedList(QWidget *parent) : QWidget(parent)
 {
@@ -81,6 +84,38 @@ ReplicatedList::ReplicatedList(QWidget *parent) : QWidget(parent)
     connect(btnSave, &QPushButton::clicked, this, &ReplicatedList::onSave);
 
     loadData();
+    auto fillNames = [this](QComboBox *combo, int type) {
+        combo->addItem(tr("无"), -1);
+        const auto &types = IniConfig::instance().rGlobals.rFile.rType;
+        if (type < types.size())
+            for (int index = 0; index < types[type].rData.size(); ++index)
+                combo->addItem(QString::number(index) + " " + Encoding::displayStr(calRName(type, index)), index);
+    };
+    fillNames(m_leaveCombo, 1);
+    fillNames(m_matchWeaponCombo, 2);
+    fillNames(m_matchSkillCombo, 4);
+    connect(m_leaveCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        m_leaveList[m_leaveScroll->value()] = m_leaveCombo->itemData(index).toInt();
+    });
+    connect(m_matchWeaponCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        m_matchList[m_matchScroll->value() * 3] = m_matchWeaponCombo->itemData(index).toInt();
+    });
+    connect(m_matchSkillCombo, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
+        m_matchList[m_matchScroll->value() * 3 + 1] = m_matchSkillCombo->itemData(index).toInt();
+    });
+    for (auto *edit : {m_effectEdit, m_matchValueEdit, m_expEdit})
+        edit->setValidator(new QIntValidator(SHRT_MIN, SHRT_MAX, edit));
+    connect(m_effectEdit, &QLineEdit::textEdited, this, [this](const QString &text) {
+        if (m_effectEdit->hasAcceptableInput()) m_effectList[m_effectScroll->value()] = text.toInt();
+    });
+    connect(m_matchValueEdit, &QLineEdit::textEdited, this, [this](const QString &text) {
+        if (m_matchValueEdit->hasAcceptableInput()) m_matchList[m_matchScroll->value() * 3 + 2] = text.toInt();
+    });
+    connect(m_expEdit, &QLineEdit::textEdited, this, [this](const QString &text) {
+        if (m_expEdit->hasAcceptableInput()) m_expList[m_expScroll->value()] = text.toInt();
+    });
+    displayLeave(0);
+    displayMatch(0);
 }
 
 void ReplicatedList::loadData()
@@ -113,8 +148,7 @@ void ReplicatedList::displayLeave(int index)
     if (index >= m_leaveList.size()) return;
     m_leaveLabel->setText(tr("离队 [%1]").arg(index));
     // 显示人物名称
-    QString name = calRName(0, m_leaveList[index]);
-    m_leaveCombo->setCurrentText(name);
+    m_leaveCombo->setCurrentIndex(m_leaveCombo->findData(m_leaveList[index]));
 }
 
 void ReplicatedList::displayEffect(int index)
@@ -128,8 +162,8 @@ void ReplicatedList::displayMatch(int index)
 {
     int base = index * 3;
     if (base + 2 >= m_matchList.size()) return;
-    m_matchWeaponCombo->setCurrentText(calRName(0, m_matchList[base]));
-    m_matchSkillCombo->setCurrentText(calRName(0, m_matchList[base + 1]));
+    m_matchWeaponCombo->setCurrentIndex(m_matchWeaponCombo->findData(m_matchList[base]));
+    m_matchSkillCombo->setCurrentIndex(m_matchSkillCombo->findData(m_matchList[base + 1]));
     m_matchValueEdit->setText(QString::number(m_matchList[base + 2]));
 }
 
@@ -148,20 +182,26 @@ void ReplicatedList::onExpScroll(int val) { displayExp(val); }
 void ReplicatedList::onSave()
 {
     IniConfig &cfg = IniConfig::instance();
+    QMap<QString, QByteArray> files;
+    bool valid = true;
     auto writeSmallIntFile = [&](const QString &name, const QVector<int16_t> &data) {
-        QFile file(cfg.gamePath + "/" + name);
-        if (file.open(QIODevice::WriteOnly)) {
-            QDataStream ds(&file);
-            ds.setByteOrder(QDataStream::LittleEndian);
-            for (auto val : data) ds << val;
-        }
+        QString path = cfg.gamePath + "/" + name;
+        if (name.isEmpty() || files.contains(path)) { valid = false; return; }
+        QByteArray bytes;
+        QDataStream stream(&bytes, QIODevice::WriteOnly);
+        stream.setByteOrder(QDataStream::LittleEndian);
+        for (auto value : data) stream << value;
+        files.insert(path, bytes);
     };
 
     writeSmallIntFile(cfg.leaveListFile, m_leaveList);
     writeSmallIntFile(cfg.effectListFile, m_effectList);
     writeSmallIntFile(cfg.matchListFile, m_matchList);
     writeSmallIntFile(cfg.expListFile, m_expList);
-
+    if (!valid || !FileIO::writeFiles(files)) {
+        QMessageBox::warning(this, tr("保存"), tr("路径未配置、重复或写入失败，未完成保存"));
+        return;
+    }
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -171,7 +211,7 @@ QString ReplicatedList::calRName(int typeIndex, int dataIndex)
     RFileGlobals &g = cfg.rGlobals;
     if (typeIndex < g.rFile.rType.size() && dataIndex >= 0 && dataIndex < g.rFile.rType[typeIndex].rData.size()) {
         int namePos = g.rFile.rType[typeIndex].namePos;
-        if (namePos >= 0) {
+        if (namePos >= 0 && namePos < g.rFile.rType[typeIndex].rData[dataIndex].rDataLine.size()) {
             const auto &line = g.rFile.rType[typeIndex].rData[dataIndex].rDataLine[namePos];
             if (!line.rArray.isEmpty() && !line.rArray[0].dataArray.isEmpty())
                 return RFileIO::readRDataStr(line.rArray[0].dataArray[0]);

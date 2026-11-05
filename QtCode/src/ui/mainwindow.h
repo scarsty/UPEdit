@@ -27,6 +27,7 @@ class PNGImport;
 class PNGExport;
 class CYHead;
 class ReplicatedList;
+class TakeIn;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -39,6 +40,7 @@ public:
     static MainWindow *instance();
 
     QMdiArea *mdiArea() const { return m_mdiArea; }
+    void openAssociatedFile(const QString &path);
 
 private slots:
     // 文件菜单
@@ -60,6 +62,7 @@ private slots:
     void onOpenPNGImport();
     void onOpenCYHead();
     void onOpenReplicatedList();
+    void onOpenTakeIn();
 
     // 帮助菜单
     void onAbout();
@@ -94,6 +97,7 @@ private:
     PNGExport          *m_pngExport  = nullptr;
     CYHead             *m_cyHead     = nullptr;
     ReplicatedList     *m_repList    = nullptr;
+    TakeIn             *m_takeIn     = nullptr;
 
     QLabel *m_statusLabel = nullptr;
     QMenu *m_windowMenu = nullptr;

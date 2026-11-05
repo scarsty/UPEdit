@@ -333,7 +333,7 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
     if (ix >= curMap.x || iy >= curMap.y) return;
 
     int layer = m_layer;
-    if (layer == 4) {
+    if (layer == 4 || (layer >= 0 && layer <= 2 && btn == Qt::RightButton && m_selectedTileId < 0)) {
         if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
         if (btn == Qt::RightButton && m_moduleMap.layerNum > 0) {
             Map adjusted = m_moduleMap;
@@ -348,7 +348,14 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
                     adjusted.mapLayer[3].pic[column][row] = valid ? refX + left : 0;
                     adjusted.mapLayer[4].pic[column][row] = valid ? refY + top : 0;
                 }
-            MapIO::pasteRegion(curMap, adjusted, QPoint(ix, iy));
+            if (layer == 4) MapIO::pasteRegion(curMap, adjusted, QPoint(ix, iy));
+            else for (int column = 0; column < adjusted.x; ++column)
+                for (int row = 0; row < adjusted.y; ++row) {
+                    int targetX = left + column, targetY = top + row;
+                    if (targetX < 0 || targetY < 0 || targetX >= curMap.x || targetY >= curMap.y) continue;
+                    for (int selected : layer == 2 ? QList<int>{2, 3, 4} : QList<int>{layer})
+                        curMap.mapLayer[selected].pic[targetX][targetY] = adjusted.mapLayer[selected].pic[column][row];
+                }
             m_needUpdate = true;
         }
         return;
@@ -356,8 +363,8 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
     if (layer < 0 || layer > 3) return;
     if (layer == 3) {
         if (btn == Qt::LeftButton) {
-            m_qbuildx = ix;
-            m_qbuildy = iy;
+            m_qbuildx = curMap.mapLayer[2].pic[ix][iy] > 0 ? ix : 0;
+            m_qbuildy = curMap.mapLayer[2].pic[ix][iy] > 0 ? iy : 0;
         } else if (btn == Qt::RightButton) {
             if (m_qbuildx < 0 || m_qbuildy < 0) return;
             curMap.mapLayer[3].pic[ix][iy] = m_qbuildx;
@@ -372,10 +379,15 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
     if (btn == Qt::RightButton && m_selectedTileId >= 0) {
         // 右键放置选定贴图
         curMap.mapLayer[layer].pic[ix][iy] = m_selectedTileId * 2;
+        if (layer == 2) {
+            curMap.mapLayer[3].pic[ix][iy] = m_selectedTileId > 0 ? ix : 0;
+            curMap.mapLayer[4].pic[ix][iy] = m_selectedTileId > 0 ? iy : 0;
+        }
         m_needUpdate = true;
     } else if (btn == Qt::LeftButton) {
         // 左键拾取当前贴图
         m_selectedTileId = curMap.mapLayer[layer].pic[ix][iy] / 2;
+        m_selectionStart = QPoint(ix, iy);
         updateTilePreview();
     }
 }
@@ -383,11 +395,13 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 void MainMapEdit::onHScroll(int) { m_needUpdate = true; }
 void MainMapEdit::handleMouseRelease(QMouseEvent *event)
 {
-    if (event->button() != Qt::LeftButton || m_layer != 4 || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
+    if (event->button() != Qt::LeftButton || m_layer < 0 || m_layer == 3 || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
     QPoint end = screenToMapRel(event->pos().x(), event->pos().y());
+    if (m_layer != 4 && end == m_selectionStart) { m_selectionStart = QPoint(-1, -1); return; }
     if (end.x() >= 0) {
         QRect bounds = QRect(m_selectionStart, end).normalized();
         m_moduleMap = MapIO::extractRegion(m_mapData.map[0], bounds);
+        m_selectedTileId = -1;
         for (int column = 0; column < m_moduleMap.x; ++column)
             for (int row = 0; row < m_moduleMap.y; ++row) {
                 int refX = m_moduleMap.mapLayer[3].pic[column][row];

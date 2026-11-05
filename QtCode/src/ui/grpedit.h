@@ -21,6 +21,9 @@ public:
 
     void setPalette(const QVector<QRgb> &pal);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 signals:
     void spriteModified(const GrpPic &pic);
 
@@ -46,6 +49,7 @@ private:
     QLabel *m_imageLabel;
     QLabel *m_paletteLabel;
     QComboBox *m_zoomCombo;
+    QComboBox *m_toolCombo;
     QSpinBox *m_xoffSpin, *m_yoffSpin;
 
     QImage m_bitmap;       // 工作位图(ARGB32)
@@ -54,4 +58,5 @@ private:
     int m_xmove = 0, m_ymove = 0;
     int m_curColor = 0;    // 当前选中调色板颜色
     EditMode m_editMode = GrpMode;
+    bool m_keepPNG = false;
 };

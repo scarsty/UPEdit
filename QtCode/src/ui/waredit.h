@@ -17,6 +17,9 @@ class WarEdit : public QWidget {
 public:
     explicit WarEdit(QWidget *parent = nullptr);
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void onLoad();
     void onSave();
@@ -30,6 +33,7 @@ private slots:
     void onTableItemChanged(QTableWidgetItem *item);
 
 private:
+    friend int runSelfTests(const QString &reportPath);
     struct WarRowInfo { int fieldIdx = -1; int valueIdx = -1; };
     QVector<WarRowInfo> m_rowMap;
     void readWIni();
@@ -59,6 +63,9 @@ private:
     int m_mapFieldPos = -1;
     bool m_autoWarFriend = false;
     bool m_updatingTable = false;
+    QPointF m_positionOrigin;
+    double m_positionScale = 1;
+    int m_selectedFaction = 0, m_selectedPerson = -1;
 
     MapStruct m_warMapData;
     QVector<GrpPic> m_warGrpPics;

@@ -8,6 +8,62 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QTemporaryFile>
+#include <QStringConverter>
+#include <QRegularExpression>
+#include "fileio.h"
+
+bool saveRunSettings(const QString &path, const QMap<QString, int> &values)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    QByteArray original = file.readAll();
+    if (file.error() != QFileDevice::NoError) return false;
+    file.close();
+    bool utf16 = original.startsWith(QByteArray::fromHex("fffe"));
+    bool utf8Bom = original.startsWith(QByteArray::fromHex("efbbbf"));
+    if (utf16 && original.size() % 2 != 0) return false;
+    QStringDecoder decoder(utf16 ? QStringConverter::Utf16LE : QStringConverter::Utf8);
+    QString text = decoder(original);
+    if (decoder.hasError()) return false;
+    QString newline = text.contains("\r\n") ? "\r\n" : "\n";
+    QStringList lines = text.split('\n');
+    int begin = -1, end = lines.size();
+    QRegularExpression section("^\\s*\\[([^]]+)\\]\\s*(?:[;#].*)?$");
+    for (int index = 0; index < lines.size(); ++index) {
+        QString line = lines[index].trimmed();
+        if (line.startsWith(QChar(0xfeff))) line.remove(0, 1);
+        auto match = section.match(line);
+        if (!match.hasMatch()) continue;
+        if (begin >= 0) { end = index; break; }
+        if (match.captured(1).compare("run", Qt::CaseInsensitive) == 0) begin = index;
+    }
+    if (begin < 0) {
+        if (!lines.isEmpty() && !lines.last().isEmpty()) lines.append(QString());
+        lines.append(QStringLiteral("[run]") + (newline == "\r\n" ? "\r" : ""));
+        begin = lines.size() - 1;
+        end = lines.size();
+    }
+    for (auto value = values.cbegin(); value != values.cend(); ++value) {
+        if (!QRegularExpression("^[A-Za-z][A-Za-z0-9_]*$").match(value.key()).hasMatch()) return false;
+        QRegularExpression key("^(\\s*" + QRegularExpression::escape(value.key()) + "\\s*=\\s*)[^;#\\r]*(.*)$", QRegularExpression::CaseInsensitiveOption);
+        bool found = false;
+        for (int index = begin + 1; index < end; ++index) {
+            auto match = key.match(lines[index]);
+            if (!match.hasMatch()) continue;
+            lines[index] = match.captured(1) + QString::number(value.value()) + match.captured(2);
+            found = true;
+        }
+        if (!found) {
+            lines.insert(end++, value.key() + "=" + QString::number(value.value()) + (newline == "\r\n" ? "\r" : ""));
+        }
+    }
+    QStringEncoder encoder(utf16 ? QStringConverter::Utf16LE : QStringConverter::Utf8);
+    QByteArray updated = encoder(lines.join('\n'));
+    if (encoder.hasError()) return false;
+    if (utf16 && !updated.startsWith(QByteArray::fromHex("fffe"))) updated.prepend(QByteArray::fromHex("fffe"));
+    if (utf8Bom && !updated.startsWith(QByteArray::fromHex("efbbbf"))) updated.prepend(QByteArray::fromHex("efbbbf"));
+    return FileIO::writeFileAll(path, updated);
+}
 
 // QSettings IniFormat 会将含逗号的值自动拆为 QStringList,
 // 导致 .toString() 返回空或首项。此辅助函数统一还原为原始字符串。

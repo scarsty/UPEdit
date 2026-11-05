@@ -25,6 +25,7 @@ class REditWidget : public QWidget {
 public:
     explicit REditWidget(QWidget *parent = nullptr);
     ~REditWidget();
+    static bool applyFieldOperation(RDataSingle &field, int operation, const QString &text);
 
 private slots:
     void onProgressChanged(int index);
@@ -45,6 +46,12 @@ private slots:
     void onSearchRange();
 
 private:
+    friend int runSelfTests(const QString &reportPath);
+    void closeEvent(QCloseEvent *event) override;
+    QByteArray stateBytes() const;
+    bool confirmDiscard();
+    QByteArray m_savedState;
+    int m_loadedSlot = -1;
     void setupUI();
     void loadProgress(int index);
     void displayR();

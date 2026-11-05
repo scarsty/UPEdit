@@ -15,6 +15,9 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QColorDialog>
+#include "fileio.h"
+#include <QImageReader>
+#include <QMouseEvent>
 
 TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
 {
@@ -40,6 +43,10 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
         m_grpCombo->addItem(cfg.grpListName[i]);
 
     leftPanel->addWidget(btnOpen);
+    m_frameSpin = new QSpinBox;
+    m_frameSpin->setPrefix(tr("帧 "));
+    m_frameSpin->setRange(0, 0);
+    leftPanel->addWidget(m_frameSpin);
     leftPanel->addWidget(new QLabel(tr("宽:")));
     leftPanel->addWidget(m_widthEdit);
     leftPanel->addWidget(new QLabel(tr("高:")));
@@ -59,6 +66,7 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
 
     auto *scroll = new QScrollArea;
     m_imageLabel = new QLabel;
+    m_imageLabel->installEventFilter(this);
     scroll->setWidget(m_imageLabel);
     scroll->setWidgetResizable(false);
 
@@ -75,6 +83,36 @@ TakeIn::TakeIn(QWidget *parent) : QWidget(parent)
     connect(btnImport, &QPushButton::clicked, this, &TakeIn::onImportToGrp);
     connect(btnTransColor, &QPushButton::clicked, this, &TakeIn::onSetTransColor);
     connect(btnConfirm, &QPushButton::clicked, this, &TakeIn::onConfirmSize);
+    connect(m_frameSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int frame) {
+        if (frame < 0 || frame >= m_frames.size()) return;
+        m_sourceImage = m_frames[frame];
+        m_widthEdit->setText(QString::number(m_sourceImage.width()));
+        m_heightEdit->setText(QString::number(m_sourceImage.height()));
+        displayImage();
+    });
+}
+
+bool TakeIn::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched != m_imageLabel) return QWidget::eventFilter(watched, event);
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton) m_cropStart = mouse->position().toPoint();
+    } else if (event->type() == QEvent::MouseButtonRelease) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton && m_cropStart.x() >= 0) {
+            QRect crop = QRect(m_cropStart, mouse->position().toPoint()).normalized().intersected(m_sourceImage.rect());
+            m_cropStart = QPoint(-1, -1);
+            if (crop.width() > 1 && crop.height() > 1) {
+                m_sourceImage = m_sourceImage.copy(crop);
+                m_widthEdit->setText(QString::number(crop.width()));
+                m_heightEdit->setText(QString::number(crop.height()));
+                displayImage();
+            }
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void TakeIn::onOpenImage()
@@ -82,9 +120,27 @@ void TakeIn::onOpenImage()
     QString f = QFileDialog::getOpenFileName(this, tr("打开图片"), {},
         "Images (*.png *.jpg *.bmp *.gif);;All (*.*)");
     if (f.isEmpty()) return;
+    openImage(f);
+}
 
-    m_sourceImage.load(f);
-    if (m_sourceImage.isNull()) return;
+void TakeIn::openImage(const QString &path)
+{
+    QImageReader reader(path);
+    QVector<QImage> frames;
+    qint64 pixels = 0;
+    while (reader.canRead() && frames.size() < 10000) {
+        QImage frame = reader.read();
+        if (frame.isNull()) { QMessageBox::warning(this, tr("打开"), reader.errorString()); return; }
+        pixels += qint64(frame.width()) * frame.height();
+        if (pixels > 67108864) { QMessageBox::warning(this, tr("打开"), tr("图片帧总量过大")); return; }
+        frames.append(frame.convertToFormat(QImage::Format_ARGB32));
+        if (!reader.supportsAnimation()) break;
+    }
+    if (frames.isEmpty()) return;
+    m_frames = frames;
+    m_frameSpin->setRange(0, frames.size() - 1);
+    m_frameSpin->setValue(0);
+    m_sourceImage = frames[0];
 
     m_sourceImage = m_sourceImage.convertToFormat(QImage::Format_ARGB32);
     m_widthEdit->setText(QString::number(m_sourceImage.width()));
@@ -114,6 +170,7 @@ void TakeIn::onConfirmSize()
     int h = m_heightEdit->text().toInt();
     if (w > 0 && h > 0 && !m_sourceImage.isNull()) {
         QImage cropped = m_sourceImage.copy(0, 0, w, h);
+        m_sourceImage = cropped;
         m_imageLabel->setPixmap(QPixmap::fromImage(cropped));
         m_imageLabel->resize(cropped.size());
     }
@@ -125,6 +182,12 @@ void TakeIn::onImportToGrp()
 
     int xoff = m_xoffEdit->text().toInt();
     int yoff = m_yoffEdit->text().toInt();
+    bool validX, validY;
+    xoff = m_xoffEdit->text().toInt(&validX);
+    yoff = m_yoffEdit->text().toInt(&validY);
+    if (!validX || !validY || xoff < SHRT_MIN || xoff > SHRT_MAX || yoff < SHRT_MIN || yoff > SHRT_MAX) {
+        QMessageBox::warning(this, tr("导入"), tr("偏移必须是 16 位整数")); return;
+    }
 
     int grpIdx = m_grpCombo->currentIndex();
     IniConfig &cfg = IniConfig::instance();
@@ -136,15 +199,34 @@ void TakeIn::onImportToGrp()
 
     // 读取已有 GRP
     QVector<GrpPic> pics;
-    GrpIO::readGrp(idxPath, grpPath, pics);
+    if ((QFile::exists(idxPath) || QFile::exists(grpPath)) && !GrpIO::readGrp(idxPath, grpPath, pics)) {
+        QMessageBox::warning(this, tr("导入"), tr("读取目标图片组失败")); return;
+    }
+    QByteArray palette = FileIO::readFileAll(cfg.gamePath + "/" + cfg.palette);
+    if (palette.size() < 768) { QMessageBox::warning(this, tr("导入"), tr("游戏调色板无效")); return; }
+    for (int index = 0; index < 256; ++index) {
+        m_palR[index] = qMin(255, int(uint8_t(palette[index * 3])) * 4);
+        m_palG[index] = qMin(255, int(uint8_t(palette[index * 3 + 1])) * 4);
+        m_palB[index] = qMin(255, int(uint8_t(palette[index * 3 + 2])) * 4);
+    }
+    QImage image = m_sourceImage;
+    if (m_transCheck->isChecked()) {
+        bool validColor;
+        uint color = m_transColorEdit->text().toUInt(&validColor, 16);
+        if (!validColor || color > 0xffffff) { QMessageBox::warning(this, tr("导入"), tr("透明色必须是六位 RGB 十六进制值")); return; }
+        for (int row = 0; row < image.height(); ++row)
+            for (int column = 0; column < image.width(); ++column)
+                if ((image.pixel(column, row) & 0xffffff) == color) image.setPixel(column, row, 0);
+    }
 
     // 用 encodeRLE 生成新精灵
-    GrpPic newPic = GrpIO::encodeRLE(m_sourceImage, m_palR, m_palG, m_palB);
+    GrpPic newPic = GrpIO::encodeRLE(image, m_palR, m_palG, m_palB);
+    if (newPic.data.isEmpty()) { QMessageBox::warning(this, tr("导入"), tr("图片超出 RLE 行编码限制，请裁剪或使用 PNG 导入")); return; }
     newPic.xoff = xoff;
     newPic.yoff = yoff;
     pics.append(newPic);
 
     // 保存
-    GrpIO::saveGrp(idxPath, grpPath, pics);
+    if (!GrpIO::saveGrp(idxPath, grpPath, pics)) { QMessageBox::warning(this, tr("导入"), tr("保存失败")); return; }
     QMessageBox::information(this, tr("导入"), tr("导入完成，新索引: %1").arg(pics.size() - 1));
 }

@@ -30,13 +30,13 @@ namespace RFileIO {
     bool readR(const QString &idxFile, const QString &grpFile, RFile *prf, const RFileGlobals &g);
 
     // 保存 R 文件
-    void saveR(const QString &idxFile, const QString &grpFile, const RFile *prf, const RFileGlobals &g);
+    bool saveR(const QString &idxFile, const QString &grpFile, const RFile *prf, const RFileGlobals &g);
 
     // 从 SQLite 数据库读取
     bool readDB(const QString &dbFile, RFile *prf, RFileGlobals &g);
 
     // 保存到 SQLite 数据库
-    void saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals &g);
+    bool saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals &g);
 
     // 深拷贝 RData
     void copyRData(const RData &source, RData &dest);

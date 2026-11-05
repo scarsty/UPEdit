@@ -1,4 +1,7 @@
 #include "waredit.h"
+#include "fileio.h"
+#include <QBuffer>
+#include <QMouseEvent>
 #include <QTemporaryFile>
 #include "iniconfig.h"
 #include "rfile.h"
@@ -61,6 +64,7 @@ WarEdit::WarEdit(QWidget *parent) : QWidget(parent)
     m_scaleSpin = new QSpinBox; m_scaleSpin->setRange(1, 8); m_scaleSpin->setValue(1);
     m_posScroll = new QScrollArea;
     m_posImage = new QLabel;
+    m_posImage->installEventFilter(this);
     m_posScroll->setWidget(m_posImage);
 
     auto *rTop = new QHBoxLayout;
@@ -304,6 +308,7 @@ void WarEdit::rebuildWarCombo()
 
 void WarEdit::onWarChanged(int index)
 {
+    m_selectedPerson = -1;
     m_currentWar = index;
     displayW();
     countWarPos();
@@ -522,6 +527,48 @@ void WarEdit::drawWarPos()
 
     m_posImage->setPixmap(pixmap);
     m_posImage->resize(pixmap.size());
+    m_positionOrigin = QPointF(centerX, centerY);
+    m_positionScale = double(pixmap.width()) / imgW;
+}
+
+bool WarEdit::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched != m_posImage || event->type() != QEvent::MouseButtonPress)
+        return QWidget::eventFilter(watched, event);
+    auto *mouse = static_cast<QMouseEvent *>(event);
+    if (mouse->button() != Qt::LeftButton || m_currentWar < 0 || m_currentWar >= m_warFile.records.size()) return false;
+    QPointF point = (mouse->position() - m_posImage->contentsRect().topLeft()) / m_positionScale - m_positionOrigin;
+    int scale = m_scaleSpin->value();
+    int x = qRound((point.x() / (18 * scale) + point.y() / (9 * scale)) / 2);
+    int y = qRound((-point.x() / (18 * scale) + point.y() / (9 * scale)) / 2);
+    if (x < 0 || y < 0 || x >= 64 || y >= 64) return true;
+    for (int faction : {1, 2}) {
+        const auto &people = faction == 1 ? m_warFriend : m_warEnemy;
+        for (int index = 0; index < people.size(); ++index) {
+            const auto &person = people[index];
+            if ((faction == 2 || m_autoWarFriend) && person.personNum < 0) continue;
+            if (person.x == x && person.y == y) {
+                m_selectedFaction = faction;
+                m_selectedPerson = index;
+                m_statusBar->showMessage(tr("已选择%1第%2人，点击空格移动").arg(faction == 1 ? tr("友军") : tr("敌军")).arg(index));
+                return true;
+            }
+        }
+    }
+    if (m_selectedPerson < 0) return true;
+    auto &record = m_warFile.records[m_currentWar];
+    for (const auto &selection : m_wSelect) {
+        if (selection.labeltype != m_selectedFaction || selection.labelcount != m_selectedPerson + 1) continue;
+        int xLabel = m_selectedFaction == 1 ? 1 : 3, yLabel = xLabel + 1;
+        if (selection.labelnum != xLabel && selection.labelnum != yLabel) continue;
+        if (selection.pos1 < 0 || selection.pos1 >= record.fields.size()) continue;
+        auto &values = record.fields[selection.pos1].values;
+        if (selection.pos2 >= 0 && selection.pos2 < values.size()) values[selection.pos2] = selection.labelnum == xLabel ? x : y;
+    }
+    displayW();
+    countWarPos();
+    drawWarPos();
+    return true;
 }
 
 void WarEdit::readWarMapGrp()
@@ -575,7 +622,8 @@ void WarEdit::onSave()
     // 写入二进制文件
     IniConfig &cfg = IniConfig::instance();
     QString warPath = cfg.gamePath + "/" + cfg.warData;
-    QFile file(warPath);
+    QByteArray bytes;
+    QBuffer file(&bytes);
     if (!file.open(QIODevice::WriteOnly)) return;
 
     for (const auto &rec2 : m_warFile.records) {
@@ -598,6 +646,9 @@ void WarEdit::onSave()
                 }
             }
         }
+    }
+    if (cfg.warData.isEmpty() || !FileIO::writeFileAll(warPath, bytes)) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败")); return;
     }
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }

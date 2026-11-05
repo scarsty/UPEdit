@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QProgressBar>
+#include <QSpinBox>
 #include "head.h"
 
 // TAKEIN 图片导入到GRP (对应 Delphi TForm1)
@@ -12,6 +13,7 @@ class TakeIn : public QWidget {
     Q_OBJECT
 public:
     explicit TakeIn(QWidget *parent = nullptr);
+    void openImage(const QString &path);
 
 private slots:
     void onOpenImage();
@@ -20,7 +22,12 @@ private slots:
     void onConfirmSize();
 
 private:
+    friend int runSelfTests(const QString &reportPath);
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void displayImage();
+    QVector<QImage> m_frames;
+    QSpinBox *m_frameSpin;
+    QPoint m_cropStart{-1, -1};
 
     QLabel *m_imageLabel;
     QLineEdit *m_widthEdit, *m_heightEdit;

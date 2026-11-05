@@ -54,6 +54,10 @@ public:
     bool keepPNG() const;
     bool useTransColor() const;
     QColor transColor() const;
+    void setOptions(int x, int y, bool png, bool transparent, QColor color);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void drawOffset();

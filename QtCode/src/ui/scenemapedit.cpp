@@ -469,6 +469,13 @@ void SceneMapEdit::renderMap()
 void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
     int layer = m_layerCombo->currentIndex();
+    if (layer >= 0 && layer <= 2 && !m_mapData.map.isEmpty()) {
+        if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
+        if (btn == Qt::RightButton && m_moduleMap.layerNum == 6) {
+            if (pasteModule(QPoint(ix, iy))) { addUndoSave(); renderMap(); }
+            return;
+        }
+    }
     if ((layer == 4 || layer == 6) && btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
     if (layer == 5 && !m_mapData.map.isEmpty()) {
         if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
@@ -788,6 +795,10 @@ void SceneMapEdit::onImportScene()
         m_dFile.mapEvent[m_currentScene] = emptyEvent;
     }
     readSceneData(m_currentScene);
+    if (!m_mapData.map.isEmpty()) {
+        for (auto &column : m_mapData.map[0].mapLayer[3].pic) column.fill(-1);
+        syncCurrentScene();
+    }
     addUndoSave();
     renderMap();
 }
@@ -858,6 +869,8 @@ void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
     QPoint end = screenToIso(event->pos().x(), event->pos().y());
     QRect bounds = QRect(m_selectionStart, end).normalized().intersected(QRect(0, 0, 64, 64));
     int layer = m_layerCombo->currentIndex();
+    if (bounds.isEmpty()) { m_selectionStart = QPoint(-1, -1); return; }
+    if (layer <= 2 && bounds.size() == QSize(1, 1)) { m_selectionStart = QPoint(-1, -1); return; }
     if (layer == 4 || layer == 6) {
         for (int column = bounds.left(); column <= bounds.right(); ++column)
             for (int row = bounds.top(); row <= bounds.bottom(); ++row)
@@ -868,6 +881,7 @@ void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
         return;
     }
     m_moduleMap = MapIO::extractRegion(m_mapData.map[0], bounds);
+    if (layer <= 2) m_selectedTileId = -1;
     m_moduleEvents.clear();
     if (m_currentScene >= 0 && m_currentScene < m_dFile.mapEvent.size())
         for (const auto &column : m_moduleMap.mapLayer[3].pic)
@@ -974,6 +988,20 @@ bool SceneMapEdit::pasteModule(const QPoint &anchor)
         || m_currentScene < 0 || m_currentScene >= m_dFile.mapEvent.size()) return false;
     Map destination = m_mapData.map[0];
     Map adjusted = m_moduleMap;
+    int selectedLayer = m_layerCombo->currentIndex();
+    if (selectedLayer >= 0 && selectedLayer <= 2) {
+        for (int column = 0; column < adjusted.x; ++column)
+            for (int row = 0; row < adjusted.y; ++row) {
+                int targetX = anchor.x() - adjusted.x + 1 + column;
+                int targetY = anchor.y() - adjusted.y + 1 + row;
+                if (targetX < 0 || targetY < 0 || targetX >= destination.x || targetY >= destination.y) continue;
+                destination.mapLayer[selectedLayer].pic[targetX][targetY] = adjusted.mapLayer[selectedLayer].pic[column][row];
+                if (selectedLayer > 0)
+                    destination.mapLayer[selectedLayer + 3].pic[targetX][targetY] = adjusted.mapLayer[selectedLayer + 3].pic[column][row];
+            }
+        m_mapData.map[0] = destination;
+        return true;
+    }
     MapEvent events = m_dFile.mapEvent[m_currentScene];
     QPoint origin = anchor - QPoint(adjusted.x - 1, adjusted.y - 1);
     QSet<int> used;

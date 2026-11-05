@@ -14,7 +14,7 @@ namespace GrpIO {
     // 从 idx+grp 读取所有精灵
     bool readGrp(const QString &idxFile, const QString &grpFile, QVector<GrpPic> &pics);
     // 保存精灵组到 idx+grp
-    void saveGrp(const QString &idxFile, const QString &grpFile, const QVector<GrpPic> &pics);
+    bool saveGrp(const QString &idxFile, const QString &grpFile, const QVector<GrpPic> &pics);
 
     // 将 RLE 编码的精灵解码为 QImage (需要调色板)
     QImage decodeRLE(const GrpPic &pic, const uint8_t r[256], const uint8_t g[256], const uint8_t b[256]);

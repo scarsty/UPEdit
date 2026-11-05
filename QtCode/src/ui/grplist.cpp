@@ -1,4 +1,8 @@
 #include "grplist.h"
+#include "grpedit.h"
+#include "pngimport.h"
+#include <QDialog>
+#include <QInputDialog>
 #include "grpdata.h"
 #include "fileio.h"
 #include "iniconfig.h"
@@ -183,8 +187,9 @@ void GrpList::onDisplay()
     QString grpPath = m_grpEdit->text().trimmed();
     if (idxPath.isEmpty() || grpPath.isEmpty()) return;
 
-    m_grpPics.clear();
-    GrpIO::readGrp(idxPath, grpPath, m_grpPics);
+    if (!GrpIO::readGrp(idxPath, grpPath, m_grpPics)) {
+        QMessageBox::warning(this, tr("打开"), tr("图片组索引或数据无效，保留当前列表")); return;
+    }
 
     m_beginPic = 0;
     m_endPic = m_grpPics.size() - 1;
@@ -278,7 +283,7 @@ void GrpList::updateSectionCombo()
 
 void GrpList::displayGrpList()
 {
-    if (m_grpPics.isEmpty()) return;
+    if (m_grpPics.isEmpty()) { m_imageLabel->clear(); return; }
 
     int labelW = m_imageLabel->width();
     int labelH = m_imageLabel->height();
@@ -396,7 +401,10 @@ void GrpList::onSave()
     QString grpPath = m_grpEdit->text().trimmed();
     if (idxPath.isEmpty() || grpPath.isEmpty()) return;
 
-    GrpIO::saveGrp(idxPath, grpPath, m_grpPics);
+    if (!GrpIO::saveGrp(idxPath, grpPath, m_grpPics)) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败，原文件已保留"));
+        return;
+    }
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -421,15 +429,28 @@ void GrpList::onContextMenu(const QPoint &pos)
 
 void GrpList::onEditCurrent()
 {
-    if (m_nowPic >= 0 && m_nowPic < m_grpPics.size())
-        emit editSprite(m_nowPic);
+    if (m_nowPic < 0 || m_nowPic >= m_grpPics.size()) return;
+    int index = m_nowPic;
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("编辑贴图 %1").arg(index));
+    dialog.resize(900, 650);
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *editor = new GrpEdit(&dialog);
+    editor->setSprite(m_grpPics[index], m_palette);
+    layout->addWidget(editor);
+    connect(editor, &GrpEdit::spriteModified, &dialog, [this, index, &dialog](const GrpPic &picture) {
+        m_grpPics[index] = picture;
+        displayGrpList();
+        dialog.accept();
+    });
+    dialog.exec();
 }
 
 void GrpList::onDeleteCurrent()
 {
     if (m_nowPic >= 0 && m_nowPic < m_grpPics.size()) {
         m_grpPics.removeAt(m_nowPic);
-        displayGrpList();
+        onSectionChanged(m_sectionCombo->currentIndex());
     }
 }
 
@@ -437,7 +458,7 @@ void GrpList::onInsertBefore()
 {
     if (m_nowPic >= 0 && m_nowPic <= m_grpPics.size()) {
         m_grpPics.insert(m_nowPic, GrpPic());
-        displayGrpList();
+        onSectionChanged(m_sectionCombo->currentIndex());
     }
 }
 
@@ -450,7 +471,11 @@ void GrpList::onReplacePNG()
     if (!file.open(QIODevice::ReadOnly)) return;
     QByteArray data = file.readAll();
     QImage img; img.loadFromData(data, "PNG");
+    if (img.isNull()) { QMessageBox::warning(this, tr("替换"), tr("PNG 文件无效")); return; }
     m_grpPics[m_nowPic].data = data;
+    m_grpPics[m_nowPic].size = data.size();
+    m_grpPics[m_nowPic].xoff = 0;
+    m_grpPics[m_nowPic].yoff = 0;
     m_grpPics[m_nowPic].width = img.width();
     m_grpPics[m_nowPic].height = img.height();
     displayGrpList();
@@ -458,32 +483,36 @@ void GrpList::onReplacePNG()
 
 void GrpList::onExportAllPNG()
 {
-    QString dir = QFileDialog::getExistingDirectory(this, tr("选择导出目录"));
-    if (dir.isEmpty()) return;
-    m_progress->setVisible(true);
-    m_progress->setRange(0, m_grpPics.size());
-
-    for (int i = 0; i < m_grpPics.size(); ++i) {
-        QImage img = decodeSprite(i);
-        if (!img.isNull())
-            img.save(dir + "/" + QString::number(i) + ".png");
-        m_progress->setValue(i + 1);
-    }
-    // Write index.ka (2B x + 2B y per sprite)
-    QFile ka(dir + "/index.ka");
-    if (ka.open(QIODevice::WriteOnly)) {
-        QDataStream ds(&ka);
-        ds.setByteOrder(QDataStream::LittleEndian);
-        for (const auto &pic : m_grpPics) {
-            ds << (int16_t)pic.xoff << (int16_t)pic.yoff;
-        }
-    }
-
-    m_progress->setVisible(false);
-    QMessageBox::information(this, tr("导出"), tr("导出完成"));
+    if (m_grpPics.isEmpty()) return;
+    PNGExport dialog(this);
+    dialog.startExport(m_grpPics, m_palette);
+    dialog.exec();
 }
 
-void GrpList::onBatchOffset() { /* 批量偏移设置 */ }
+void GrpList::onBatchOffset()
+{
+    if (m_grpPics.isEmpty()) return;
+    bool accepted = false;
+    int first = QInputDialog::getInt(this, tr("批量偏移"), tr("起始编号"), 0, 0, m_grpPics.size() - 1, 1, &accepted);
+    if (!accepted) return;
+    int last = QInputDialog::getInt(this, tr("批量偏移"), tr("结束编号"), m_grpPics.size() - 1, first, m_grpPics.size() - 1, 1, &accepted);
+    if (!accepted) return;
+    int xoff = QInputDialog::getInt(this, tr("批量偏移"), tr("X偏移"), 0, SHRT_MIN, SHRT_MAX, 1, &accepted);
+    if (!accepted) return;
+    int yoff = QInputDialog::getInt(this, tr("批量偏移"), tr("Y偏移"), 0, SHRT_MIN, SHRT_MAX, 1, &accepted);
+    if (!accepted) return;
+    for (int index = first; index <= last; ++index) {
+        if (GrpIO::isPNG(m_grpPics[index])) {
+            QMessageBox::warning(this, tr("偏移"), tr("所选范围包含不支持偏移的原始 PNG，请缩小范围"));
+            return;
+        }
+    }
+    for (int index = first; index <= last; ++index) {
+        m_grpPics[index].xoff = xoff;
+        m_grpPics[index].yoff = yoff;
+    }
+    displayGrpList();
+}
 
 void GrpList::onBgColorPick()
 {

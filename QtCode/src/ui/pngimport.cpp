@@ -13,6 +13,9 @@
 #include <QBuffer>
 #include <QDataStream>
 #include <QApplication>
+#include <QMouseEvent>
+#include <QIntValidator>
+#include "fileio.h"
 
 // ========= PNGImport =========
 
@@ -111,13 +114,17 @@ void PNGImport::onModifyEntry()
 
     QImage preview(m_entries[row].fileName);
     PNGImportModify dlg(preview, this);
+    const auto &entry = m_entries[row];
+    dlg.setOptions(entry.xOff, entry.yOff, entry.keepPNG, entry.transparent, QColor::fromRgb(entry.transColor));
     if (dlg.exec() == QDialog::Accepted) {
-        m_entries[row].xOff = dlg.xOffset();
-        m_entries[row].yOff = dlg.yOffset();
-        m_entries[row].keepPNG = dlg.keepPNG();
-        m_entries[row].transparent = dlg.useTransColor();
-        if (dlg.useTransColor())
-            m_entries[row].transColor = dlg.transColor().rgb();
+        for (int index = 0; index < m_entries.size(); ++index) {
+            if (!dlg.applyAll() && index != row) continue;
+            m_entries[index].xOff = dlg.xOffset();
+            m_entries[index].yOff = dlg.yOffset();
+            m_entries[index].keepPNG = dlg.keepPNG();
+            m_entries[index].transparent = dlg.useTransColor();
+            m_entries[index].transColor = dlg.transColor().rgb();
+        }
     }
 }
 
@@ -137,7 +144,10 @@ void PNGImport::onStartImport()
 
     // 加载现有 GRP
     QVector<GrpPic> grpPics;
-    GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics);
+    bool indexExists = QFile::exists(m_idxEdit->text()), dataExists = QFile::exists(m_grpEdit->text());
+    if ((indexExists || dataExists) && (!indexExists || !dataExists || !GrpIO::readGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics))) {
+        QMessageBox::warning(this, tr("导入"), tr("现有 IDX/GRP 不完整或无法读取")); return;
+    }
 
     m_progress->setVisible(true);
     m_progress->setRange(0, m_entries.size());
@@ -145,7 +155,14 @@ void PNGImport::onStartImport()
     for (int i = 0; i < m_entries.size(); ++i) {
         const auto &entry = m_entries[i];
         QImage img(entry.fileName);
-        if (img.isNull()) continue;
+        if (img.isNull() || (!entry.keepPNG && m_palette.size() != 256)) {
+            m_progress->setVisible(false);
+            QMessageBox::warning(this, tr("导入"), tr("图片无效或未加载完整调色板：%1").arg(entry.fileName)); return;
+        }
+        img = img.convertToFormat(QImage::Format_ARGB32);
+        if (entry.transparent) for (int row = 0; row < img.height(); ++row)
+            for (int column = 0; column < img.width(); ++column)
+                if ((img.pixel(column, row) & 0xffffff) == (entry.transColor & 0xffffff)) img.setPixelColor(column, row, Qt::transparent);
 
         GrpPic pic;
         pic.width = img.width();
@@ -155,8 +172,12 @@ void PNGImport::onStartImport()
 
         if (entry.keepPNG) {
             // 保持原始 PNG 格式
-            QFile f(entry.fileName);
-            if (f.open(QIODevice::ReadOnly)) pic.data = f.readAll();
+            if (entry.xOff || entry.yOff) {
+                m_progress->setVisible(false);
+                QMessageBox::warning(this, tr("导入"), tr("原始 PNG 在 GRP 中不支持偏移；请改用 RLE 或将偏移归零")); return;
+            }
+            QBuffer buffer(&pic.data);
+            if (!img.save(&buffer, "PNG")) { m_progress->setVisible(false); return; }
         } else {
             // 转 RLE8
             img = img.convertToFormat(QImage::Format_ARGB32);
@@ -165,15 +186,21 @@ void PNGImport::onStartImport()
                 pr[j] = qRed(m_palette[j]); pg[j] = qGreen(m_palette[j]); pb[j] = qBlue(m_palette[j]);
             }
             pic = GrpIO::encodeRLE(img, pr, pg, pb);
+            if (pic.data.isEmpty()) {
+                m_progress->setVisible(false);
+                QMessageBox::warning(this, tr("导入"), tr("图片超出 RLE 行编码限制，请选择保留 PNG")); return;
+            }
             pic.xoff = entry.xOff;
             pic.yoff = entry.yOff;
         }
+        pic.size = pic.data.size();
         grpPics.append(pic);
         m_progress->setValue(i + 1);
     }
 
-    GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics);
+    bool saved = GrpIO::saveGrp(m_idxEdit->text(), m_grpEdit->text(), grpPics);
     m_progress->setVisible(false);
+    if (!saved) { QMessageBox::warning(this, tr("导入"), tr("保存失败，未完成导入")); return; }
     QMessageBox::information(this, tr("导入"), tr("导入完成"));
 }
 
@@ -187,11 +214,14 @@ PNGImportModify::PNGImportModify(const QImage &preview, QWidget *parent)
 
     m_previewLabel = new QLabel;
     m_previewLabel->setFixedSize(400, 400);
+    m_previewLabel->installEventFilter(this);
     layout->addWidget(m_previewLabel);
 
     auto *form = new QHBoxLayout;
     m_xEdit = new QLineEdit("0");
     m_yEdit = new QLineEdit("0");
+    m_xEdit->setValidator(new QIntValidator(SHRT_MIN, SHRT_MAX, m_xEdit));
+    m_yEdit->setValidator(new QIntValidator(SHRT_MIN, SHRT_MAX, m_yEdit));
     form->addWidget(new QLabel("X:")); form->addWidget(m_xEdit);
     form->addWidget(new QLabel("Y:")); form->addWidget(m_yEdit);
     layout->addLayout(form);
@@ -210,7 +240,9 @@ PNGImportModify::PNGImportModify(const QImage &preview, QWidget *parent)
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     layout->addWidget(buttons);
 
-    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::accepted, this, [this] {
+        if (m_xEdit->hasAcceptableInput() && m_yEdit->hasAcceptableInput()) accept();
+    });
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_colorBtn, &QPushButton::clicked, [this]() {
         QColor c = QColorDialog::getColor(m_transCol, this);
@@ -218,6 +250,30 @@ PNGImportModify::PNGImportModify(const QImage &preview, QWidget *parent)
     });
 
     drawOffset();
+    connect(m_xEdit, &QLineEdit::textChanged, this, [this] { drawOffset(); });
+    connect(m_yEdit, &QLineEdit::textChanged, this, [this] { drawOffset(); });
+}
+
+void PNGImportModify::setOptions(int x, int y, bool png, bool transparent, QColor color)
+{
+    m_xEdit->setText(QString::number(x));
+    m_yEdit->setText(QString::number(y));
+    m_keepPNGCheck->setChecked(png);
+    m_transCheck->setChecked(transparent);
+    m_transCol = color;
+    drawOffset();
+}
+
+bool PNGImportModify::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_previewLabel && event->type() == QEvent::MouseButtonPress && !m_preview.isNull()) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        double scale = qMin(380.0 / m_preview.width(), 380.0 / m_preview.height());
+        m_xEdit->setText(QString::number(qRound((mouse->position().x() - 10) / scale)));
+        m_yEdit->setText(QString::number(qRound((mouse->position().y() - 10) / scale)));
+        return true;
+    }
+    return QDialog::eventFilter(watched, event);
 }
 
 void PNGImportModify::drawOffset()
@@ -231,7 +287,8 @@ void PNGImportModify::drawOffset()
         p.drawImage(10, 10, scaled);
     }
 
-    int x = m_xEdit->text().toInt(), y = m_yEdit->text().toInt();
+    double scale = m_preview.isNull() ? 1.0 : qMin(380.0 / m_preview.width(), 380.0 / m_preview.height());
+    int x = qRound(m_xEdit->text().toInt() * scale), y = qRound(m_yEdit->text().toInt() * scale);
     p.setPen(QPen(Qt::red, 2));
     p.drawLine(x + 10, 0, x + 10, 400);
     p.drawLine(0, y + 10, 400, y + 10);
@@ -296,6 +353,7 @@ void PNGExport::onSelectPath()
 
 void PNGExport::onStart()
 {
+    if (m_running) return;
     QString dir = m_pathEdit->text();
     if (dir.isEmpty() || m_pics.isEmpty()) return;
 
@@ -303,7 +361,7 @@ void PNGExport::onStart()
     m_progress->setRange(0, m_pics.size());
 
     QFile ka(dir + "/index.ka");
-    ka.open(QIODevice::WriteOnly);
+    if (!ka.open(QIODevice::WriteOnly)) { m_running = false; m_statusLabel->setText(tr("索引无法写入")); return; }
     QDataStream ds(&ka);
     ds.setByteOrder(QDataStream::LittleEndian);
 
@@ -314,14 +372,18 @@ void PNGExport::onStart()
 
         if (isPNG) {
             QFile f(dir + "/" + QString::number(i) + ".png");
-            if (f.open(QIODevice::WriteOnly)) f.write(pic.data);
+            if (!f.open(QIODevice::WriteOnly) || f.write(pic.data) != pic.data.size()) {
+                m_running = false; m_statusLabel->setText(tr("图片写入失败")); return;
+            }
         } else if (pic.width > 0 && pic.height > 0) {
             uint8_t pr[256]{}, pg[256]{}, pb[256]{};
             for (int j = 0; j < 256 && j < m_palette.size(); ++j) {
                 pr[j] = qRed(m_palette[j]); pg[j] = qGreen(m_palette[j]); pb[j] = qBlue(m_palette[j]);
             }
             QImage img = GrpIO::decodeRLE(pic, pr, pg, pb);
-            img.save(dir + "/" + QString::number(i) + ".png");
+            if (!img.save(dir + "/" + QString::number(i) + ".png")) {
+                m_running = false; m_statusLabel->setText(tr("图片写入失败")); return;
+            }
         }
 
         ds << (int16_t)pic.xoff << (int16_t)pic.yoff;
@@ -330,8 +392,9 @@ void PNGExport::onStart()
         QApplication::processEvents();
     }
 
+    bool completed = m_running && ds.status() == QDataStream::Ok && ka.flush();
     m_running = false;
-    m_statusLabel->setText(tr("导出完成"));
+    m_statusLabel->setText(completed ? tr("导出完成") : tr("导出中止或索引写入失败"));
 }
 
 void PNGExport::onStop() { m_running = false; }

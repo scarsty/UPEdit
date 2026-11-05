@@ -8,6 +8,13 @@
 #include <QPainter>
 #include <QClipboard>
 #include <QApplication>
+#include <QBuffer>
+#include <QSignalBlocker>
+#include <QMouseEvent>
+#include <QInputDialog>
+#include <QDir>
+#include <QtEndian>
+#include <limits>
 
 PicEdit::PicEdit(QWidget *parent) : QWidget(parent)
 {
@@ -32,13 +39,19 @@ PicEdit::PicEdit(QWidget *parent) : QWidget(parent)
     // 缩略图带
     m_thumbLabel = new QLabel;
     m_thumbLabel->setFixedHeight(60);
+    m_thumbLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    m_thumbLabel->installEventFilter(this);
     mainLayout->addWidget(m_thumbLabel);
 
     // 工具面板 + 主显示区
     auto *centerLayout = new QHBoxLayout;
     auto *toolPanel = new QVBoxLayout;
-    m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(-9999, 9999);
-    m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(-9999, 9999);
+    m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(INT_MIN, INT_MAX);
+    m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(INT_MIN, INT_MAX);
+    m_backgroundCheck = new QCheckBox(tr("黑色背景"));
+    auto *btnAppend = new QPushButton(tr("追加图片"));
+    auto *btnExport = new QPushButton(tr("导出当前图片"));
+    auto *btnBatch = new QPushButton(tr("批量设置偏移"));
     auto *btnSave = new QPushButton(tr("保存文件"));
     auto *btnCopy = new QPushButton(tr("复制"));
     auto *btnPaste = new QPushButton(tr("粘贴"));
@@ -50,12 +63,16 @@ PicEdit::PicEdit(QWidget *parent) : QWidget(parent)
     toolPanel->addWidget(m_xoffSpin);
     toolPanel->addWidget(new QLabel(tr("Y偏移:")));
     toolPanel->addWidget(m_yoffSpin);
+    toolPanel->addWidget(m_backgroundCheck);
+    toolPanel->addWidget(btnBatch);
     toolPanel->addWidget(btnSave);
     toolPanel->addWidget(btnCopy);
     toolPanel->addWidget(btnPaste);
     toolPanel->addWidget(btnInsert);
+    toolPanel->addWidget(btnAppend);
     toolPanel->addWidget(btnDelete);
     toolPanel->addWidget(btnExportAll);
+    toolPanel->addWidget(btnExport);
     toolPanel->addStretch();
 
     m_scroll = new QScrollArea;
@@ -77,6 +94,30 @@ PicEdit::PicEdit(QWidget *parent) : QWidget(parent)
     connect(btnDelete, &QPushButton::clicked, this, &PicEdit::onDelete);
     connect(btnExportAll, &QPushButton::clicked, this, &PicEdit::onExportAll);
     connect(m_indexSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, &PicEdit::onIndexChanged);
+    connect(m_xoffSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this] { updateMetadata(); });
+    connect(m_yoffSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this] { updateMetadata(); });
+    connect(m_backgroundCheck, &QCheckBox::toggled, this, [this] { updateMetadata(); });
+    connect(btnAppend, &QPushButton::clicked, this, [this] { insertImage(true); });
+    connect(btnBatch, &QPushButton::clicked, this, [this] {
+        if (m_pics.isEmpty()) return;
+        bool accepted = false;
+        int first = QInputDialog::getInt(this, tr("批量偏移"), tr("起始编号"), 0, 0, m_pics.size() - 1, 1, &accepted);
+        if (!accepted) return;
+        int last = QInputDialog::getInt(this, tr("批量偏移"), tr("结束编号"), m_pics.size() - 1, first, m_pics.size() - 1, 1, &accepted);
+        if (!accepted) return;
+        for (int index = first; index <= last; ++index) {
+            m_pics[index].xoff = m_xoffSpin->value();
+            m_pics[index].yoff = m_yoffSpin->value();
+        }
+    });
+    connect(btnExport, &QPushButton::clicked, this, [this] {
+        if (m_currentIndex < 0 || m_currentIndex >= m_pics.size()) return;
+        const auto &picture = m_pics[m_currentIndex];
+        bool png = picture.data.startsWith(QByteArray::fromHex("89504e470d0a1a0a"));
+        QString path = QFileDialog::getSaveFileName(this, tr("导出图片"), {}, png ? "PNG (*.png)" : "JPEG (*.jpg)");
+        if (!path.isEmpty() && !FileIO::writeFileAll(path, picture.data))
+            QMessageBox::warning(this, tr("导出"), tr("写入图片失败"));
+    });
 }
 
 void PicEdit::onOpen()
@@ -87,8 +128,13 @@ void PicEdit::onOpen()
 
 void PicEdit::openFile(const QString &path)
 {
+    QVector<PicData> pictures;
+    if (!decodeFile(FileIO::readFileAll(path), pictures)) {
+        QMessageBox::warning(this, tr("打开"), tr("PIC 文件无效或已损坏"));
+        return;
+    }
     m_filePath = path;
-    readPicFile(path);
+    m_pics = pictures;
     m_indexSpin->setRange(0, qMax(0, m_pics.size() - 1));
     m_currentIndex = 0;
     m_indexSpin->setValue(0);
@@ -96,73 +142,66 @@ void PicEdit::openFile(const QString &path)
     drawThumbnails();
 }
 
-void PicEdit::readPicFile(const QString &path)
+bool PicEdit::decodeFile(const QByteArray &bytes, QVector<PicData> &pictures)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return;
-    QDataStream ds(&file);
-    ds.setByteOrder(QDataStream::LittleEndian);
-
-    int32_t count = 0;
-    ds >> count;
-    if (count <= 0 || count > 100000) return;
-
-    QVector<int32_t> offsets(count + 1);
-    for (int i = 0; i <= count; ++i) ds >> offsets[i];
-
-    m_pics.resize(count);
-    for (int i = 0; i < count; ++i) {
-        file.seek(offsets[i]);
-        int32_t xs, ys, bg;
-        ds >> xs >> ys >> bg;
-        m_pics[i].width = xs;
-        m_pics[i].height = ys;
-        m_pics[i].background = bg;
-
-        int dataSize;
-        if (i + 1 < count)
-            dataSize = offsets[i + 1] - offsets[i] - 12;
-        else
-            dataSize = file.size() - offsets[i] - 12;
-
-        if (dataSize > 0) {
-            m_pics[i].data = file.read(dataSize);
-            // Detect PNG/JPG
-            if (m_pics[i].data.size() > 4) {
-                uint8_t b1 = m_pics[i].data[0], b2 = m_pics[i].data[1];
-                if (b1 == 0x89 && b2 == 'P') m_pics[i].picType = 1; // PNG
-                else if (b1 == 0xFF && b2 == 0xD8) m_pics[i].picType = 2; // JPG
-            }
-        }
+    if (bytes.size() < 4) return false;
+    qint32 count = qFromLittleEndian<qint32>(bytes.constData());
+    if (count < 0 || count > 100000 || qint64(count) * 4 + 4 > bytes.size()) return false;
+    QVector<PicData> decoded;
+    qint64 begin = 4 + qint64(count) * 4;
+    for (int index = 0; index < count; ++index) {
+        qint32 end = qFromLittleEndian<qint32>(bytes.constData() + 4 + index * 4);
+        if (end < begin + 12 || end > bytes.size()) return false;
+        PicData picture;
+        picture.xoff = qFromLittleEndian<qint32>(bytes.constData() + begin);
+        picture.yoff = qFromLittleEndian<qint32>(bytes.constData() + begin + 4);
+        picture.background = qFromLittleEndian<qint32>(bytes.constData() + begin + 8);
+        picture.data = bytes.mid(begin + 12, end - begin - 12);
+        decoded.append(picture);
+        begin = end;
     }
+    if (begin != bytes.size()) return false;
+    pictures = decoded;
+    return true;
+}
+
+QByteArray PicEdit::encodeFile(const QVector<PicData> &pictures)
+{
+    if (pictures.size() > 100000) return {};
+    qint64 end = 4 + qint64(pictures.size()) * 4;
+    QByteArray result;
+    QDataStream stream(&result, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << qint32(pictures.size());
+    for (const auto &picture : pictures) {
+        end += 12 + picture.data.size();
+        if (end > INT_MAX) return {};
+        stream << qint32(end);
+    }
+    for (const auto &picture : pictures) {
+        stream << picture.xoff << picture.yoff << picture.background;
+        stream.writeRawData(picture.data.constData(), picture.data.size());
+    }
+    return stream.status() == QDataStream::Ok ? result : QByteArray();
 }
 
 void PicEdit::displayCurrent()
 {
-    if (m_currentIndex < 0 || m_currentIndex >= m_pics.size()) return;
-    const auto &pic = m_pics[m_currentIndex];
-
-    QImage img;
-    if (pic.picType == 1 || pic.picType == 2) {
-        img.loadFromData(pic.data);
-    } else {
-        // Raw pixel data — simple display
-        img = QImage(pic.width, pic.height, QImage::Format_ARGB32);
-        img.fill(Qt::black);
-        if (pic.data.size() >= pic.width * pic.height * 2) {
-            for (int y = 0; y < pic.height; ++y) {
-                for (int x = 0; x < pic.width; ++x) {
-                    int off = (y * pic.width + x) * 2;
-                    uint16_t c = (uint8_t)pic.data[off] | ((uint8_t)pic.data[off + 1] << 8);
-                    int r = ((c >> 10) & 0x1F) << 3;
-                    int g = ((c >> 5) & 0x1F) << 3;
-                    int b = (c & 0x1F) << 3;
-                    img.setPixelColor(x, y, QColor(r, g, b));
-                }
-            }
-        }
+    QSignalBlocker indexBlock(m_indexSpin), xBlock(m_xoffSpin), yBlock(m_yoffSpin), bgBlock(m_backgroundCheck);
+    m_indexSpin->setRange(0, qMax(0, m_pics.size() - 1));
+    m_indexSpin->setValue(qMax(0, m_currentIndex));
+    if (m_currentIndex < 0 || m_currentIndex >= m_pics.size()) {
+        m_imageLabel->clear();
+        m_imageLabel->resize(1, 1);
+        return;
     }
-
+    const auto &pic = m_pics[m_currentIndex];
+    m_xoffSpin->setValue(pic.xoff);
+    m_yoffSpin->setValue(pic.yoff);
+    m_backgroundCheck->setChecked(pic.background == 1);
+    m_imageLabel->setStyleSheet(pic.background == 1 ? "background: black" : "background: white");
+    QImage img = QImage::fromData(pic.data);
+    m_imageLabel->clear();
     if (!img.isNull()) {
         m_imageLabel->setPixmap(QPixmap::fromImage(img));
         m_imageLabel->resize(img.size());
@@ -183,7 +222,7 @@ void PicEdit::drawThumbnails()
         if (idx >= m_pics.size()) break;
         const auto &pic = m_pics[idx];
         QImage img;
-        if (pic.picType >= 1) img.loadFromData(pic.data);
+        img.loadFromData(pic.data);
         if (!img.isNull()) {
             QImage s = img.scaled(thumbW - 4, thumbH - 4, Qt::KeepAspectRatio);
             p.drawImage(i * thumbW + 2, 2, s);
@@ -198,30 +237,14 @@ void PicEdit::drawThumbnails()
 
 void PicEdit::onSave()
 {
-    if (m_filePath.isEmpty() || m_pics.isEmpty()) return;
-    QFile file(m_filePath);
-    if (!file.open(QIODevice::WriteOnly)) return;
-    QDataStream ds(&file);
-    ds.setByteOrder(QDataStream::LittleEndian);
-
-    int32_t count = m_pics.size();
-    ds << count;
-
-    // 计算偏移
-    int32_t headerSize = 4 + (count + 1) * 4;
-    QVector<int32_t> offsets(count + 1);
-    int32_t pos = headerSize;
-    for (int i = 0; i <= count; ++i) {
-        offsets[i] = pos;
-        if (i < count) pos += 12 + m_pics[i].data.size();
+    QString path = QFileDialog::getSaveFileName(this, tr("保存PIC文件"), m_filePath, "PIC (*.pic)");
+    if (path.isEmpty()) return;
+    QByteArray bytes = encodeFile(m_pics);
+    if (bytes.isEmpty() || !FileIO::writeFileAll(path, bytes)) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败，原文件未替换"));
+        return;
     }
-    for (auto off : offsets) ds << off;
-
-    for (const auto &pic : m_pics) {
-        ds << (int32_t)pic.width << (int32_t)pic.height << (int32_t)pic.background;
-        file.write(pic.data);
-    }
-
+    m_filePath = path;
     QMessageBox::information(this, tr("保存"), tr("保存成功"));
 }
 
@@ -242,14 +265,21 @@ void PicEdit::onCopy()
     if (!pix.isNull()) QApplication::clipboard()->setImage(pix.toImage());
 }
 
-void PicEdit::onPaste() { /* 从剪贴板粘贴，转换后存入m_pics[m_currentIndex] */ }
+void PicEdit::onPaste()
+{
+    QImage image = QApplication::clipboard()->image();
+    if (image.isNull() || m_currentIndex < 0 || m_currentIndex >= m_pics.size()) return;
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    if (!image.save(&buffer, "PNG")) return;
+    m_pics[m_currentIndex] = PicData{0, 0, 0, bytes};
+    displayCurrent();
+    drawThumbnails();
+}
 
 void PicEdit::onInsert()
 {
-    if (m_currentIndex >= 0)
-        m_pics.insert(m_currentIndex, PicData());
-    m_indexSpin->setRange(0, qMax(0, m_pics.size() - 1));
-    displayCurrent();
+    insertImage(false);
 }
 
 void PicEdit::onDelete()
@@ -259,6 +289,7 @@ void PicEdit::onDelete()
         m_indexSpin->setRange(0, qMax(0, m_pics.size() - 1));
         if (m_currentIndex >= m_pics.size()) m_currentIndex = m_pics.size() - 1;
         displayCurrent();
+        drawThumbnails();
     }
 }
 
@@ -269,21 +300,73 @@ void PicEdit::onExportAll()
     m_progress->setVisible(true);
     m_progress->setRange(0, m_pics.size());
 
-    QFile ka(dir + "/index.ka");
-    ka.open(QIODevice::WriteOnly);
-    QDataStream kds(&ka);
+    QByteArray metadata;
+    QDataStream kds(&metadata, QIODevice::WriteOnly);
     kds.setByteOrder(QDataStream::LittleEndian);
+    QMap<QString, QByteArray> files;
 
     for (int i = 0; i < m_pics.size(); ++i) {
         const auto &pic = m_pics[i];
-        QImage img;
-        if (pic.picType >= 1)
-            img.loadFromData(pic.data);
-        if (!img.isNull())
-            img.save(dir + "/" + QString::number(i) + ".png");
-        kds << (int16_t)0 << (int16_t)0; // x, y offsets
+        if (pic.xoff < SHRT_MIN || pic.xoff > SHRT_MAX || pic.yoff < SHRT_MIN || pic.yoff > SHRT_MAX) {
+            m_progress->setVisible(false);
+            QMessageBox::warning(this, tr("导出"), tr("偏移超出 index.ka 的16位范围"));
+            return;
+        }
+        QString extension = pic.data.startsWith(QByteArray::fromHex("89504e470d0a1a0a")) ? ".png" : ".jpg";
+        files.insert(QDir(dir).filePath(QString::number(i) + extension), pic.data);
+        kds << qint16(pic.xoff) << qint16(pic.yoff);
         m_progress->setValue(i + 1);
     }
     m_progress->setVisible(false);
+    files.insert(QDir(dir).filePath("index.ka"), metadata);
+    if (!FileIO::writeFiles(files)) {
+        QMessageBox::warning(this, tr("导出"), tr("写入失败"));
+        return;
+    }
     QMessageBox::information(this, tr("导出"), tr("导出完成"));
+}
+
+void PicEdit::insertImage(bool append)
+{
+    QString path = QFileDialog::getOpenFileName(this, tr("插入图片"), {}, "Images (*.png *.jpg *.jpeg *.bmp)");
+    if (path.isEmpty()) return;
+    QByteArray bytes = FileIO::readFileAll(path);
+    QImage image = QImage::fromData(bytes);
+    if (image.isNull()) {
+        QMessageBox::warning(this, tr("插入"), tr("图片无法解码"));
+        return;
+    }
+    if (!bytes.startsWith(QByteArray::fromHex("89504e470d0a1a0a")) && !bytes.startsWith(QByteArray::fromHex("ffd8"))) {
+        bytes.clear();
+        QBuffer buffer(&bytes);
+        if (!image.save(&buffer, "PNG")) return;
+    }
+    int position = append ? m_pics.size() : qBound(0, m_currentIndex, m_pics.size());
+    m_pics.insert(position, PicData{0, 0, 0, bytes});
+    m_currentIndex = position;
+    displayCurrent();
+    drawThumbnails();
+}
+
+void PicEdit::updateMetadata()
+{
+    if (m_currentIndex < 0 || m_currentIndex >= m_pics.size()) return;
+    auto &picture = m_pics[m_currentIndex];
+    picture.xoff = m_xoffSpin->value();
+    picture.yoff = m_yoffSpin->value();
+    picture.background = m_backgroundCheck->isChecked() ? 1 : 0;
+    displayCurrent();
+}
+
+bool PicEdit::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_thumbLabel && event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        int offset = int(mouse->position().x()) / 50;
+        int index = qMax(0, m_currentIndex - 10) + offset;
+        if (mouse->position().x() >= 0 && mouse->position().y() < 50 && offset < 20 && index < m_pics.size())
+            m_indexSpin->setValue(index);
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }

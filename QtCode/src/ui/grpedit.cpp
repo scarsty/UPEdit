@@ -6,6 +6,9 @@
 #include <QClipboard>
 #include <QApplication>
 #include <QMouseEvent>
+#include <QBuffer>
+#include <QMessageBox>
+#include <QtEndian>
 
 GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
 {
@@ -23,6 +26,9 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
 
     m_zoomCombo = new QComboBox;
     m_zoomCombo->addItems({"1x", "2x", "4x", "8x", "16x"});
+    m_toolCombo = new QComboBox;
+    m_toolCombo->addItems({tr("画笔"), tr("吸色"), tr("左吸色／右绘制"), tr("替换为透明色")});
+    toolPanel->addWidget(m_toolCombo);
 
     m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(-9999, 9999);
     m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(-9999, 9999);
@@ -45,6 +51,7 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
     // 中央：主图显示
     m_scroll = new QScrollArea;
     m_imageLabel = new QLabel;
+    m_imageLabel->installEventFilter(this);
     m_imageLabel->setAlignment(Qt::AlignCenter);
     m_scroll->setWidget(m_imageLabel);
     m_scroll->setWidgetResizable(false);
@@ -84,6 +91,7 @@ void GrpEdit::setPalette(const QVector<QRgb> &pal)
 void GrpEdit::setSprite(const GrpPic &pic, const QVector<QRgb> &palette)
 {
     m_pal = palette;
+    m_keepPNG = GrpIO::isPNG(pic);
     decodeRLE8(pic);
     m_xmove = pic.xoff;
     m_ymove = pic.yoff;
@@ -172,12 +180,26 @@ void GrpEdit::onPaste()
 
 void GrpEdit::onSave()
 {
+    if (m_bitmap.isNull()) return;
     GrpPic pic;
     pic.width = m_bitmap.width();
     pic.height = m_bitmap.height();
     pic.xoff = m_xoffSpin->value();
     pic.yoff = m_yoffSpin->value();
-    pic.data = encodeRLE8();
+    if (m_keepPNG) {
+        if (pic.xoff || pic.yoff) {
+            QMessageBox::warning(this, tr("保存"), tr("GRP 中的原始 PNG 不存储偏移；请将偏移设为零"));
+            return;
+        }
+        QBuffer buffer(&pic.data);
+        if (!m_bitmap.save(&buffer, "PNG")) return;
+    } else {
+        pic.data = encodeRLE8();
+        if (pic.data.size() < 8) { QMessageBox::warning(this, tr("保存"), tr("图片超出 RLE 行编码限制")); return; }
+        qToLittleEndian<qint16>(pic.xoff, pic.data.data() + 4);
+        qToLittleEndian<qint16>(pic.yoff, pic.data.data() + 6);
+    }
+    pic.size = pic.data.size();
     emit spriteModified(pic);
 }
 
@@ -214,7 +236,50 @@ void GrpEdit::onPaletteClicked(const QPoint &pos)
     if (m_curColor >= 256) m_curColor = 255;
 }
 
-void GrpEdit::onImageClicked(const QPoint &) { /* 绘制模式 */ }
+void GrpEdit::onImageClicked(const QPoint &position)
+{
+    if (!m_bitmap.rect().contains(position)) return;
+    m_bitmap = m_bitmap.convertToFormat(QImage::Format_ARGB32);
+    m_bitmap.setPixelColor(position, QColor::fromRgb(m_pal.value(m_curColor, qRgb(0, 0, 0))));
+    display();
+}
+
+bool GrpEdit::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() != QEvent::MouseButtonPress && event->type() != QEvent::MouseMove)
+        return QWidget::eventFilter(watched, event);
+    auto *mouse = static_cast<QMouseEvent *>(event);
+    if (event->type() == QEvent::MouseMove && mouse->buttons() == Qt::NoButton) return false;
+    if (watched == m_paletteLabel) {
+        onPaletteClicked(mouse->position().toPoint());
+        return true;
+    }
+    if (watched != m_imageLabel) return false;
+    QPoint pixel = mouse->position().toPoint() / (1 << m_zoomCombo->currentIndex());
+    if (!m_bitmap.rect().contains(pixel)) return true;
+    auto button = event->type() == QEvent::MouseMove ? mouse->buttons() : Qt::MouseButtons(mouse->button());
+    int mode = m_toolCombo->currentIndex();
+    if (mode == 1 || (mode == 2 && button.testFlag(Qt::LeftButton))) {
+        QRgb color = m_bitmap.pixel(pixel);
+        int best = 0, distance = INT_MAX;
+        for (int index = 0; index < m_pal.size(); ++index) {
+            QRgb candidate = m_pal[index];
+            int delta = qAbs(qRed(color) - qRed(candidate)) + qAbs(qGreen(color) - qGreen(candidate)) + qAbs(qBlue(color) - qBlue(candidate));
+            if (delta < distance) { best = index; distance = delta; }
+        }
+        m_curColor = best;
+    } else if (mode == 3) {
+        QRgb selected = m_bitmap.pixel(pixel);
+        m_bitmap = m_bitmap.convertToFormat(QImage::Format_ARGB32);
+        for (int row = 0; row < m_bitmap.height(); ++row)
+            for (int column = 0; column < m_bitmap.width(); ++column)
+                if (m_bitmap.pixel(column, row) == selected) m_bitmap.setPixelColor(column, row, Qt::transparent);
+        display();
+    } else {
+        onImageClicked(pixel);
+    }
+    return true;
+}
 
 GrpPic GrpEdit::resultSprite() const
 {

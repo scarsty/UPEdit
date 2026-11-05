@@ -13,6 +13,14 @@
 #include "mapdata.h"
 #include "iniconfig.h"
 #include "encoding.h"
+#include <QProgressDialog>
+#include <QScopedValueRollback>
+#include <QApplication>
+
+void OutputMap::reject()
+{
+    if (!m_exporting) QDialog::reject();
+}
 
 void OutputMap::setMapData(const Map &map, const QVector<QImage> &tiles, const QVector<GrpPic> &pictures, int scale)
 {
@@ -82,6 +90,8 @@ void OutputMap::onSelectFont()
 
 void OutputMap::onExport()
 {
+    if (m_exporting) return;
+    QScopedValueRollback<bool> exporting(m_exporting, true);
     QString savePath = m_fileEdit->text();
     if (savePath.isEmpty()) {
         savePath = QFileDialog::getSaveFileName(this, tr("保存地图"), {}, "PNG (*.png);;BMP (*.bmp)");
@@ -98,8 +108,16 @@ void OutputMap::onExport()
         return;
     }
 
+    QProgressDialog progress(tr("正在绘制地图"), tr("取消"), 0, 101, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
     QImage image = MapIO::renderMainMap(m_map, m_tiles, m_pictures, m_groundCheck->isChecked(),
-        m_surfaceCheck->isChecked(), m_buildingCheck->isChecked(), m_scale, zoom);
+        m_surfaceCheck->isChecked(), m_buildingCheck->isChecked(), m_scale, zoom, [&](int value) {
+            progress.setValue(value);
+            QApplication::processEvents();
+            return !progress.wasCanceled();
+        });
+    if (progress.wasCanceled()) { m_logText->append(tr("导出已取消，未写入文件")); return; }
     if (image.isNull()) {
         QString reason = m_map.mapLayer.isEmpty() ? tr("没有地图数据，请从地图编辑器打开导出窗口")
             : tr("地图尺寸或缩放超限，或内存不足，请降低缩放比例");

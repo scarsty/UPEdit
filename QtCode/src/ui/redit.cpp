@@ -9,6 +9,85 @@
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QInputDialog>
+#include <QSpinBox>
+#include <limits>
+#include <QDataStream>
+#include <QCloseEvent>
+#include <QSignalBlocker>
+
+QByteArray REditWidget::stateBytes() const
+{
+    QByteArray bytes;
+    QDataStream stream(&bytes, QIODevice::WriteOnly);
+    stream << m_rFile.typeNumber << m_rFile.rType.size();
+    for (const auto &type : m_rFile.rType) {
+        stream << type.rData.size();
+        for (const auto &record : type.rData) {
+            stream << record.rDataLine.size();
+            for (const auto &line : record.rDataLine) {
+                stream << line.rArray.size();
+                for (const auto &array : line.rArray) {
+                    stream << array.dataArray.size();
+                    for (const auto &field : array.dataArray) stream << field.dataType << field.dataLen << field.data;
+                }
+            }
+        }
+    }
+    return bytes;
+}
+
+bool REditWidget::confirmDiscard()
+{
+    if (m_loadedSlot < 0 || stateBytes() == m_savedState) return true;
+    auto answer = QMessageBox::question(this, tr("未保存修改"), tr("保存当前进度的修改？"),
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer == QMessageBox::Cancel) return false;
+    if (answer == QMessageBox::Save) {
+        onSave();
+        return stateBytes() == m_savedState;
+    }
+    return true;
+}
+
+void REditWidget::closeEvent(QCloseEvent *event)
+{
+    if (confirmDiscard()) event->accept();
+    else event->ignore();
+}
+
+bool REditWidget::applyFieldOperation(RDataSingle &field, int operation, const QString &text)
+{
+    if (operation < 0 || operation > 4) return false;
+    if (field.dataType != 0) {
+        if (operation != 0) return false;
+        RFileIO::writeRDataStr(field, text);
+        return true;
+    }
+    bool valid = false;
+    qint64 operand = text.toLongLong(&valid);
+    if (!valid || field.dataLen <= 0) return false;
+    const qint64 minimum = (std::numeric_limits<qint64>::min)();
+    const qint64 maximum = (std::numeric_limits<qint64>::max)();
+    qint64 current = RFileIO::readRDataInt(field), result = operand;
+    if (operation == 1) {
+        if ((operand > 0 && current > maximum - operand) || (operand < 0 && current < minimum - operand)) return false;
+        result = current + operand;
+    } else if (operation == 2) {
+        if ((operand < 0 && current > maximum + operand) || (operand > 0 && current < minimum + operand)) return false;
+        result = current - operand;
+    } else if (operation == 3) {
+        if (current > 0 ? (operand > 0 ? current > maximum / operand : operand < minimum / current)
+            : current < 0 && (operand > 0 ? current < minimum / operand : operand < 0 && current < maximum / operand)) return false;
+        result = current * operand;
+    } else if (operation == 4) {
+        if (operand == 0 || (current == minimum && operand == -1)) return false;
+        result = current / operand;
+    }
+    int bits = field.dataLen >= 8 ? 64 : field.dataLen >= 4 ? 32 : field.dataLen >= 2 ? 16 : 8;
+    if (bits < 64 && (result < -(qint64(1) << (bits - 1)) || result >= (qint64(1) << (bits - 1)))) return false;
+    RFileIO::writeRDataInt(field, result);
+    return true;
+}
 
 REditWidget::REditWidget(QWidget *parent)
     : QWidget(parent)
@@ -96,6 +175,8 @@ void REditWidget::setupUI()
     m_editValue = new QLineEdit(batchBox);
     m_editValue->setMaximumWidth(100);
     auto *btnApply = new QPushButton(tr("执行"), batchBox);
+    auto *btnFields = new QPushButton(tr("当前记录字段批量"), batchBox);
+    batchLayout->addWidget(btnFields);
     opLayout->addWidget(m_fieldCombo);
     opLayout->addWidget(m_opCombo);
     opLayout->addWidget(m_editValue);
@@ -146,11 +227,92 @@ void REditWidget::setupUI()
     connect(m_btnImport, &QPushButton::clicked, this, &REditWidget::onImportXlsx);
     connect(m_btnSearch, &QPushButton::clicked, this, &REditWidget::onSearch);
     connect(btnApply,    &QPushButton::clicked, this, &REditWidget::onBatchEdit);
+    m_recordList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    connect(btnFields, &QPushButton::clicked, this, [this] {
+        if (m_currentType < 0 || m_currentRecord < 0 || m_currentType >= m_rFile.rType.size()
+            || m_currentRecord >= m_rFile.rType[m_currentType].rData.size()) return;
+        auto &record = m_rFile.rType[m_currentType].rData[m_currentRecord];
+        QVector<RDataSingle *> fields;
+        for (auto &line : record.rDataLine)
+            for (auto &array : line.rArray)
+                for (auto &value : array.dataArray) fields.append(&value);
+        if (fields.isEmpty()) return;
+        QDialog dialog(this);
+        dialog.setWindowTitle(tr("当前记录字段批量"));
+        auto *layout = new QVBoxLayout(&dialog);
+        auto *list = new QListWidget;
+        for (int index = 0; index < fields.size(); ++index) {
+            auto *item = new QListWidgetItem(QString::number(index) + " " + RFileIO::readRDataStr(*fields[index]), list);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(Qt::Unchecked);
+        }
+        layout->addWidget(list);
+        auto *range = new QHBoxLayout;
+        auto *first = new QSpinBox;
+        auto *last = new QSpinBox;
+        first->setRange(0, fields.size() - 1);
+        last->setRange(0, fields.size() - 1);
+        last->setValue(fields.size() - 1);
+        auto *selectRange = new QPushButton(tr("选择范围"));
+        range->addWidget(first);
+        range->addWidget(last);
+        range->addWidget(selectRange);
+        layout->addLayout(range);
+        connect(selectRange, &QPushButton::clicked, &dialog, [=] {
+            int begin = qMin(first->value(), last->value()), end = qMax(first->value(), last->value());
+            for (int row = 0; row < list->count(); ++row)
+                list->item(row)->setCheckState(row >= begin && row <= end ? Qt::Checked : Qt::Unchecked);
+        });
+        auto *select = new QHBoxLayout;
+        for (int action = 0; action < 3; ++action) {
+            auto *button = new QPushButton(QStringList{tr("全选"), tr("清空"), tr("反选")}[action]);
+            select->addWidget(button);
+            connect(button, &QPushButton::clicked, &dialog, [list, action] {
+                for (int row = 0; row < list->count(); ++row)
+                    list->item(row)->setCheckState(action == 0 || (action == 2 && list->item(row)->checkState() == Qt::Unchecked) ? Qt::Checked : Qt::Unchecked);
+            });
+        }
+        layout->addLayout(select);
+        auto *valueEdit = new QLineEdit;
+        valueEdit->setText(m_editValue->text());
+        auto *operation = new QComboBox;
+        operation->addItems({tr("赋值"), tr("加"), tr("减"), tr("乘"), tr("除")});
+        layout->addWidget(operation);
+        layout->addWidget(valueEdit);
+        auto *apply = new QPushButton(tr("执行"));
+        layout->addWidget(apply);
+        connect(apply, &QPushButton::clicked, &dialog, [&, this] {
+            int mode = operation->currentIndex();
+            QVector<RDataSingle> updated;
+            QVector<int> selected;
+            for (int index = 0; index < fields.size(); ++index) {
+                if (list->item(index)->checkState() != Qt::Checked) continue;
+                RDataSingle field = *fields[index];
+                if (!applyFieldOperation(field, mode, valueEdit->text())) {
+                    QMessageBox::warning(&dialog, tr("批量操作"), tr("字段 %1 的操作无效或结果超出范围，未修改任何字段").arg(index));
+                    return;
+                }
+                selected.append(index);
+                updated.append(field);
+            }
+            for (int index = 0; index < selected.size(); ++index) *fields[selected[index]] = updated[index];
+            populateFields();
+            dialog.accept();
+        });
+        dialog.resize(550, 650);
+        dialog.exec();
+    });
 }
 
 void REditWidget::onProgressChanged(int index)
 {
     if (index < 0) return;
+    if (index == m_loadedSlot) return;
+    if (!confirmDiscard()) {
+        QSignalBlocker blocker(m_progressCombo);
+        m_progressCombo->setCurrentIndex(m_loadedSlot);
+        return;
+    }
     loadProgress(index);
 }
 
@@ -164,27 +326,29 @@ void REditWidget::loadProgress(int index)
 
     // readDB 会修改 rGlobals.rIni / typeDataItem，
     // 每次加载前从 INI 重新读取，保证字段定义回归原始状态
-    RFileIO::readIni(cfg.rGlobals, cfg.iniPath);
+    RFileGlobals globals = cfg.rGlobals;
+    RFileIO::readIni(globals, cfg.iniPath);
+    RFile loaded;
 
     bool ok;
     if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        ok = RFileIO::readDB(grpFile, &m_rFile, cfg.rGlobals);
+        ok = RFileIO::readDB(grpFile, &loaded, globals);
     } else {
-        ok = RFileIO::readR(idxFile, grpFile, &m_rFile, cfg.rGlobals);
+        ok = RFileIO::readR(idxFile, grpFile, &loaded, globals);
     }
 
     if (ok) {
-        RFileIO::calcNamePos(&m_rFile, cfg.rGlobals);
+        RFileIO::calcNamePos(&loaded, globals);
     } else {
-        // 读取失败: 初始化空结构
-        m_rFile.typeNumber = cfg.rGlobals.typeNumber;
-        m_rFile.rType.resize(m_rFile.typeNumber);
-        for (int i = 0; i < m_rFile.typeNumber; ++i) {
-            m_rFile.rType[i].dataNum = 0;
-            m_rFile.rType[i].rData.clear();
-        }
-        RFileIO::calcNamePos(&m_rFile, cfg.rGlobals);
+        QSignalBlocker blocker(m_progressCombo);
+        m_progressCombo->setCurrentIndex(m_loadedSlot);
+        m_statusBar->showMessage(tr("读取失败，保留当前工作数据"));
+        return;
     }
+    m_rFile = loaded;
+    cfg.rGlobals = globals;
+    m_loadedSlot = index;
+    m_savedState = stateBytes();
 
     // 通知 editForm 使用本地 rFile
     m_editForm->setRFile(&m_rFile);
@@ -281,16 +445,18 @@ void REditWidget::onFieldDoubleClicked(int row)
 void REditWidget::onSave()
 {
     IniConfig &cfg = IniConfig::instance();
-    int slot = m_progressCombo->currentIndex();
+    int slot = m_loadedSlot;
     if (slot < 0 || slot >= cfg.rFileNum) return;
 
     QString grpFile = cfg.gamePath + cfg.rFileName[slot];
     QString idxFile = cfg.gamePath + cfg.rIdxFileName[slot];
 
-    if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        RFileIO::saveDB(grpFile, &m_rFile, cfg.rGlobals);
-    } else {
-        RFileIO::saveR(idxFile, grpFile, &m_rFile, cfg.rGlobals);
+    bool saved = grpFile.endsWith(".db", Qt::CaseInsensitive)
+        ? RFileIO::saveDB(grpFile, &m_rFile, cfg.rGlobals)
+        : RFileIO::saveR(idxFile, grpFile, &m_rFile, cfg.rGlobals);
+    if (!saved) {
+        QMessageBox::warning(this, tr("保存"), tr("保存失败，原始数据未替换"));
+        return;
     }
 
     // 若保存的是进度 0，同步到全局 useR (cfg.rGlobals.rFile)
@@ -305,6 +471,7 @@ void REditWidget::onSave()
         RFileIO::calcNamePos(&cfg.rGlobals.rFile, cfg.rGlobals);
     }
 
+    m_savedState = stateBytes();
     m_statusBar->showMessage(tr("保存成功"), 3000);
 }
 
@@ -312,8 +479,8 @@ void REditWidget::onReload()
 {
     int slot = m_progressCombo->currentIndex();
     if (slot < 0) return;
+    if (!confirmDiscard()) return;
     loadProgress(slot);
-    m_statusBar->showMessage(tr("重新载入完成"), 3000);
 }
 
 void REditWidget::onNewRecord()
@@ -395,31 +562,22 @@ void REditWidget::onPasteRecord()
 
 void REditWidget::onBatchEdit()
 {
-    if (m_currentType < 0) return;
+    if (m_currentType < 0 || m_currentType >= m_rFile.rType.size()) return;
 
     int fieldIdx = m_fieldCombo->currentIndex();
     int op = m_opCombo->currentIndex();
     QString valStr = m_editValue->text();
-    bool ok;
-    int64_t val = valStr.toLongLong(&ok);
-
-    auto &rtype = m_rFile.rType[m_currentType];
+    RType rtype = m_rFile.rType[m_currentType];
+    bool valid = true;
 
     auto applyOp = [&](int recordIdx) {
         if (recordIdx < 0 || recordIdx >= rtype.rData.size()) return;
         auto &rd = rtype.rData[recordIdx];
-        if (fieldIdx >= rd.rDataLine.size()) return;
+        if (fieldIdx < 0 || fieldIdx >= rd.rDataLine.size()) { valid = false; return; }
         auto &line = rd.rDataLine[fieldIdx];
-        if (line.rArray.isEmpty() || line.rArray[0].dataArray.isEmpty()) return;
-        auto &single = line.rArray[0].dataArray[0];
-
-        switch (op) {
-        case 0: RFileIO::writeRDataStr(single, valStr); break;
-        case 1: if (single.dataType == 0 && ok) RFileIO::writeRDataInt(single, RFileIO::readRDataInt(single) + val); break;
-        case 2: if (single.dataType == 0 && ok) RFileIO::writeRDataInt(single, RFileIO::readRDataInt(single) - val); break;
-        case 3: if (single.dataType == 0 && ok) RFileIO::writeRDataInt(single, RFileIO::readRDataInt(single) * val); break;
-        case 4: if (single.dataType == 0 && ok && val != 0) RFileIO::writeRDataInt(single, RFileIO::readRDataInt(single) / val); break;
-        }
+        for (auto &array : line.rArray)
+            for (auto &single : array.dataArray)
+                if (!applyFieldOperation(single, op, valStr)) valid = false;
     };
 
     if (m_radioChecked->isChecked()) {
@@ -429,13 +587,21 @@ void REditWidget::onBatchEdit()
                 applyOp(i);
         }
     } else {
-        int a = m_editFrom->text().toInt();
-        int b = m_editTo->text().toInt();
+        bool fromValid, toValid;
+        int a = m_editFrom->text().toInt(&fromValid);
+        int b = m_editTo->text().toInt(&toValid);
+        if (!fromValid || !toValid || a < 0 || b < 0 || a >= rtype.rData.size() || b >= rtype.rData.size()) {
+            QMessageBox::warning(this, tr("批量操作"), tr("记录范围无效")); return;
+        }
         if (a > b) std::swap(a, b);
         for (int i = a; i <= b; ++i)
             applyOp(i);
     }
 
+    if (!valid) {
+        QMessageBox::warning(this, tr("批量操作"), tr("操作无效或结果超出字段范围，未修改任何记录")); return;
+    }
+    m_rFile.rType[m_currentType] = rtype;
     populateFields();
     m_statusBar->showMessage(tr("批量操作完成"), 3000);
 }
@@ -576,8 +742,9 @@ void REditWidget::onImportXlsx()
         rt.rData.clear();
 
         if (i1 == 0) {
-            // Type 0: 转置 — 列是记录，行是字段。固定创建 1 条记录
-            RFileIO::addNewRData(&m_rFile, i1, g);
+            int recordCount = 0;
+            for (const auto &row : rows) recordCount = qMax(recordCount, row.size() - 1);
+            for (int record = 0; record < recordCount; ++record) RFileIO::addNewRData(&m_rFile, i1, g);
 
             for (int i2 = 0; i2 < rt.dataNum; ++i2) {
                 int temp = 0;

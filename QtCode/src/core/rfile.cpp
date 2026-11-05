@@ -1,4 +1,6 @@
 #include "rfile.h"
+#include <QFileInfo>
+#include <QTemporaryFile>
 #include "encoding.h"
 #include "fileio.h"
 #include "iniconfig.h"
@@ -288,11 +290,10 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
 
 // ── 保存 R 文件 ─────────────────────────────────────────
 
-void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile *prf, const RFileGlobals &g)
+bool RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile *prf, const RFileGlobals &g)
 {
     if (grpFile.endsWith(".db", Qt::CaseInsensitive)) {
-        saveDB(grpFile, prf, g);
-        return;
+        return saveDB(grpFile, prf, g);
     }
 
     // Delphi 约定: offset[i] 为累积末尾偏移
@@ -329,11 +330,10 @@ void RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
         }
     }
 
-    FileIO::writeFileAll(grpFile, grpData);
-
     QByteArray idxData(prf->typeNumber * 4, '\0');
     memcpy(idxData.data(), offsets.data(), prf->typeNumber * 4);
-    FileIO::writeFileAll(idxFile, idxData);
+    if (QFileInfo(idxFile).absoluteFilePath().compare(QFileInfo(grpFile).absoluteFilePath(), Qt::CaseInsensitive) == 0) return false;
+    return FileIO::writeFiles({{grpFile, grpData}, {idxFile, idxData}});
 }
 
 // ── 从 SQLite 读取 ──────────────────────────────────────
@@ -495,17 +495,22 @@ bool RFileIO::readDB(const QString &dbFile, RFile *prf, RFileGlobals &g)
 
 // ── 保存到 SQLite ───────────────────────────────────────
 
-void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals &g)
+bool RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals &g)
 {
-    if (!SQLite3Database::isLibraryLoaded()) return;
-
-    // 对应 Delphi: DeleteFile(dbfile) 后重新创建
-    QFile::remove(dbFile);
-
+    if (!SQLite3Database::isLibraryLoaded() || !prf || prf->typeNumber < 0
+        || prf->typeNumber > prf->rType.size() || prf->typeNumber > g.rIni.size() || prf->typeNumber > g.typeName.size()) return false;
+    QTemporaryFile temporary(QFileInfo(dbFile).absolutePath() + "/.upedit-db-XXXXXX");
+    if (!temporary.open()) return false;
+    QString temporaryPath = temporary.fileName();
+    temporary.close();
     SQLite3Database db;
-    if (!db.open(dbFile)) return;
-
-    db.beginTransaction();
+    if (!db.open(temporaryPath)) return false;
+    auto execute = [&db](const QString &sql) {
+        QByteArray utf8 = sql.toUtf8();
+        return SQLite3Database::fn_exec(db.handle(), utf8.constData(), nullptr, nullptr, nullptr) == 0;
+    };
+    auto identifier = [](QString name) { name.replace('"', "\"\""); return '"' + name + '"'; };
+    if (!execute("BEGIN IMMEDIATE")) return false;
 
     for (int i1 = 0; i1 < prf->typeNumber && i1 < g.rIni.size(); ++i1) {
         if (i1 >= g.typeName.size()) break;
@@ -513,7 +518,7 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
         if (tname.isEmpty()) continue;
 
         // ── CREATE TABLE ──
-        QString sql = QStringLiteral("create table %1(").arg(tname);
+        QString sql = QStringLiteral("create table %1(").arg(identifier(tname));
         for (int j = 0; j < g.rIni[i1].rTerm.size(); ++j) {
             const RTermini &term = g.rIni[i1].rTerm[j];
             for (int j1 = 0; j1 < term.datanum; ++j1) {
@@ -523,10 +528,10 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
                     QString colName = g.rIni[i1].rTerm[termIdx].name;
                     if (term.datanum > 1)
                         colName += QString::number(j1 + IniConfig::instance().listBeginNum);
-                    if (term.isstr != 0)
-                        sql += QStringLiteral("\"%1\" text,").arg(colName);
+                    if (g.rIni[i1].rTerm[termIdx].isstr != 0)
+                        sql += identifier(colName) + " text,";
                     else
-                        sql += QStringLiteral("\"%1\" integer,").arg(colName);
+                        sql += identifier(colName) + " integer,";
                 }
             }
         }
@@ -534,11 +539,11 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
         if (sql.endsWith(','))
             sql.chop(1);
         sql += ")";
-        db.execute(sql);
+        if (!execute(sql)) return false;
 
         // ── INSERT DATA ──
-        for (int i2 = 0; i2 < prf->rType[i1].dataNum; ++i2) {
-            sql = QStringLiteral("insert into %1 values(").arg(tname);
+        for (int i2 = 0; i2 < prf->rType[i1].rData.size(); ++i2) {
+            sql = QStringLiteral("insert into %1 values(").arg(identifier(tname));
             const RData &rd = prf->rType[i1].rData[i2];
             for (int i3 = 0; i3 < rd.rDataLine.size(); ++i3) {
                 for (int i4 = 0; i4 < rd.rDataLine[i3].rArray.size(); ++i4) {
@@ -547,13 +552,12 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
                         const RDataSingle &ds = arr.dataArray[i5];
                         if (ds.dataLen <= 0) continue;
 
-                        int termIdx = i3;
-                        if (termIdx < g.rIni[i1].rTerm.size() && g.rIni[i1].rTerm[termIdx].isstr != 0) {
+                        if (ds.dataType != 0) {
                             // 文本列: 内存中统一为 UTF-8，写 DB 时不做额外编码转换
                             QString str = readRDataStr(ds);
                             // 转义双引号
-                            str.replace('"', "\"\"");
-                            sql += QStringLiteral("\"%1\",").arg(str);
+                            str.replace('\'', "''");
+                            sql += QStringLiteral("'%1',").arg(str);
                         } else {
                             // 整数列
                             int64_t value = readRDataInt(ds);
@@ -565,11 +569,17 @@ void RFileIO::saveDB(const QString &dbFile, const RFile *prf, const RFileGlobals
             if (sql.endsWith(','))
                 sql.chop(1);
             sql += ")";
-            db.execute(sql);
+            if (!execute(sql)) return false;
         }
     }
 
-    db.commit();
+    if (!execute("COMMIT")) return false;
+    db.close();
+    QFile complete(temporaryPath);
+    if (!complete.open(QIODevice::ReadOnly)) return false;
+    QByteArray bytes = complete.readAll();
+    if (complete.error() != QFileDevice::NoError || bytes.isEmpty()) return false;
+    return FileIO::writeFileAll(dbFile, bytes);
 }
 
 // ── 计算 name 位置 ──────────────────────────────────────
