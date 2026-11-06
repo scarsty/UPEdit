@@ -43,6 +43,7 @@
 #include <QMouseEvent>
 #include "ZipFile.h"
 #include <QTemporaryDir>
+#include <QDirIterator>
 #include <QTemporaryFile>
 #include <QFile>
 #include <QTextStream>
@@ -58,6 +59,397 @@
 #include <crtdbg.h>
 #endif
 #endif
+
+inline int verifyResources(const QString &iniPath, const QString &reportPath)
+{
+#ifdef Q_OS_WIN
+    SetUnhandledExceptionFilter([](EXCEPTION_POINTERS *exception) -> LONG {
+        fprintf(stderr, "Unhandled exception %08lx at %p\n", exception->ExceptionRecord->ExceptionCode,
+            exception->ExceptionRecord->ExceptionAddress);
+        void *frames[64];
+        USHORT count = CaptureStackBackTrace(0, 64, frames, nullptr);
+        for (USHORT frame = 0; frame < count; ++frame) {
+            HMODULE module = nullptr;
+            char path[MAX_PATH] = {};
+            GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                reinterpret_cast<LPCSTR>(frames[frame]), &module);
+            GetModuleFileNameA(module, path, MAX_PATH);
+            fprintf(stderr, "%s + %llx\n", path,
+                static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(frames[frame]) - reinterpret_cast<uintptr_t>(module)));
+        }
+        fflush(stderr);
+        return EXCEPTION_EXECUTE_HANDLER;
+    });
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
+#ifdef _MSC_VER
+    _set_error_mode(_OUT_TO_STDERR);
+#ifdef _DEBUG
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+#endif
+#endif
+#endif
+    QFile report(reportPath);
+    if (!report.open(QIODevice::WriteOnly | QIODevice::Text)) return 2;
+    QTextStream output(&report);
+    int failures = 0;
+    QTemporaryDir roundtrip;
+    if (!roundtrip.isValid()) return 2;
+    bool savingCopy = false;
+    auto check = [&](bool valid, const QString &message) {
+        output << (valid ? "PASS: " : "FAIL: ") << message << '\n';
+        output.flush();
+        if (!valid) ++failures;
+    };
+    QTimer dialogs;
+    QObject::connect(&dialogs, &QTimer::timeout, &dialogs, [&] {
+        for (auto *widget : QApplication::topLevelWidgets())
+            if (auto *message = qobject_cast<QMessageBox *>(widget); message && message->isVisible()) {
+                if (!savingCopy || message->icon() != QMessageBox::Information)
+                    check(false, message->text());
+                message->reject();
+            }
+    });
+    dialogs.start(10);
+    auto &config = IniConfig::instance();
+    config.load(iniPath);
+    output << "INI: " << iniPath << "\nResources: " << config.gamePath << '\n';
+    RFileIO::readIni(config.rGlobals, iniPath);
+    SQLite3Database::loadLibrary("sqlite3");
+    for (const QString &tilePath : {config.wmapImz, config.mmapImz}) {
+        if (tilePath.isEmpty()) continue;
+        QVector<GrpPic> pictures;
+        QVector<QImage> tiles;
+        check(MapIO::loadPngTiles(config.gamePath + tilePath, pictures, tiles),
+            "Configured PNG tile container: " + tilePath);
+    }
+    check(config.rGlobals.typeNumber > 0, "R schema loaded");
+    for (int slot = 0; slot < config.rFileName.size(); ++slot) {
+        RFile records;
+        if (config.rFileName[slot].endsWith(".db", Qt::CaseInsensitive)) {
+            QString source = config.gamePath + config.rFileName[slot];
+            if (!QFile::exists(source)) {
+                output << "SKIP: SQLite slot " << slot << " not provided: " << source << '\n';
+                continue;
+            }
+            QString copy = roundtrip.filePath(QString("database-%1.db").arg(slot));
+            bool loaded = QFile::exists(source) && RFileIO::readDB(source, &records, config.rGlobals);
+            check(loaded, QString("SQLite slot %1 read").arg(slot));
+            if (!loaded) continue;
+            bool valid = QFile::copy(source, copy) && RFileIO::saveDB(copy, &records, config.rGlobals);
+            RFile reopened;
+            valid = valid && RFileIO::readDB(copy, &reopened, config.rGlobals)
+                && records.rType.size() == reopened.rType.size();
+            for (int type = 0; valid && type < records.rType.size(); ++type) {
+                valid = records.rType[type].rData.size() == reopened.rType[type].rData.size();
+                for (int row = 0; valid && row < records.rType[type].rData.size(); ++row) {
+                    const auto &before = records.rType[type].rData[row].rDataLine;
+                    const auto &after = reopened.rType[type].rData[row].rDataLine;
+                    valid = before.size() == after.size();
+                    for (int field = 0; valid && field < before.size(); ++field)
+                        valid = RFileIO::readRDataStr(before[field].rArray[0].dataArray[0])
+                            == RFileIO::readRDataStr(after[field].rArray[0].dataArray[0]);
+                }
+            }
+            check(valid, QString("SQLite slot %1 all field values save/reopen").arg(slot));
+            if (slot == 0) config.rGlobals.rFile = records;
+            continue;
+        }
+        bool loaded = slot < config.rIdxFileName.size() && RFileIO::readR(
+            config.gamePath + config.rIdxFileName[slot], config.gamePath + config.rFileName[slot],
+            &records, config.rGlobals);
+        check(loaded, QString("R slot %1: %2 types").arg(slot).arg(records.rType.size()));
+        if (loaded) {
+            QString indexCopy = roundtrip.filePath(QString("r%1.idx").arg(slot));
+            QString dataCopy = roundtrip.filePath(QString("r%1.grp").arg(slot));
+            bool saved = RFileIO::saveR(indexCopy, dataCopy, &records, config.rGlobals);
+            QByteArray sourceBytes = FileIO::readFileAll(config.gamePath + config.rFileName[slot]);
+            QByteArray savedBytes = FileIO::readFileAll(dataCopy);
+            int firstDifference = 0;
+            while (firstDifference < sourceBytes.size() && firstDifference < savedBytes.size()
+                && sourceBytes[firstDifference] == savedBytes[firstDifference]) ++firstDifference;
+            output << "R bytes slot " << slot << ": source=" << sourceBytes.size() << " saved=" << savedBytes.size()
+                << " first-difference=" << firstDifference << '\n';
+            check(saved && FileIO::readFileAll(indexCopy) == FileIO::readFileAll(config.gamePath + config.rIdxFileName[slot])
+                && FileIO::readFileAll(dataCopy) == FileIO::readFileAll(config.gamePath + config.rFileName[slot]),
+                QString("R slot %1 byte-exact save").arg(slot));
+            RFile reopened;
+            check(saved && RFileIO::readR(indexCopy, dataCopy, &reopened, config.rGlobals),
+                QString("R slot %1 reopen").arg(slot));
+            bool numberTested = false, stringTested = false;
+            for (int type = 0; type < records.rType.size(); ++type)
+                for (int record = 0; record < records.rType[type].rData.size(); ++record)
+                    for (int line = 0; line < records.rType[type].rData[record].rDataLine.size(); ++line)
+                        for (int array = 0; array < records.rType[type].rData[record].rDataLine[line].rArray.size(); ++array)
+                            for (int member = 0; member < records.rType[type].rData[record].rDataLine[line].rArray[array].dataArray.size(); ++member) {
+                                auto &field = records.rType[type].rData[record].rDataLine[line].rArray[array].dataArray[member];
+                                bool text = field.dataType == 1;
+                                if ((text ? stringTested : numberTested) || field.dataLen < (text ? 4 : 1)) continue;
+                                QByteArray original = field.data;
+                                if (text) RFileIO::writeRDataStr(field, QString::fromUtf8("\xe6\xb8\xac\xe8\xa9\xa6"));
+                                else RFileIO::writeRDataInt(field, RFileIO::readRDataInt(field) == 0 ? 1 : 0);
+                                QByteArray expected = field.data;
+                                QString expectedText = RFileIO::readRDataStr(field);
+                                bool edited = RFileIO::saveR(indexCopy, dataCopy, &records, config.rGlobals)
+                                    && RFileIO::readR(indexCopy, dataCopy, &reopened, config.rGlobals);
+                                check(edited && (text
+                                    ? RFileIO::readRDataStr(reopened.rType[type].rData[record].rDataLine[line].rArray[array].dataArray[member]).trimmed() == expectedText.trimmed()
+                                    : reopened.rType[type].rData[record].rDataLine[line].rArray[array].dataArray[member].data == expected),
+                                    QString("R slot %1 edited %2 survives save/reopen").arg(slot).arg(text ? "text" : "number"));
+                                field.data = original;
+                                if (text) stringTested = true; else numberTested = true;
+                            }
+            check(numberTested && stringTested, QString("R slot %1 numeric/text coverage").arg(slot));
+        }
+        if (slot == 0 && loaded) config.rGlobals.rFile = records;
+    }
+    QVector<QByteArray> talks;
+    if (config.talkGrp.endsWith(".txt", Qt::CaseInsensitive)) {
+        QString originalPath = config.gamePath + config.talkGrp;
+        QByteArray original = FileIO::readFileAll(originalPath);
+        QString copyName = "verified-talk.txt";
+        bool copied = QFile::exists(originalPath) && FileIO::writeFileAll(roundtrip.filePath(copyName), original);
+        check(copied, "UTF8 line-based Talk source copied");
+        if (copied) {
+            QScopedValueRollback<QString> pathGuard(config.gamePath, roundtrip.path() + "/");
+            QScopedValueRollback<QString> nameGuard(config.talkGrp, copyName);
+            KDEFEdit textEditor;
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *dialog = qobject_cast<QDialog *>(widget); dialog && dialog->isVisible())
+                        if (auto *buttons = dialog->findChild<QDialogButtonBox *>())
+                            buttons->button(QDialogButtonBox::Save)->click();
+            });
+            textEditor.editTalks();
+            check(FileIO::readFileAll(roundtrip.filePath(copyName)) == original,
+                "UTF8 line-based Talk actual UI unchanged save is byte-exact");
+        }
+    } else {
+    bool talksLoaded = KDEFEdit::decodeRecords(FileIO::readFileAll(config.gamePath + config.talkIdx),
+        FileIO::readFileAll(config.gamePath + config.talkGrp), talks) && !talks.isEmpty();
+    check(talksLoaded,
+        QString("Talk IDX/GRP: %1 records").arg(talks.size()));
+    QByteArray talkIndex, talkData;
+    check(talksLoaded && KDEFEdit::encodeRecords(talks, talkIndex, talkData)
+        && talkIndex == FileIO::readFileAll(config.gamePath + config.talkIdx)
+        && talkData == FileIO::readFileAll(config.gamePath + config.talkGrp), "Talk byte-exact record re-encoding");
+    if (talksLoaded) {
+        TalkStr edited;
+        QString expected = QString::fromUtf8("\xe6\xb8\xac\xe8\xa9\xa6");
+        RFileIO::writeTalkStr(edited, expected);
+        auto modified = talks;
+        modified[0] = edited.str;
+        QVector<QByteArray> reopened;
+        bool valid = KDEFEdit::encodeRecords(modified, talkIndex, talkData)
+            && FileIO::writeFileAll(roundtrip.filePath("talk.idx"), talkIndex)
+            && FileIO::writeFileAll(roundtrip.filePath("talk.grp"), talkData)
+            && KDEFEdit::decodeRecords(FileIO::readFileAll(roundtrip.filePath("talk.idx")),
+                FileIO::readFileAll(roundtrip.filePath("talk.grp")), reopened);
+        if (valid) { edited.str = reopened[0]; edited.len = edited.str.size(); }
+        check(valid && RFileIO::readTalkStr(edited) == expected, "Talk edited text encoded/saved/reopened");
+    }
+    }
+    KDEFEdit editor;
+    bool hasKdef = QFile::exists(config.gamePath + config.kdefIdx) || QFile::exists(config.gamePath + config.kdefGrp);
+    if (hasKdef) {
+        editor.readKDEFFile();
+        check(editor.m_loaded && !editor.m_events.isEmpty(), QString("KDEF: %1 events").arg(editor.m_events.size()));
+    } else output << "SKIP: legacy KDEF pair absent; script compatibility is not tested\n";
+    QSet<QString> layouts;
+    int instructionCount = 0;
+    for (int eventIndex = 0; eventIndex < editor.m_events.size(); ++eventIndex) {
+        editor.displayInstructions(eventIndex);
+        const auto &event = editor.m_events[eventIndex];
+        for (int instruction = 0; instruction < event.instructions.size(); ++instruction) {
+            const auto &entry = event.instructions[instruction];
+            ++instructionCount;
+            QString layout = QString::number(entry.code) + ":" + QString::number(entry.params.size());
+            if (entry.code == 50) layout += ":" + QString::number(entry.params.value(0)) + ":" + QString::number(entry.params.value(1));
+            if (layouts.contains(layout)) continue;
+            layouts.insert(layout);
+            editor.displayInstructionDetail(instruction);
+            check(editor.m_paramTable->rowCount() == entry.params.size(), "KDEF layout " + layout);
+        }
+    }
+    output << "Instructions: " << instructionCount << "; layouts: " << layouts.size() << '\n';
+    WarEdit war;
+    check(war.m_loaded && !war.m_warFile.records.isEmpty(),
+        QString("War records: %1").arg(war.m_warFile.records.size()));
+    {
+        QString originalPath = config.gamePath;
+        QScopedValueRollback<QString> gamePath(config.gamePath, roundtrip.path() + "/");
+        QDir().mkpath(QFileInfo(config.gamePath + config.warData).absolutePath());
+        QDir().mkpath(QFileInfo(config.gamePath + config.kdefIdx).absolutePath());
+        QDir().mkpath(QFileInfo(config.gamePath + config.kdefGrp).absolutePath());
+        QScopedValueRollback<bool> saveGuard(savingCopy, true);
+        war.onSave();
+        check(FileIO::readFileAll(config.gamePath + config.warData) == FileIO::readFileAll(originalPath + config.warData),
+            "War byte-exact actual save");
+        check(war.readW(), "War saved copy reopen");
+        if (hasKdef) {
+        editor.onSaveKDEF();
+        check(FileIO::readFileAll(config.gamePath + config.kdefIdx) == FileIO::readFileAll(originalPath + config.kdefIdx)
+            && FileIO::readFileAll(config.gamePath + config.kdefGrp) == FileIO::readFileAll(originalPath + config.kdefGrp),
+            "KDEF byte-exact actual save");
+        editor.m_loaded = false;
+        editor.readKDEFFile();
+        check(editor.m_loaded, "KDEF saved copy reopen");
+        }
+        if (!war.m_warFile.records.isEmpty() && !war.m_warFile.records[0].fields.isEmpty()
+            && !war.m_warFile.records[0].fields[0].values.isEmpty()) {
+            auto expected = war.m_warFile.records[0].fields[0].values[0] == 0 ? 1 : 0;
+            war.m_warFile.records[0].fields[0].values[0] = expected;
+            war.onSave();
+            check(war.readW() && war.m_warFile.records[0].fields[0].values[0] == expected,
+                "War edited numeric field survives save/reopen");
+        }
+        int selectedEvent = -1, selectedInstruction = -1;
+        for (int eventIndex = 0; eventIndex < editor.m_events.size() && selectedEvent < 0; ++eventIndex)
+            for (int instructionIndex = 0; instructionIndex < editor.m_events[eventIndex].instructions.size(); ++instructionIndex)
+                if (!editor.m_events[eventIndex].instructions[instructionIndex].params.isEmpty()) {
+                    selectedEvent = eventIndex;
+                    selectedInstruction = instructionIndex;
+                    break;
+                }
+        if (hasKdef) check(selectedEvent >= 0, "KDEF editable parameter present");
+        if (selectedEvent >= 0) {
+            qint16 expected = editor.m_events[selectedEvent].instructions[selectedInstruction].params[0] == 0 ? 1 : 0;
+            editor.m_events[selectedEvent].instructions[selectedInstruction].params[0] = expected;
+            editor.onSaveKDEF();
+            editor.m_loaded = false;
+            editor.readKDEFFile();
+            check(editor.m_loaded && editor.m_events[selectedEvent].instructions[selectedInstruction].params[0] == expected,
+                "KDEF edited parameter survives save/reopen");
+        }
+    }
+    if (QFile::exists(config.gamePath + config.mmapFileIdx) || QFile::exists(config.gamePath + config.mmapFileGrp)) {
+        QVector<GrpPic> original, reopened;
+        bool loaded = GrpIO::readGrp(config.gamePath + config.mmapFileIdx, config.gamePath + config.mmapFileGrp, original);
+        QString indexCopy = roundtrip.filePath("mmap.idx"), dataCopy = roundtrip.filePath("mmap.grp");
+        bool valid = loaded && GrpIO::saveGrp(indexCopy, dataCopy, original)
+            && GrpIO::readGrp(indexCopy, dataCopy, reopened) && original.size() == reopened.size();
+        for (int picture = 0; valid && picture < original.size(); ++picture)
+            valid = original[picture].data == reopened[picture].data
+                && original[picture].xoff == reopened[picture].xoff && original[picture].yoff == reopened[picture].yoff;
+        check(valid, "Main GRP all image bytes/offsets survive save/reopen; reserved IDX slots normalized");
+    } else output << "SKIP: legacy main GRP pair absent; PNG tile container checked separately\n";
+    auto checkMap = [&](IsoMapEditor &map, const QString &name) {
+        int decoded = 0;
+        for (const auto &tile : map.m_tileCache) if (!tile.isNull()) ++decoded;
+        check(!map.m_mapData.map.isEmpty() && decoded > 0 && !map.m_mapImage.isNull(),
+            QString("%1: %2 maps, %3 decoded tiles, render %4x%5").arg(name)
+                .arg(map.m_mapData.map.size()).arg(decoded)
+                .arg(map.m_mapImage.width()).arg(map.m_mapImage.height()));
+    };
+    auto saveMapCopy = [&](const QStringList &paths, const std::function<void()> &save) {
+        QString originalPath = config.gamePath;
+        QScopedValueRollback<QString> pathGuard(config.gamePath, roundtrip.path() + "/");
+        for (const auto &path : paths) QDir().mkpath(QFileInfo(config.gamePath + path).absolutePath());
+        QScopedValueRollback<bool> saveGuard(savingCopy, true);
+        save();
+        for (const auto &path : paths)
+            check(QFile::exists(config.gamePath + path)
+                && FileIO::readFileAll(config.gamePath + path) == FileIO::readFileAll(originalPath + path),
+                "Map byte-exact actual save: " + path);
+    };
+    { WarMapEdit map; checkMap(map, "War map");
+        saveMapCopy({config.warMapDefIdx, config.warMapDefGrp}, [&] { map.onSaveMap(); });
+        bool rendered = true;
+        for (int index = 0; index < map.m_mapData.map.size(); ++index) {
+            map.onLoadMap(index);
+            rendered = rendered && !map.m_mapImage.isNull();
+        }
+        check(rendered, "All war maps rendered");
+        QScopedValueRollback<QString> pathGuard(config.gamePath, roundtrip.path() + "/");
+        QScopedValueRollback<bool> saveGuard(savingCopy, true);
+        qint16 expected = map.m_mapData.map[0].mapLayer[0].pic[0][0] == 0 ? 2 : 0;
+        map.m_mapData.map[0].mapLayer[0].pic[0][0] = expected;
+        map.onSaveMap(); map.readWarMapDef();
+        check(!map.m_mapData.map.isEmpty() && map.m_mapData.map[0].mapLayer[0].pic[0][0] == expected,
+            "War map edited cell survives save/reopen"); }
+    { SceneMapEdit map; checkMap(map, "Scene map");
+        for (int slot = 0; slot < config.sGrp.size(); ++slot) {
+            if (!QFile::exists(config.gamePath + config.sGrp[slot])) {
+                output << "SKIP: scene slot " << slot << " not provided\n";
+                continue;
+            }
+            map.loadSceneGrpFile(slot);
+            bool valid = map.m_sceneCount > 0;
+            for (int scene = 0; scene < map.m_sceneCount; ++scene) {
+                map.readSceneData(scene);
+                valid = valid && MapIO::encodeMap(map.m_mapData.map[0])
+                    == map.m_sceneRawData.mid(scene * 49152, 49152);
+            }
+            check(valid, QString("Scene slot %1: all %2 maps decode/re-encode").arg(slot).arg(map.m_sceneCount));
+            if (!valid) continue;
+            if (slot < config.sIdx.size() && slot < config.dIdx.size() && slot < config.dGrp.size()) {
+                saveMapCopy({config.sGrp[slot], config.dGrp[slot]}, [&] { map.onSaveScene(); });
+                QScopedValueRollback<QString> pathGuard(config.gamePath, roundtrip.path() + "/");
+                QScopedValueRollback<bool> saveGuard(savingCopy, true);
+                int scene = map.m_currentScene;
+                qint16 expected = map.m_mapData.map[0].mapLayer[0].pic[0][0] == 0 ? 2 : 0;
+                qint16 eventExpected = map.m_dFile.mapEvent[scene].sceneEvent[0].event1 == 0 ? 1 : 0;
+                map.m_mapData.map[0].mapLayer[0].pic[0][0] = expected;
+                map.m_dFile.mapEvent[scene].sceneEvent[0].event1 = eventExpected;
+                map.onSaveScene();
+                Map reopenedMap; DFile reopenedEvents;
+                bool edited = MapIO::readSingleMap(FileIO::readFileAll(config.gamePath + config.sGrp[slot]),
+                    scene * 49152, reopenedMap, 6, 64, 64)
+                    && EventIO::readEvents(config.gamePath + config.dIdx[slot], config.gamePath + config.dGrp[slot], reopenedEvents);
+                check(edited && reopenedMap.mapLayer[0].pic[0][0] == expected
+                    && reopenedEvents.mapEvent[scene].sceneEvent[0].event1 == eventExpected,
+                    QString("Scene slot %1 edited cell/event survives save/reopen").arg(slot));
+                    } else check(false, QString("Scene slot %1 missing save paths").arg(slot));
+        }
+    }
+    { MainMapEdit map; checkMap(map, "Main map");
+        if (!map.m_mapData.map.isEmpty()) {
+        saveMapCopy({config.mEarth, config.mSurface, config.mBuilding, config.mBuildX, config.mBuildY}, [&] { map.onSaveMap(); });
+        QScopedValueRollback<QString> pathGuard(config.gamePath, roundtrip.path() + "/");
+        QScopedValueRollback<bool> saveGuard(savingCopy, true);
+        qint16 expected = map.m_mapData.map[0].mapLayer[0].pic[0][0] == 0 ? 2 : 0;
+        map.m_mapData.map[0].mapLayer[0].pic[0][0] = expected;
+        map.onSaveMap(); map.readMainMapFile();
+        check(!map.m_mapData.map.isEmpty() && map.m_mapData.map[0].mapLayer[0].pic[0][0] == expected,
+            "Main map edited cell survives save/reopen"); } }
+    if (!QApplication::arguments().contains("--data-only")) {
+    for (const QString &directory : {QString("resource"), QString("fight"), QString("head"), QString("item")}) {
+        QDirIterator files(config.gamePath + directory, {"*.idx"}, QDir::Files, QDirIterator::Subdirectories);
+        while (files.hasNext()) {
+            QString index = files.next();
+            QString data = index.left(index.size() - 4) + ".grp";
+            QString base = QFileInfo(index).baseName().toLower();
+            if (!QFile::exists(data) || base.startsWith("talk") || base == "kdef" || base == "warfld" || base == "name") continue;
+            QVector<GrpPic> pictures, reopened;
+            bool valid = GrpIO::readGrp(index, data, pictures);
+            if (valid) valid = GrpIO::saveGrp(roundtrip.filePath("images.idx"), roundtrip.filePath("images.grp"), pictures)
+                && GrpIO::readGrp(roundtrip.filePath("images.idx"), roundtrip.filePath("images.grp"), reopened)
+                && pictures.size() == reopened.size();
+            for (int entry = 0; valid && entry < pictures.size(); ++entry)
+                valid = pictures[entry].data == reopened[entry].data
+                    && pictures[entry].xoff == reopened[entry].xoff && pictures[entry].yoff == reopened[entry].yoff;
+            check(valid, "Real GRP image roundtrip: " + QDir(config.gamePath).relativeFilePath(index));
+        }
+    }
+    QDirIterator pngFiles(config.gamePath, {"*.png"}, QDir::Files, QDirIterator::Subdirectories);
+    int pngCount = 0;
+    bool pngValid = true;
+    while (pngFiles.hasNext()) {
+        QString imagePath = pngFiles.next();
+        QString relative = QDir(config.gamePath).relativeFilePath(imagePath);
+        if (relative.startsWith("exported", Qt::CaseInsensitive)) continue;
+        QImage image(imagePath);
+        bool valid = !image.isNull() && image.save(roundtrip.filePath("image.png"), "PNG");
+        if (valid) valid = image.convertToFormat(QImage::Format_ARGB32)
+            == QImage(roundtrip.filePath("image.png")).convertToFormat(QImage::Format_ARGB32);
+        pngValid = pngValid && valid;
+        ++pngCount;
+    }
+    check(pngValid && pngCount > 0, QString("Real PNG decode/export pixel roundtrip: %1 files").arg(pngCount));
+    } else output << "SKIP: bulk GRP/PNG checks (--data-only); see separate full resource report\n";
+    output << "Failures: " << failures << '\n';
+    return failures ? 1 : 0;
+}
 
 inline int runSelfTests(const QString &reportPath)
 {
@@ -98,7 +490,63 @@ inline int runSelfTests(const QString &reportPath)
     auto require = [](bool value, const char *message) { if (!value) throw std::runtime_error(message); };
     try {
         QTemporaryDir temporary;
+        {
+            for (int code = 0; code <= 3; ++code) {
+                QScopedValueRollback<int> codeGuard(Encoding::talkCode, code);
+                TalkStr talk;
+                QString expected = QString::fromUtf8("\xe6\xb8\xac\xe8\xa9\xa6");
+                RFileIO::writeTalkStr(talk, expected);
+                require(!talk.str.isEmpty() && RFileIO::readTalkStr(talk) == expected,
+                    "Talk encoding write/read failed");
+            }
+        }
         require(temporary.isValid(), "Temporary directory unavailable");
+        {
+            QByteArray bytes("keep");
+            require(!Encoding::writeInStrWithCode(QString::fromUtf8("\xe6\xb8\xac"), bytes.data(), 2, 3)
+                && bytes == "keep", "Short UTF8 field changed after rejected write");
+            QString unsupported = QString::fromUtf8("\xf0\x9f\x98\x80");
+            require(!Encoding::writeInStrWithCode(unsupported, bytes.data(), bytes.size(), 1)
+                && bytes == "keep", "Unrepresentable Big5 write changed buffer");
+            QScopedValueRollback<int> codeGuard(Encoding::talkCode, 1);
+            TalkStr talk;
+            talk.str = "original";
+            talk.len = talk.str.size();
+            require(!RFileIO::writeTalkStr(talk, unsupported) && talk.str == "original" && talk.len == 8,
+                "Rejected Talk conversion changed existing record");
+            output << "PASS: rejected encoding writes preserve original buffers and Talk records\n";
+        }
+        {
+            QString folder = temporary.filePath("mixed-image-format");
+            require(QDir().mkpath(folder), "Cannot create mixed image fixture");
+            QImage image(4, 4, QImage::Format_RGB32);
+            image.fill(Qt::red);
+            require(image.save(folder + "/0.png", "JPEG"), "Cannot create JPEG with PNG filename");
+            QVector<GrpPic> pictures;
+            QVector<QImage> tiles;
+            require(MapIO::loadPngTiles(folder, pictures, tiles) && tiles.size() == 1 && !tiles[0].isNull(),
+                "JPEG content with PNG extension rejected");
+            require(QDir(folder).removeRecursively(), "Cannot remove mixed image fixture");
+            output << "PASS: image containers identify content independently of PNG extension\n";
+        }
+        {
+            QLibrary library("libwebp");
+            using Encode = size_t (*)(const unsigned char *, int, int, int, unsigned char **);
+            using Free = void (*)(void *);
+            auto encode = reinterpret_cast<Encode>(library.resolve("WebPEncodeLosslessRGBA"));
+            auto release = reinterpret_cast<Free>(library.resolve("WebPFree"));
+            require(encode && release, "WebP runtime or transitive dependency unavailable");
+            QImage image(3, 2, QImage::Format_RGBA8888);
+            image.fill(QColor(27, 83, 149, 255));
+            unsigned char *encoded = nullptr;
+            size_t size = encode(image.constBits(), image.width(), image.height(), image.bytesPerLine(), &encoded);
+            QByteArray bytes(reinterpret_cast<const char *>(encoded), size);
+            release(encoded);
+            QImage restored = ImzIO::decodeImage(bytes);
+            require(size > 0 && restored.convertToFormat(QImage::Format_RGBA8888) == image,
+                "WebP fallback failed lossless pixel roundtrip");
+            output << "PASS: deployed WebP runtime lossless pixel roundtrip\n";
+        }
         {
             auto &config = IniConfig::instance();
             QScopedValueRollback<int> typeCount(config.rGlobals.typeNumber, 0);
@@ -366,6 +814,67 @@ inline int runSelfTests(const QString &reportPath)
                 && transparent.pixelColor(0, 0) == QColor(Qt::red), "GRP transparent replacement changed unrelated colors");
         }
         output << "PASS: GRP zoomed brush, eyedropper and transparent replacement mouse pixels\n";
+        {
+            QImage image(3, 2, QImage::Format_ARGB32);
+            image.fill(Qt::blue);
+            GrpPic picture;
+            QBuffer buffer(&picture.data);
+            require(image.save(&buffer, "PNG"), "Cannot create canvas PNG");
+            picture.width = 3; picture.height = 2; picture.size = picture.data.size();
+            GrpEdit editor;
+            editor.setSprite(picture, QVector<QRgb>(256, qRgb(0, 0, 0)));
+            auto *width = editor.findChild<QSpinBox *>("canvasWidth");
+            auto *height = editor.findChild<QSpinBox *>("canvasHeight");
+            auto *resize = editor.findChild<QPushButton *>("resizeCanvas");
+            auto *custom = editor.findChild<QPushButton *>("customColor");
+            require(width && height && resize && custom, "Canvas controls missing");
+            GrpPic saved;
+            QObject::connect(&editor, &GrpEdit::spriteModified, &editor, [&](const GrpPic &result) { saved = result; });
+            width->setValue(5); height->setValue(4); resize->click();
+            QMetaObject::invokeMethod(&editor, "onSave", Qt::DirectConnection);
+            QImage expanded = QImage::fromData(saved.data);
+            require(expanded.size() == QSize(5, 4) && expanded.pixelColor(0, 0) == QColor(Qt::blue)
+                && expanded.pixelColor(4, 3).alpha() == 0, "Canvas expansion lost pixels or transparency");
+            width->setValue(2); height->setValue(1); resize->click();
+            QMetaObject::invokeMethod(&editor, "onSave", Qt::DirectConnection);
+            require(QImage::fromData(saved.data).size() == QSize(2, 1), "Canvas crop failed");
+            bool native = QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
+            QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, true);
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *dialog = qobject_cast<QColorDialog *>(widget); dialog && dialog->isVisible()) {
+                        dialog->setCurrentColor(QColor(23, 45, 67)); dialog->accept();
+                    }
+            });
+            custom->click();
+            QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, native);
+            QLabel *preview = nullptr;
+            for (auto *label : editor.findChildren<QLabel *>())
+                if (!label->pixmap().isNull() && label->size() != QSize(192, 192)) preview = label;
+            require(preview, "Canvas preview missing");
+            QMouseEvent click(QEvent::MouseButtonPress, QPointF(1, 0), QPointF(1, 0), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(preview, &click);
+            QMetaObject::invokeMethod(&editor, "onSave", Qt::DirectConnection);
+            require(QImage::fromData(saved.data).pixelColor(1, 0) == QColor(23, 45, 67), "Custom RGB brush failed");
+            auto *offset = editor.findChild<QCheckBox *>();
+            require(offset, "Offset toggle missing");
+            offset->setChecked(false);
+            require(preview->pixmap().toImage().pixelColor(0, 0) == QColor(Qt::blue), "Offset toggle did not hide cross");
+            QWheelEvent wheel(QPointF(0, 0), QPointF(0, 0), QPoint(), QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(preview, &wheel);
+            require(preview->pixmap().size() == QSize(4, 2), "Wheel zoom did not change preview scale");
+            width->setValue(1024); height->setValue(257); resize->click();
+            QComboBox *zoom = nullptr;
+            for (auto *combo : editor.findChildren<QComboBox *>())
+                if (combo->findText("16x") >= 0) zoom = combo;
+            require(zoom, "Zoom control missing");
+            zoom->setCurrentIndex(zoom->count() - 1);
+            int scale = 1 << zoom->currentIndex();
+            require(qint64(1024) * 257 * scale * scale <= 67108864
+                && preview->pixmap().size() == QSize(1024 * scale, 257 * scale),
+                "Budget-limited zoom left stale preview coordinates");
+        }
+        output << "PASS: GRP canvas crop/expand, custom RGB, offset visibility and wheel zoom\n";
         {
             auto &config = IniConfig::instance();
             QScopedValueRollback<QString> restorePath(config.iniPath);
@@ -1034,6 +1543,31 @@ inline int runSelfTests(const QString &reportPath)
         output << "PASS: PIC unsaved switch/close cancellation and corrupt-load session preservation\n";
         {
             auto &config = IniConfig::instance();
+            QScopedValueRollback<QString> pathGuard(config.gamePath, temporary.path());
+            QScopedValueRollback<QString> dataGuard(config.talkGrp, "plain-talk.txt");
+            QString path = temporary.filePath(config.talkGrp);
+            require(FileIO::writeFileAll(path, "first\r\nsecond\r\n"), "Cannot create plain Talk fixture");
+            KDEFEdit editor;
+            bool edited = false;
+            QTimer::singleShot(0, [&] {
+                for (auto *widget : QApplication::topLevelWidgets()) {
+                    auto *dialog = qobject_cast<QDialog *>(widget);
+                    if (!dialog || !dialog->isVisible()) continue;
+                    auto *text = dialog->findChild<QTextEdit *>();
+                    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+                    if (!text || !buttons) continue;
+                    text->setPlainText("changed");
+                    edited = true;
+                    buttons->button(QDialogButtonBox::Save)->click();
+                }
+            });
+            editor.editTalks();
+            require(edited && FileIO::readFileAll(path) == "changed\r\nsecond\r\n",
+                "Plain Talk UI changed line numbering or CRLF");
+            output << "PASS: UTF8 line-based Talk UI save preserves line numbering and CRLF\n";
+        }
+        {
+            auto &config = IniConfig::instance();
             QScopedValueRollback<QString> restorePath(config.gamePath, temporary.path());
             QScopedValueRollback<QString> restoreIdx(config.talkIdx, "talk-ui.idx");
             QScopedValueRollback<QString> restoreGrp(config.talkGrp, "talk-ui.grp");
@@ -1103,6 +1637,37 @@ inline int runSelfTests(const QString &reportPath)
                 require(operated && KDEFEdit::decodeRecords(FileIO::readFileAll(indexPath), FileIO::readFileAll(dataPath), saved)
                     && saved.size() == 3 && saved[0] == encode(QString::fromUtf8("edited\n\xe4\xb8\xad\xe6\x96\x87"))
                     && saved[1] == original[1] && saved[2].isEmpty(), "Talk UI encoding, inversion or untouched record bytes changed");
+            }
+            {
+                QScopedValueRollback<QString> restoreNameIdx(config.nameIdx, "name-ui.idx");
+                QScopedValueRollback<QString> restoreNameGrp(config.nameGrp, "name-ui.grp");
+                QScopedValueRollback<int> nameCode(config.talkCode, 3);
+                QScopedValueRollback<int> nameInvert(config.talkInvert, 1);
+                QString nameIndex = temporary.filePath(config.nameIdx), nameData = temporary.filePath(config.nameGrp);
+                QByteArray index, data;
+                require(KDEFEdit::encodeRecords({QByteArray("original\0", 9)}, index, data)
+                    && FileIO::writeFiles({{nameIndex, index}, {nameData, data}}), "Cannot prepare name records");
+                QByteArray talkBefore = FileIO::readFileAll(dataPath);
+                KDEFEdit nameEditor;
+                for (bool save : {false, true}) {
+                    QTimer::singleShot(0, [&nameEditor, save] {
+                        auto *dialog = nameEditor.findChild<QDialog *>();
+                        if (!dialog || !dialog->isVisible()) return;
+                        auto *text = dialog->findChild<QTextEdit *>();
+                        text->setPlainText("updated");
+                        for (auto *button : dialog->findChildren<QPushButton *>())
+                            if (button->text() == QString::fromUtf8("\xe8\xbf\xbd\xe5\x8a\xa0\xe5\xa7\x93\xe5\x90\x8d")) button->click();
+                        text->setPlainText("new name");
+                        dialog->findChild<QDialogButtonBox *>()->button(save ? QDialogButtonBox::Save : QDialogButtonBox::Cancel)->click();
+                    });
+                    nameEditor.editTextRecords(true);
+                    QVector<QByteArray> saved;
+                    require(KDEFEdit::decodeRecords(FileIO::readFileAll(nameIndex), FileIO::readFileAll(nameData), saved)
+                        && (save ? saved == QVector<QByteArray>{QByteArray("updated\0", 8), QByteArray("new name\0", 9)}
+                                 : saved == QVector<QByteArray>{QByteArray("original\0", 9)})
+                        && FileIO::readFileAll(dataPath) == talkBefore,
+                        "Name edit save/cancel changed wrong records or talk resource");
+                }
             }
             KDEFEdit editor;
             QString exportPath = temporary.filePath("talk-export.txt");
@@ -1250,6 +1815,15 @@ inline int runSelfTests(const QString &reportPath)
                 && restored[0].xoff == -12 && restored[0].yoff == 23
                 && GrpIO::decodeRLE(restored[0], red, green, blue).pixelColor(1, 1) == QColor(Qt::red), "GRP offsets or pixels lost");
             require(!GrpIO::saveGrp(indexPath, indexPath, {sprite}), "Identical GRP paths accepted");
+            QByteArray reservedIndex(16, '\0');
+            qToLittleEndian<qint32>(sprite.data.size(), reservedIndex.data());
+            require(FileIO::writeFileAll(indexPath, reservedIndex)
+                && GrpIO::readGrp(indexPath, dataPath, restored) && restored.size() == 4
+                && restored[1].data.isEmpty() && restored[3].data.isEmpty(), "GRP reserved zero tail rejected");
+            qToLittleEndian<qint32>(sprite.data.size(), reservedIndex.data() + 12);
+            require(FileIO::writeFileAll(indexPath, reservedIndex)
+                && !GrpIO::readGrp(indexPath, dataPath, restored), "GRP internal backward offset accepted");
+            restored.resize(1);
             QByteArray invalidIndex(4, '\0');
             qToLittleEndian<qint32>(sprite.data.size() + 1, invalidIndex.data());
             require(FileIO::writeFileAll(indexPath, invalidIndex), "Cannot create invalid GRP index");
@@ -1279,6 +1853,19 @@ inline int runSelfTests(const QString &reportPath)
             QCoreApplication::sendEvent(editor.m_imageLabel, &release);
             require(editor.m_sourceImage.size() == QSize(5, 5) && editor.m_sourceImage.pixelColor(0, 0) == QColor(Qt::red),
                 "Image crop mouse selection did not modify import source");
+            editor.m_cropX->setValue(4); editor.m_cropY->setValue(0);
+            editor.m_widthEdit->setText("1"); editor.m_heightEdit->setText("5");
+            editor.onCropImage();
+            require(editor.m_sourceImage.size() == QSize(1, 5), "Exact crop rejected single-column selection");
+            QImage cropBefore = editor.m_sourceImage;
+            editor.m_cropX->setValue(1);
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget); message && message->isVisible())
+                        if (auto *button = message->button(QMessageBox::Ok)) button->click();
+            });
+            editor.onCropImage();
+            require(editor.m_sourceImage == cropBefore, "Out-of-bounds exact crop changed source");
             QString gifPath = temporary.filePath("takein-two-frames.gif");
             QByteArray gif = QByteArray::fromHex("47494638396101000100800000ff000000ff00"
                 "21f904000a0000002c0000000001000100000202440100"
@@ -1520,6 +2107,80 @@ inline int runSelfTests(const QString &reportPath)
                 "Invalid ordinary image palette modified GRP files");
         }
         output << "PASS: ordinary image GRP append, transparency, signed offsets and rejected input preservation\n";
+        {
+            TakeIn editor;
+            editor.m_sourceImage = QImage(3, 2, QImage::Format_ARGB32);
+            editor.m_sourceImage.fill(Qt::blue);
+            QImage original = editor.m_sourceImage;
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *dialog = qobject_cast<QDialog *>(widget); dialog && dialog->isVisible()
+                        && dialog->findChild<GrpEdit *>()) dialog->reject();
+            });
+            editor.onEditImage();
+            require(editor.m_sourceImage == original, "Cancelled region edit changed source image");
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets()) {
+                    auto *dialog = qobject_cast<QDialog *>(widget);
+                    if (!dialog || !dialog->isVisible()) continue;
+                    auto *imageEditor = dialog->findChild<GrpEdit *>();
+                    if (!imageEditor) continue;
+                    imageEditor->findChild<QSpinBox *>("canvasWidth")->setValue(4);
+                    imageEditor->findChild<QSpinBox *>("canvasHeight")->setValue(5);
+                    imageEditor->findChild<QPushButton *>("resizeCanvas")->click();
+                    QMetaObject::invokeMethod(imageEditor, "onSave", Qt::DirectConnection);
+                }
+            });
+            editor.onEditImage();
+            require(editor.m_sourceImage.size() == QSize(4, 5)
+                && editor.m_sourceImage.pixelColor(0, 0) == QColor(Qt::blue)
+                && editor.m_sourceImage.pixelColor(3, 4).alpha() == 0,
+                "Region editor did not write back accepted canvas changes");
+            QByteArray palette(768, '\0'); palette[5] = 63;
+            QString palettePath = temporary.filePath("independent.col");
+            QString indexPath = temporary.filePath("independent.idx");
+            QString dataPath = temporary.filePath("independent.grp");
+            require(FileIO::writeFileAll(palettePath, palette), "Cannot create independent palette");
+            editor.m_idxPath->setText(indexPath);
+            editor.m_grpPath->setText(dataPath);
+            editor.m_palettePath->setText(palettePath);
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget); message && message->isVisible())
+                        if (auto *button = message->button(QMessageBox::Ok)) button->click();
+            });
+            editor.onImportToGrp();
+            QVector<GrpPic> pictures;
+            require(GrpIO::readGrp(indexPath, dataPath, pictures) && pictures.size() == 1
+                && pictures[0].width == 4 && pictures[0].height == 5,
+                "Independent COL/IDX/GRP paths were not used");
+            QImage frame(2, 2, QImage::Format_ARGB32);
+            frame.fill(Qt::blue);
+            editor.m_frames = {frame, frame};
+            editor.m_frames[1].fill(Qt::transparent);
+            editor.m_allFrames->setChecked(true);
+            auto importFrames = [&] {
+                QTimer::singleShot(0, [] {
+                    for (auto *widget : QApplication::topLevelWidgets())
+                        if (auto *message = qobject_cast<QMessageBox *>(widget); message && message->isVisible())
+                            if (auto *button = message->button(QMessageBox::Ok)) button->click();
+                });
+                editor.onImportToGrp();
+            };
+            importFrames();
+            uint8_t red[256]{}, green[256]{}, blue[256]{}; blue[1] = 252;
+            require(GrpIO::readGrp(indexPath, dataPath, pictures) && pictures.size() == 3
+                && GrpIO::decodeRLE(pictures[1], red, green, blue).pixelColor(0, 0) == QColor(0, 0, 252)
+                && GrpIO::decodeRLE(pictures[2], red, green, blue).pixelColor(0, 0).alpha() == 0,
+                "All-frame append lost order, colors or transparency");
+            QByteArray indexBefore = FileIO::readFileAll(indexPath), dataBefore = FileIO::readFileAll(dataPath);
+            editor.m_frames[1] = QImage(300, 1, QImage::Format_ARGB32);
+            editor.m_frames[1].fill(Qt::blue);
+            importFrames();
+            require(FileIO::readFileAll(indexPath) == indexBefore && FileIO::readFileAll(dataPath) == dataBefore,
+                "Failed later frame partially appended batch");
+        }
+        output << "PASS: ordinary image region edit acceptance/cancellation and independent COL/IDX/GRP paths\n";
         {
             QVector<QByteArray> source{QByteArray::fromHex("0100ffff0200"), QByteArray(), QByteArray::fromHex("ffff")};
             QByteArray index, data;
@@ -1912,6 +2573,171 @@ inline int runSelfTests(const QString &reportPath)
         }
         output << "PASS: KDEF packed foreground/background palette and variable mode\n";
         {
+            KDEFEdit editor;
+            editor.m_instrDefs.clear();
+            KDEFEdit::KDEFEvent event;
+            event.instructions = {{44, {9, 10, -2, 1, 0, qint16(0xabcd), 12}, 1}};
+            editor.m_events = {event};
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            auto *foreground = editor.findChild<QComboBox *>("kdefForeground");
+            auto *background = editor.findChild<QComboBox *>("kdefBackground");
+            require(foreground && background && foreground->currentIndex() == 0xcd
+                && background->currentIndex() == 0xab, "New-dialog palette indices decoded incorrectly");
+            foreground->setCurrentIndex(17);
+            background->setCurrentIndex(255);
+            require(editor.m_events[0].instructions[0].params == QVector<int16_t>{9, 10, -2, 1, 0, qint16(0xff11), 12},
+                "New-dialog palette changed unrelated parameters");
+        }
+        output << "PASS: KDEF new-dialog packed palette and unrelated parameter preservation\n";
+        {
+            auto &config = IniConfig::instance();
+            QScopedValueRollback<QString> path(config.gamePath, temporary.path());
+            QScopedValueRollback<QString> head(config.headPicName, "guide-head.pic");
+            QScopedValueRollback<QString> nameIdx(config.nameIdx, "guide-name.idx");
+            QScopedValueRollback<QString> nameGrp(config.nameGrp, "guide-name.grp");
+            QScopedValueRollback<QString> talkIdx(config.talkIdx, "guide-talk.idx");
+            QScopedValueRollback<QString> talkGrp(config.talkGrp, "guide-talk.grp");
+            QScopedValueRollback<int> code(config.talkCode, 3);
+            QScopedValueRollback<int> invert(config.talkInvert, 1);
+            QImage image(3, 4, QImage::Format_ARGB32); image.fill(Qt::green);
+            QByteArray png;
+            QBuffer buffer(&png);
+            require(image.save(&buffer, "PNG"), "Cannot create guide portrait");
+            require(FileIO::writeFileAll(temporary.filePath(config.headPicName),
+                PicEdit::encodeFile({{0, 0, 0, png}, {0, 0, 0, png}})), "Cannot create guide PIC");
+            QByteArray index, data;
+            require(KDEFEdit::encodeRecords({QByteArray("entry\0", 6)}, index, data)
+                && FileIO::writeFiles({{temporary.filePath(config.nameIdx), index}, {temporary.filePath(config.nameGrp), data},
+                    {temporary.filePath(config.talkIdx), index}, {temporary.filePath(config.talkGrp), data}}),
+                "Cannot create guide text references");
+            KDEFEdit editor;
+            editor.m_instrDefs.clear();
+            KDEFEdit::KDEFEvent event;
+            event.instructions = {{44, {0, 0, -2, 1, 0, 0, 12}, 1}};
+            editor.m_events = {event};
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            auto *portraits = editor.findChild<QComboBox *>("kdefPortrait");
+            auto *talk = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(1, 1));
+            auto *name = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(2, 1));
+            require(portraits && portraits->count() == 2 && !portraits->itemIcon(1).isNull()
+                && talk && talk->findData(0) >= 0 && name && name->findData(-2) >= 0 && name->findData(0) >= 0,
+                "New-dialog portrait or text references missing");
+            portraits->setCurrentIndex(1);
+            name->setCurrentIndex(name->findData(0));
+            require(editor.m_events[0].instructions[0].params == QVector<int16_t>{1, 0, 0, 1, 0, 0, 12},
+                "New-dialog reference selection changed unrelated parameters");
+        }
+        output << "PASS: KDEF new-dialog portrait thumbnails and talk/name references\n";
+        {
+            auto &globals = IniConfig::instance().rGlobals;
+            QScopedValueRollback<RFile> restore(globals.rFile);
+            globals.rFile.rType.resize(5);
+            globals.rFile.rType[1].rData.resize(1);
+            globals.rFile.rType[2].rData.resize(3);
+            globals.rFile.rType[3].rData.resize(2);
+            KDEFEdit editor;
+            editor.m_instrDefs.clear();
+            KDEFEdit::KDEFEvent event;
+            event.instructions = {{45, {0, 0, 0}, 1}, {46, {0, qint16(0xabcd)}, 2}, {47, {0, 12, 13}, 3}};
+            editor.m_events = {event};
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            auto *type = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            auto *record = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(1, 1));
+            require(type && record && record->findData(0) >= 0 && record->findData(1) < 0,
+                "Replacement guide initial R type incorrect");
+            type->setCurrentIndex(type->findData(1));
+            QApplication::processEvents();
+            record = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(1, 1));
+            require(record && record->findData(1) >= 0, "Replacement guide did not refresh R records");
+            record->setCurrentIndex(record->findData(1));
+            require(editor.m_events[0].instructions[0].params == QVector<int16_t>{1, 1, 0},
+                "Replacement guide wrote wrong parameters");
+            editor.displayInstructionDetail(1);
+            auto *container = editor.m_paramTable->cellWidget(1, 1);
+            require(container, "Subtitle color controls missing");
+            auto *foreground = container->findChild<QComboBox *>("kdefForeground");
+            auto *background = container->findChild<QComboBox *>("kdefBackground");
+            require(foreground && background, "Subtitle palette controls missing");
+            foreground->setCurrentIndex(17); background->setCurrentIndex(255);
+            require(editor.m_events[0].instructions[1].params == QVector<int16_t>{0, qint16(0xff11)},
+                "Subtitle palette wrote wrong parameter");
+            editor.displayInstructionDetail(2);
+            auto *scene = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(scene && scene->findData(2) >= 0, "Scene jump reference missing");
+            scene->setCurrentIndex(scene->findData(2));
+            require(editor.m_events[0].instructions[2].params == QVector<int16_t>{2, 12, 13},
+                "Scene jump reference changed coordinates");
+        }
+        output << "PASS: KDEF replacement type refresh, subtitle palette and scene jump references\n";
+        {
+            auto &globals = IniConfig::instance().rGlobals;
+            QScopedValueRollback<RFile> restore(globals.rFile);
+            globals.rFile.rType.resize(5);
+            globals.rFile.rType[1].rData.resize(2);
+            globals.rFile.rType[2].rData.resize(2);
+            globals.rFile.rType[3].rData.resize(2);
+            globals.rFile.rType[4].rData.resize(2);
+            auto &config = IniConfig::instance();
+            QScopedValueRollback<QString> path(config.gamePath, temporary.path());
+            QScopedValueRollback<QString> talkIdx(config.talkIdx, "legacy-guide.idx");
+            QScopedValueRollback<QString> talkGrp(config.talkGrp, "legacy-guide.grp");
+            QScopedValueRollback<int> code(config.talkCode, 3);
+            QScopedValueRollback<int> invert(config.talkInvert, 1);
+            QByteArray index, data;
+            require(KDEFEdit::encodeRecords({QByteArray("talk\0", 5)}, index, data)
+                && FileIO::writeFiles({{temporary.filePath(config.talkIdx), index}, {temporary.filePath(config.talkGrp), data}}),
+                "Cannot create legacy guide text");
+            KDEFEdit editor;
+            editor.m_instrDefs.clear();
+            KDEFEdit::KDEFEvent event;
+            event.instructions = {
+                {1, {0, 0, 0}, 1}, {2, {0, 0}, 2}, {48, {0, 12, 13}, 5}, {49, {0, 14, 15}, 6},
+                {0x11, {0, 0, 0, 0, 0, 0}, 3}, {0x21, {0, 0, 0, 0}, 4},
+                {36, {0, 0}, 7}, {40, {0}, 8}};
+            editor.m_events = {event};
+            editor.displayInstructions(0);
+            editor.displayInstructionDetail(0);
+            auto *talk = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            auto *person = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(1, 1));
+            require(talk && talk->findData(0) >= 0 && person && person->findData(1) >= 0,
+                "Legacy dialogue/item selectors missing");
+            talk->setCurrentIndex(talk->findData(0));
+            editor.displayInstructionDetail(1);
+            person = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            person->setCurrentIndex(person->findData(1));
+            require(editor.m_events[0].instructions[1].params[0] == 1,
+                "Legacy item selector did not write record index");
+            editor.displayInstructionDetail(2);
+            auto *attribute = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(attribute && attribute->findData(1) >= 0, "Legacy 48 person selector missing");
+            attribute->setCurrentIndex(attribute->findData(1));
+            require(editor.m_events[0].instructions[2].params[0] == 1,
+                "Legacy 48 person selector did not write record index");
+            editor.displayInstructionDetail(3);
+            attribute = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(attribute && attribute->findData(1) >= 0, "Legacy 49 person selector missing");
+            editor.displayInstructionDetail(4);
+            auto *scene = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(scene && scene->findData(1) >= 0, "Legacy scene selector missing");
+            editor.displayInstructionDetail(5);
+            auto *personForSkill = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            auto *skill = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(1, 1));
+            require(personForSkill && skill && skill->findData(1) >= 0,
+                "Legacy skill selector missing");
+            editor.displayInstructionDetail(6);
+            auto *gender = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(gender && gender->findData(0) >= 0 && gender->findData(256) >= 0,
+                "Legacy gender selector missing");
+            editor.displayInstructionDetail(7);
+            auto *direction = qobject_cast<QComboBox *>(editor.m_paramTable->cellWidget(0, 1));
+            require(direction && direction->count() == 4 && direction->findData(3) >= 0,
+                "Legacy direction selector missing");
+        }
+        output << "PASS: KDEF legacy dialogue/item/scene/skill selectors\n";
+        {
             QScopedValueRollback<K50MemoryList> savedMemory(IniConfig::instance().memoryList);
             IniConfig::instance().memoryList = {1, {0xfedcba98}, {"test address"}};
             KDEFEdit editor;
@@ -2267,6 +3093,28 @@ inline int runSelfTests(const QString &reportPath)
         }
         output << "PASS: W unsaved cancel, discard and truncated-load preservation\n";
         {
+            RFileGlobals schema;
+            schema.typeNumber = 1;
+            schema.typeDataItem = {1};
+            schema.rIni.resize(1);
+            RTermini term;
+            term.datanum = term.incnum = 1;
+            term.datalen = 4;
+            term.isstr = 1;
+            schema.rIni[0].rTerm = {term};
+            QByteArray index = QByteArray::fromHex("06000000aabbccdd");
+            QByteArray data = QByteArray::fromHex("4100deadbeeffeed");
+            QString idxPath = temporary.filePath("opaque-r.idx"), grpPath = temporary.filePath("opaque-r.grp");
+            require(FileIO::writeFiles({{idxPath, index}, {grpPath, data}}), "Cannot create opaque R fixture");
+            QScopedValueRollback<int> codeGuard(Encoding::dataCode, 3);
+            RFile records;
+            require(RFileIO::readR(idxPath, grpPath, &records, schema)
+                && RFileIO::saveR(idxPath, grpPath, &records, schema)
+                && FileIO::readFileAll(idxPath) == index && FileIO::readFileAll(grpPath) == data,
+                "R save discarded padding, block remainder, extra indices or trailing bytes");
+            output << "PASS: R opaque text padding and unknown block/index/file tails preserved\n";
+        }
+        {
             require(SQLite3Database::loadLibrary("sqlite3"), "SQLite runtime unavailable");
             RFileGlobals schema;
             schema.typeNumber = 1;
@@ -2408,6 +3256,29 @@ inline int runSelfTests(const QString &reportPath)
                 require(FileIO::writeFileAll(indexPath, invalid), "Cannot write invalid preview map index");
                 editor.readWarMapDef();
                 require(preserved(), "Invalid war preview index replaced active map");
+            }
+            data.resize(24576);
+            qToLittleEndian<qint16>(77, data.data() + 16384);
+            index = QByteArray(4, '\0');
+            qToLittleEndian<quint32>(data.size(), index.data());
+            require(FileIO::writeFiles({{indexPath, index}, {dataPath, data}}), "Cannot create three-layer war map");
+            WarMapEdit layered;
+            require(layered.m_mapData.map.size() == 1 && layered.m_mapData.map[0].layerNum == 3
+                && layered.m_mapData.map[0].mapLayer[2].pic[0][0] == 77, "Extra war map layer lost");
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget)) message->accept();
+            });
+            layered.onSaveMap();
+            require(FileIO::readFileAll(dataPath) == data && FileIO::readFileAll(indexPath) == index,
+                "Three-layer war map save lost bytes");
+            for (const QByteArray &invalid : {QByteArray::fromHex("0060000001000000"),
+                QByteArray::fromHex("0000000000600000"), QByteArray("bad")}) {
+                require(FileIO::writeFileAll(indexPath, invalid), "Cannot create malformed war index");
+                layered.readWarMapDef();
+                require(layered.m_mapData.map.size() == 1 && layered.m_mapData.map[0].layerNum == 3
+                    && layered.m_mapData.map[0].mapLayer[2].pic[0][0] == 77,
+                    "Malformed index replaced active WarMapEdit data");
             }
         }
         output << "PASS: war preview map strict offsets, truncated input and active-map preservation\n";
@@ -3132,7 +4003,50 @@ inline int runSelfTests(const QString &reportPath)
         DFile restored;
         require(EventIO::readEvents(idx, grp, restored) && restored.mapEvent.size() == 2
             && restored.mapEvent[1].sceneEvent[0].event1 == 42, "Event roundtrip failed");
+        QByteArray validEvents = FileIO::readFileAll(grp);
+        require(FileIO::writeFileAll(grp, validEvents.chopped(1)) && !EventIO::readEvents(idx, grp, restored)
+            && restored.mapEvent.size() == 2 && restored.mapEvent[1].sceneEvent[0].event1 == 42,
+            "Truncated event input replaced active data");
+        require(FileIO::writeFileAll(grp, validEvents), "Cannot restore event fixture");
+        require(EventIO::readEvents(temporary.filePath("absent-event.idx"), grp, restored)
+            && restored.mapEvent[1].sceneEvent[0].event1 == 42, "Fixed-size event stream requires obsolete index");
+        {
+            SceneMapEdit guarded;
+            guarded.m_invalidSaveSlots.insert(guarded.m_currentSave);
+            bool rejected = false;
+            QTimer::singleShot(0, [&] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget)) {
+                        rejected = message->icon() == QMessageBox::Warning;
+                        message->accept();
+                    }
+            });
+            guarded.onSaveScene();
+            require(rejected && FileIO::readFileAll(grp) == validEvents,
+                "Invalid scene session did not reject save");
+        }
         output << "PASS: event cumulative offsets and scene event roundtrip\n";
+        {
+            auto &config = IniConfig::instance();
+            QScopedValueRollback<QString> gamePath(config.gamePath, temporary.path() + "/");
+            QScopedValueRollback<QStringList> maps(config.sGrp, {"shared-s0.grp", "shared-s1.grp"});
+            QScopedValueRollback<QStringList> mapIndices(config.sIdx, {"shared-s.idx", "shared-s.idx"});
+            QScopedValueRollback<QStringList> eventFiles(config.dGrp, {"shared-d0.grp", "shared-d1.grp"});
+            QScopedValueRollback<QStringList> eventIndices(config.dIdx, {"shared-d.idx", "shared-d.idx"});
+            require(FileIO::writeFiles({{temporary.filePath("shared-s0.grp"), QByteArray(49152, '\0')},
+                {temporary.filePath("shared-d0.grp"), validEvents.left(4400)},
+                {temporary.filePath("shared-s.idx"), "shared-map-index"},
+                {temporary.filePath("shared-d.idx"), "shared-event-index"}}), "Cannot create shared index fixture");
+            SceneMapEdit editor;
+            QTimer::singleShot(0, [] {
+                for (auto *widget : QApplication::topLevelWidgets())
+                    if (auto *message = qobject_cast<QMessageBox *>(widget)) message->accept();
+            });
+            editor.onSaveScene();
+            require(FileIO::readFileAll(temporary.filePath("shared-s.idx")) == "shared-map-index"
+                && FileIO::readFileAll(temporary.filePath("shared-d.idx")) == "shared-event-index",
+                "Scene save overwrote shared indices");
+        }
         {
             bool nativeDialogsDisabled = QApplication::testAttribute(Qt::AA_DontUseNativeDialogs);
             QApplication::setAttribute(Qt::AA_DontUseNativeDialogs, true);

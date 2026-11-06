@@ -16,23 +16,22 @@ std::string PotConv::conv(const std::string& src, const char* from, const char* 
 {
     //const char *from_charset, const char *to_charset, const char *inbuf, size_t inlen, char *outbuf;
     iconv_t cd = createcd(from, to);
-    if (cd == nullptr)
+    if (cd == nullptr || cd == reinterpret_cast<iconv_t>(-1))
     {
         return "";
     }
     size_t inlen = src.length();
-    size_t outlen = src.length() * 2;
+    size_t outlen = src.length() * 4 + 16;
+    const size_t capacity = outlen;
+    iconv(cd, nullptr, nullptr, nullptr, nullptr);
     auto in = new char[inlen + 1];
     auto out = new char[outlen + 1];
     memset(in, 0, inlen + 1);
     memcpy(in, src.c_str(), inlen);
     memset(out, 0, outlen + 1);
     char *pin = in, *pout = out;
-    if (iconv(cd, &pin, &inlen, &pout, &outlen) == -1)
-    {
-        out[0] = '\0';
-    }
-    std::string result(out, src.length() * 2 - outlen);
+    bool converted = iconv(cd, &pin, &inlen, &pout, &outlen) != size_t(-1) && inlen == 0;
+    std::string result = converted ? std::string(out, capacity - outlen) : std::string();
     delete[] in;
     delete[] out;
     return result;

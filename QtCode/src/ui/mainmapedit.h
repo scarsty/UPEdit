@@ -9,6 +9,7 @@
 class MainMapEdit : public IsoMapEditor {
     Q_OBJECT
     friend int runSelfTests(const QString &reportPath);
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
 public:
     explicit MainMapEdit(QWidget *parent = nullptr);
 

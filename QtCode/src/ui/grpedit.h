@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QCheckBox>
 #include "head.h"
 
 // GRP 单贴图编辑器 (对应 Delphi TForm2)
@@ -51,6 +52,10 @@ private:
     QComboBox *m_zoomCombo;
     QComboBox *m_toolCombo;
     QSpinBox *m_xoffSpin, *m_yoffSpin;
+    QSpinBox *m_widthSpin, *m_heightSpin;
+    QCheckBox *m_showOffset;
+    QRgb m_customColor = qRgb(0, 0, 0);
+    bool m_useCustomColor = false;
 
     QImage m_bitmap;       // 工作位图(ARGB32)
     QVector<QRgb> m_pal;   // 256色调色板

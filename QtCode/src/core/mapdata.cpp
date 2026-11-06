@@ -28,7 +28,7 @@ bool MapIO::loadPngTiles(const QString &path, QVector<GrpPic> &pictures, QVector
         picture.size = picture.data.size();
         picture.xoff = sprite.x;
         picture.yoff = sprite.y;
-        tiles[sprite.fileNum].loadFromData(picture.data, "PNG");
+        tiles[sprite.fileNum] = ImzIO::decodeImage(picture.data);
         picture.width = tiles[sprite.fileNum].width();
         picture.height = tiles[sprite.fileNum].height();
     }

@@ -229,7 +229,7 @@ void WarMapEdit::readWarMapDef()
 
     QByteArray idxData = FileIO::readFileAll(defIdxPath);
     QByteArray grpData = FileIO::readFileAll(defGrpPath);
-    if (idxData.isEmpty() || grpData.isEmpty()) return;
+    if (idxData.isEmpty() || grpData.isEmpty() || idxData.size() % 4 != 0) return;
 
     // idx: cumulative END offsets, each 4 bytes
     int totalEntries = idxData.size() / 4;
@@ -241,16 +241,27 @@ void WarMapEdit::readWarMapDef()
         if (offsets[i] > 0) ++num;
         else break;
     }
+    for (int entry = num; entry < totalEntries; ++entry)
+        if (offsets[entry] != 0) return;
+    if (num == 0 || offsets[num - 1] != quint32(grpData.size())) return;
+    auto candidate = m_mapData;
+    candidate.num = num;
+    candidate.map.resize(num);
 
-    m_mapData.num = num;
-    m_mapData.map.resize(num);
-
-    // War maps: no header, hardcoded layerNum=2, x=64, y=64 (matching Delphi readwardef)
-    const int layerNum = 2, mapW = 64, mapH = 64;
+    const int mapW = 64, mapH = 64;
     for (int i = 0; i < num; ++i) {
+        if (offsets[i] > quint32(grpData.size())
+            || (i > 0 && offsets[i] <= offsets[i - 1])) return;
         int startOff = (i == 0) ? 0 : static_cast<int>(offsets[i - 1]);
-        MapIO::readSingleMap(grpData, startOff, m_mapData.map[i], layerNum, mapW, mapH);
+        int byteCount = int(offsets[i]) - startOff;
+        if (byteCount <= 0 || byteCount % (mapW * mapH * 2) != 0
+            || offsets[i] > quint32(grpData.size())) return;
+        int actualLayers = byteCount / (mapW * mapH * 2);
+        if (actualLayers > 64 || !MapIO::readSingleMap(grpData, startOff, candidate.map[i], actualLayers, mapW, mapH)) {
+            return;
+        }
     }
+    m_mapData = std::move(candidate);
 
     m_mapCombo->blockSignals(true);
     m_mapCombo->clear();
@@ -492,8 +503,10 @@ void WarMapEdit::onSaveMap()
         offsets[i] = static_cast<uint32_t>(grpData.size());
     }
 
-    FileIO::writeFileAll(defGrpPath, grpData);
-    FileIO::writeFileAll(defIdxPath, idxData);
+    if (!FileIO::writeFiles({{defGrpPath, grpData}, {defIdxPath, idxData}})) {
+        QMessageBox::warning(this, tr("保存"), tr("战场地图保存失败"));
+        return;
+    }
     QMessageBox::information(this, tr("保存"), tr("战场地图保存成功"));
 }
 

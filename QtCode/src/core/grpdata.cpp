@@ -16,6 +16,15 @@ bool GrpIO::readGrp(const QString &idxFile, const QString &grpFile, QVector<GrpP
     qint32 begin = 0;
     for (int entry = 0; entry < decoded.size(); ++entry) {
         qint32 end = qFromLittleEndian<qint32>(index.constData() + entry * 4);
+        if (end == 0 && begin == data.size()) {
+            bool reservedTail = true;
+            for (int tail = entry + 1; tail < decoded.size(); ++tail)
+                if (qFromLittleEndian<qint32>(index.constData() + tail * 4) != 0) {
+                    reservedTail = false;
+                    break;
+                }
+            if (reservedTail) break;
+        }
         if (end < begin || end > data.size()) return false;
         auto &picture = decoded[entry];
         picture.data = data.mid(begin, end - begin);

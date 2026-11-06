@@ -34,6 +34,25 @@ static bool safeMetadataPath(const QString &name)
 #include <QJsonDocument>
 #include <QJsonArray>
 #include "fileio.h"
+#include <QLibrary>
+
+QImage ImzIO::decodeImage(const QByteArray &bytes)
+{
+    QImage image = QImage::fromData(bytes);
+    if (!image.isNull() || bytes.size() < 12 || !bytes.startsWith("RIFF") || bytes.mid(8, 4) != "WEBP") return image;
+    static QLibrary library("libwebp");
+    using GetInfo = int (*)(const unsigned char *, size_t, int *, int *);
+    using Decode = unsigned char *(*)(const unsigned char *, size_t, unsigned char *, size_t, int);
+    auto info = reinterpret_cast<GetInfo>(library.resolve("WebPGetInfo"));
+    auto decode = reinterpret_cast<Decode>(library.resolve("WebPDecodeRGBAInto"));
+    int width = 0, height = 0;
+    const auto *data = reinterpret_cast<const unsigned char *>(bytes.constData());
+    if (!info || !decode || !info(data, bytes.size(), &width, &height) || width <= 0 || height <= 0
+        || width > 32767 || height > 32767 || qint64(width) * height > 100000000) return {};
+    image = QImage(width, height, QImage::Format_RGBA8888);
+    if (image.isNull() || !decode(data, bytes.size(), image.bits(), image.sizeInBytes(), image.bytesPerLine())) return {};
+    return image;
+}
 
 static bool readLegacyImz(const QByteArray &bytes, Imz &result)
 {
@@ -109,12 +128,19 @@ static bool saveLegacyImz(const QString &path, const Imz &imz)
 
 static bool readArchiveData(const QString &path, Imz &imz)
 {
+    auto imageEntry = [](const QString &name) {
+        QString suffix = QFileInfo(name).suffix().toLower();
+        return suffix == "png" || suffix == "webp" || suffix == "jpg" || suffix == "jpeg";
+    };
     QFileInfo fi(path);
     if (fi.isDir()) {
         return ImzIO::readImzFromFolder(path, imz);
     }
     QFile source(path);
-    if (!source.open(QIODevice::ReadOnly)) return false;
+    if (!source.open(QIODevice::ReadOnly)) {
+        qWarning("Cannot open image container %s: %s", qPrintable(path), qPrintable(source.errorString()));
+        return false;
+    }
     if (!source.peek(4).startsWith("PK")) return readLegacyImz(source.readAll(), imz);
     source.close();
 
@@ -131,8 +157,11 @@ static bool readArchiveData(const QString &path, Imz &imz)
     for (const auto &entry : entries) {
         QString name = QString::fromStdString(entry);
         if (name.endsWith('/')) continue;
-        if (!name.endsWith(".png", Qt::CaseInsensitive) && name != "index.ka" && name != "index.txt") {
-            if (!safeMetadataPath(name)) return false;
+        if (!imageEntry(name) && name != "index.ka" && name != "index.txt") {
+            if (!safeMetadataPath(name)) {
+                fprintf(stderr, "Unsafe archive metadata path: %s\n", qPrintable(name));
+                return false;
+            }
             auto bytes = zip.readFile(entry);
             imz.metadata.insert(name, QByteArray(bytes.data(), int(bytes.size())));
         }
@@ -148,7 +177,7 @@ static bool readArchiveData(const QString &path, Imz &imz)
     QMap<int, QMap<int, QString>> groups; // baseId → { frameIdx → entryName }
     for (auto &e : entries) {
         QString name = QString::fromStdString(e);
-        if (!name.endsWith(".png", Qt::CaseInsensitive)) continue;
+        if (!imageEntry(name)) continue;
         QString stem = name.left(name.lastIndexOf('.'));
         int uscore = stem.indexOf('_');
         if (uscore < 0) {
@@ -239,7 +268,11 @@ bool ImzIO::readImz(const QString &path, Imz &imz)
     if (!readArchiveData(path, decoded)) return false;
     for (const auto &sprite : decoded.imzPng)
         for (const auto &frame : sprite.frameData)
-            if (QImage::fromData(frame.data, "PNG").isNull()) return false;
+            if (ImzIO::decodeImage(frame.data).isNull()) {
+                fprintf(stderr, "Invalid PNG in container %s: sprite %d, bytes %lld\n", qPrintable(path), sprite.fileNum,
+                    static_cast<long long>(frame.data.size()));
+                return false;
+            }
     imz = decoded;
     return true;
 }
@@ -468,7 +501,7 @@ bool ImzIO::readImzFromFolder(const QString &folder, Imz &imz)
     if (!readFolderData(folder, decoded)) return false;
     for (const auto &sprite : decoded.imzPng)
         for (const auto &frame : sprite.frameData)
-            if (QImage::fromData(frame.data, "PNG").isNull()) return false;
+            if (ImzIO::decodeImage(frame.data).isNull()) return false;
     imz = decoded;
     return true;
 }
@@ -488,7 +521,7 @@ bool ImzIO::saveFolder(const QString &folder, const Imz &imz, const QStringList 
         maximumId = qMax(maximumId, sprite.fileNum);
         for (int frame = 0; frame < sprite.frame; ++frame) {
             const QByteArray &bytes = sprite.frameData[frame].data;
-            if (QImage::fromData(bytes, "PNG").isNull()) return false;
+            if (ImzIO::decodeImage(bytes).isNull()) return false;
             files.insert(sprite.frame == 1 ? QString("%1.png").arg(sprite.fileNum)
                 : QString("%1_%2.png").arg(sprite.fileNum).arg(frame), bytes);
         }
@@ -595,7 +628,7 @@ void ImzIO::drawImzPngToImage(QImage &target, const ImzPng &png, int frameIndex,
     if (frameIndex < 0 || frameIndex >= png.frameData.size()) return;
 
     QImage frame;
-    frame.loadFromData(png.frameData[frameIndex].data, "PNG");
+    frame = ImzIO::decodeImage(png.frameData[frameIndex].data);
     if (frame.isNull()) return;
 
     QPainter painter(&target);

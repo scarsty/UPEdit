@@ -9,6 +9,8 @@
 #include <QBuffer>
 #include <QMessageBox>
 #include <QtEndian>
+#include <QColorDialog>
+#include <QWheelEvent>
 
 GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
 {
@@ -32,6 +34,46 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
 
     m_xoffSpin = new QSpinBox; m_xoffSpin->setRange(-32768, 32767);
     m_yoffSpin = new QSpinBox; m_yoffSpin->setRange(-32768, 32767);
+    m_widthSpin = new QSpinBox;
+    m_heightSpin = new QSpinBox;
+    m_widthSpin->setObjectName("canvasWidth");
+    m_heightSpin->setObjectName("canvasHeight");
+    m_widthSpin->setRange(1, 32767);
+    m_heightSpin->setRange(1, 32767);
+    auto *resizeCanvas = new QPushButton(tr("确认宽高"));
+    resizeCanvas->setObjectName("resizeCanvas");
+    auto *customColor = new QPushButton(tr("自定义颜色"));
+    customColor->setObjectName("customColor");
+    m_showOffset = new QCheckBox(tr("显示偏移"));
+    m_showOffset->setChecked(true);
+    toolPanel->addWidget(new QLabel(tr("画布宽度")));
+    toolPanel->addWidget(m_widthSpin);
+    toolPanel->addWidget(new QLabel(tr("画布高度")));
+    toolPanel->addWidget(m_heightSpin);
+    toolPanel->addWidget(resizeCanvas);
+    toolPanel->addWidget(customColor);
+    toolPanel->addWidget(m_showOffset);
+    connect(m_showOffset, &QCheckBox::toggled, this, [this] { display(); });
+    connect(customColor, &QPushButton::clicked, this, [this] {
+        QColor color = QColorDialog::getColor(QColor::fromRgb(m_useCustomColor ? m_customColor : m_pal.value(m_curColor)), this);
+        if (!color.isValid()) return;
+        m_customColor = color.rgb();
+        m_useCustomColor = true;
+    });
+    connect(resizeCanvas, &QPushButton::clicked, this, [this] {
+        int width = m_widthSpin->value(), height = m_heightSpin->value();
+        if (qint64(width) * height > 16777216) {
+            QMessageBox::warning(this, tr("画布"), tr("画布超过像素预算，未修改图片")); return;
+        }
+        QImage canvas(width, height, QImage::Format_ARGB32);
+        if (canvas.isNull()) return;
+        canvas.fill(Qt::transparent);
+        QPainter painter(&canvas);
+        painter.drawImage(0, 0, m_bitmap);
+        painter.end();
+        m_bitmap = canvas;
+        display();
+    });
 
     toolPanel->addWidget(new QLabel(tr("缩放:")));
     toolPanel->addWidget(m_zoomCombo);
@@ -55,6 +97,7 @@ GrpEdit::GrpEdit(QWidget *parent) : QWidget(parent)
     m_imageLabel->setAlignment(Qt::AlignCenter);
     m_scroll->setWidget(m_imageLabel);
     m_scroll->setWidgetResizable(false);
+    m_scroll->viewport()->installEventFilter(this);
 
     // 右侧：调色板
     m_paletteLabel = new QLabel;
@@ -131,15 +174,27 @@ QByteArray GrpEdit::encodeRLE8()
 void GrpEdit::display()
 {
     if (m_bitmap.isNull()) return;
+    m_widthSpin->setValue(m_bitmap.width());
+    m_heightSpin->setValue(m_bitmap.height());
     int z = 1 << m_zoomCombo->currentIndex();
+    while (z > 1 && qint64(m_bitmap.width()) * m_bitmap.height() * z * z > 67108864)
+        z /= 2;
+    {
+        QSignalBlocker blocker(m_zoomCombo);
+        int index = 0;
+        for (int scale = z; scale > 1; scale /= 2) ++index;
+        m_zoomCombo->setCurrentIndex(index);
+    }
 
     // 绘制带红色十字偏移指示的预览
     QImage preview = m_bitmap.scaled(m_bitmap.width() * z, m_bitmap.height() * z, Qt::KeepAspectRatio, Qt::FastTransformation);
     QPainter p(&preview);
     int ox = m_xoffSpin->value() * z, oy = m_yoffSpin->value() * z;
     p.setPen(QPen(Qt::red, 1));
-    p.drawLine(ox - 10, oy, ox + 10, oy);
-    p.drawLine(ox, oy - 10, ox, oy + 10);
+    if (m_showOffset->isChecked()) {
+        p.drawLine(ox - 10, oy, ox + 10, oy);
+        p.drawLine(ox, oy - 10, ox, oy + 10);
+    }
     p.end();
 
     m_imageLabel->setPixmap(QPixmap::fromImage(preview));
@@ -231,6 +286,7 @@ void GrpEdit::onRotate270()
 
 void GrpEdit::onPaletteClicked(const QPoint &pos)
 {
+    m_useCustomColor = false;
     int col = pos.x() / 12, row = pos.y() / 12;
     m_curColor = row * 16 + col;
     if (m_curColor >= 256) m_curColor = 255;
@@ -240,12 +296,19 @@ void GrpEdit::onImageClicked(const QPoint &position)
 {
     if (!m_bitmap.rect().contains(position)) return;
     m_bitmap = m_bitmap.convertToFormat(QImage::Format_ARGB32);
-    m_bitmap.setPixelColor(position, QColor::fromRgb(m_pal.value(m_curColor, qRgb(0, 0, 0))));
+    m_bitmap.setPixelColor(position, QColor::fromRgb(m_useCustomColor ? m_customColor : m_pal.value(m_curColor, qRgb(0, 0, 0))));
     display();
 }
 
 bool GrpEdit::eventFilter(QObject *watched, QEvent *event)
 {
+    if (event->type() == QEvent::Wheel && (watched == m_imageLabel || watched == m_scroll->viewport())) {
+        auto *wheel = static_cast<QWheelEvent *>(event);
+        int delta = wheel->angleDelta().y();
+        if (delta) m_zoomCombo->setCurrentIndex(qBound(0, m_zoomCombo->currentIndex() + (delta > 0 ? 1 : -1), m_zoomCombo->count() - 1));
+        event->accept();
+        return true;
+    }
     if (event->type() != QEvent::MouseButtonPress && event->type() != QEvent::MouseMove)
         return QWidget::eventFilter(watched, event);
     auto *mouse = static_cast<QMouseEvent *>(event);
@@ -268,6 +331,7 @@ bool GrpEdit::eventFilter(QObject *watched, QEvent *event)
             if (delta < distance) { best = index; distance = delta; }
         }
         m_curColor = best;
+        m_useCustomColor = false;
     } else if (mode == 3) {
         QRgb selected = m_bitmap.pixel(pixel);
         m_bitmap = m_bitmap.convertToFormat(QImage::Format_ARGB32);

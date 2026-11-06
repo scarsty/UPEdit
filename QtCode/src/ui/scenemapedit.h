@@ -10,6 +10,7 @@
 class SceneMapEdit : public IsoMapEditor {
     Q_OBJECT
     friend int runSelfTests(const QString &reportPath);
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
 public:
     explicit SceneMapEdit(QWidget *parent = nullptr);
 
@@ -51,6 +52,7 @@ private:
     };
     QMap<int, SaveSession> m_sessions;
     QMap<int, SaveSession> m_savedSessions;
+    QSet<int> m_invalidSaveSlots;
     bool hasUnsavedChanges();
     bool m_sessionLoaded = false;
     QPoint m_selectionStart{-1, -1};

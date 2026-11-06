@@ -105,6 +105,9 @@ void RFileIO::copyRData(const RData &source, RData &dest)
                 da.dataArray[k].dataType = sa.dataArray[k].dataType;
                 da.dataArray[k].dataLen  = sa.dataArray[k].dataLen;
                 da.dataArray[k].data     = sa.dataArray[k].data; // QByteArray 隐式共享
+                da.dataArray[k].originalBytes = sa.dataArray[k].originalBytes;
+                da.dataArray[k].originalText = sa.dataArray[k].originalText;
+                da.dataArray[k].originalCode = sa.dataArray[k].originalCode;
             }
         }
     }
@@ -208,11 +211,22 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
     // type 0 数据: [0, offset[0])
     // type 1 数据: [offset[0], offset[1])
     QVector<int32_t> offsets(prf->typeNumber);
-    fidx.read(reinterpret_cast<char *>(offsets.data()), prf->typeNumber * 4);
+    if (fidx.read(reinterpret_cast<char *>(offsets.data()), prf->typeNumber * 4) != prf->typeNumber * 4)
+        return false;
+    prf->extraIndexBytes = fidx.readAll();
+    qint64 previousOffset = 0;
+    for (int32_t offset : offsets) {
+        if (offset < previousOffset || offset > fgrp.size()) return false;
+        previousOffset = offset;
+    }
+    if (!fgrp.seek(previousOffset)) return false;
+    prf->trailingBytes = fgrp.readAll();
+    fgrp.seek(0);
     fidx.close();
 
     for (int i1 = 0; i1 < prf->typeNumber; ++i1) {
         RType &rt = prf->rType[i1];
+        rt.trailingBytes.clear();
         if (i1 >= g.typeDataItem.size()) break;
 
         int fieldCount = g.typeDataItem[i1];
@@ -230,7 +244,7 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
                 }
             }
         }
-        if (recordSize <= 0) continue;
+        if (recordSize <= 0) return false;
 
         // 计算记录数
         int dataSize;
@@ -238,15 +252,16 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
             dataSize = offsets[i1];
         else
             dataSize = offsets[i1] - offsets[i1 - 1];
-        int recordCount = qMax(dataSize / recordSize, 1);
+        int recordCount = dataSize / recordSize;
+        if (!fgrp.seek((i1 == 0 ? 0 : offsets[i1 - 1]) + recordCount * recordSize)) return false;
+        rt.trailingBytes = fgrp.read(dataSize % recordSize);
 
         // 预分配记录 (使用 addNewRData 的逻辑)
         for (int i2 = 0; i2 < recordCount; ++i2)
             addNewRData(prf, i1, g);
 
         // 定位到正确偏移
-        if (i1 != 0)
-            fgrp.seek(offsets[i1 - 1]);
+        fgrp.seek(i1 == 0 ? 0 : offsets[i1 - 1]);
 
         // 读数据
         for (int i2 = 0; i2 < rt.dataNum; ++i2) {
@@ -272,6 +287,9 @@ bool RFileIO::readR(const QString &idxFile, const QString &grpFile, RFile *prf, 
                                         QByteArray raw(dl, '\0');
                                         fgrp.read(raw.data(), dl);
                                         writeRDataStr(ds, Encoding::readOutStr(raw.constData(), dl));
+                                        ds.originalBytes = raw;
+                                        ds.originalText = ds.data;
+                                        ds.originalCode = Encoding::dataCode;
                                     } else {
                                         fgrp.read(ds.data.data(), dl);
                                     }
@@ -317,7 +335,10 @@ bool RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
                             if (ds.dataType == 1) {
                                 QByteArray encoded(ds.dataLen, '\0');
                                 QString str = readRDataStr(ds);
-                                Encoding::writeInStr(str, encoded.data(), ds.dataLen);
+                                if (ds.originalCode == Encoding::dataCode && ds.data == ds.originalText
+                                    && ds.originalBytes.size() == ds.dataLen)
+                                    encoded = ds.originalBytes;
+                                else if (!Encoding::writeInStr(str, encoded.data(), ds.dataLen)) return false;
                                 grpData.append(encoded);
                             } else {
                                 grpData.append(ds.data);
@@ -330,8 +351,16 @@ bool RFileIO::saveR(const QString &idxFile, const QString &grpFile, const RFile 
         }
     }
 
+    for (int typeIndex = 0; typeIndex < prf->typeNumber; ++typeIndex) {
+        int insertionOffset = offsets[typeIndex];
+        grpData.insert(insertionOffset, prf->rType[typeIndex].trailingBytes);
+        for (int laterIndex = typeIndex; laterIndex < prf->typeNumber; ++laterIndex)
+            offsets[laterIndex] += prf->rType[typeIndex].trailingBytes.size();
+    }
+    grpData.append(prf->trailingBytes);
     QByteArray idxData(prf->typeNumber * 4, '\0');
     memcpy(idxData.data(), offsets.data(), prf->typeNumber * 4);
+    idxData.append(prf->extraIndexBytes);
     if (QFileInfo(idxFile).absoluteFilePath().compare(QFileInfo(grpFile).absoluteFilePath(), Qt::CaseInsensitive) == 0) return false;
     return FileIO::writeFiles({{grpFile, grpData}, {idxFile, idxData}});
 }
@@ -671,7 +700,7 @@ QString RFileIO::readTalkStr(const TalkStr &ts)
     return Encoding::readOutStrWithCode(ts.str.constData(), ts.len, Encoding::talkCode);
 }
 
-void RFileIO::writeTalkStr(TalkStr &ts, const QString &str)
+bool RFileIO::writeTalkStr(TalkStr &ts, const QString &str)
 {
     QByteArray encoded;
     int code = Encoding::talkCode;
@@ -680,16 +709,11 @@ void RFileIO::writeTalkStr(TalkStr &ts, const QString &str)
         const ushort *u16 = str.utf16();
         encoded = QByteArray(reinterpret_cast<const char *>(u16), str.size() * 2);
     } else {
-        const char *encName = "UTF-8";
-        switch (code) {
-        case 0: encName = "GBK"; break;
-        case 1: encName = "Big5"; break;
-        default: break;
-        }
-        auto encoder = QStringEncoder(encName);
-        if (encoder.isValid()) encoded = encoder(str);
+        encoded.resize(Encoding::encodedByteLengthWithCode(str, code));
+        if (!Encoding::writeInStrWithCode(str, encoded.data(), encoded.size(), code)) return false;
     }
 
     ts.len = encoded.size();
     ts.str = encoded;
+    return true;
 }

@@ -12,6 +12,7 @@
 // 等距地图编辑器基类
 class IsoMapEditor : public QWidget {
     Q_OBJECT
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
 public:
     explicit IsoMapEditor(QWidget *parent = nullptr);
     virtual ~IsoMapEditor() = default;
@@ -64,6 +65,7 @@ protected:
 class WarMapEdit : public IsoMapEditor {
     Q_OBJECT
     friend int runSelfTests(const QString &reportPath);
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
 public:
     explicit WarMapEdit(QWidget *parent = nullptr);
 

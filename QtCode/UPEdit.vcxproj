@@ -292,4 +292,10 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="$(QtMsBuild)\qt.targets" Condition="Exists('$(QtMsBuild)\qt.targets')" />
   <ImportGroup Label="ExtensionTargets" />
+  <Target Name="DeployWebP" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\runtime\COPYING.libwebp" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(QTDIR)\plugins\platforms\qoffscreend.dll" DestinationFolder="$(OutDir)platforms" Condition="'$(Configuration)'=='Debug'" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(QTDIR)\plugins\platforms\qoffscreen.dll" DestinationFolder="$(OutDir)platforms" Condition="'$(Configuration)'=='Release'" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\runtime\libwebp.dll;$(MSBuildProjectDirectory)\runtime\libsharpyuv.dll" DestinationFolder="$(OutDir)" Condition="Exists('$(MSBuildProjectDirectory)\runtime\libwebp.dll')" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

@@ -30,7 +30,9 @@ void ZipFile::openRead(const std::string& zip_filename)
     {
         zip_close(zip_);
     }
-    zip_ = zip_open(u8name(zip_filename).c_str(), ZIP_RDONLY, NULL);
+    int error = 0;
+    zip_ = zip_open(u8name(zip_filename).c_str(), ZIP_RDONLY, &error);
+    if (!zip_) fprintf(stderr, "Cannot open ZIP (%d): %s\n", error, zip_filename.c_str());
 }
 
 void ZipFile::openWrite(const std::string& zip_filename)

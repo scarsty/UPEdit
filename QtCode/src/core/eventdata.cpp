@@ -4,11 +4,10 @@
 #include <QDataStream>
 #include <cstring>
 
-bool EventIO::readEvents(const QString &idxFile, const QString &grpFile, DFile &dfile)
+bool EventIO::readEvents(const QString &, const QString &grpFile, DFile &dfile)
 {
-    QByteArray idxData = FileIO::readFileAll(idxFile);
     QByteArray grpData = FileIO::readFileAll(grpFile);
-    if (idxData.isEmpty() || grpData.isEmpty())
+    if (grpData.isEmpty())
         return false;
 
     const int bytesPerMap = 200 * static_cast<int>(sizeof(SceneEvent));
@@ -16,7 +15,7 @@ bool EventIO::readEvents(const QString &idxFile, const QString &grpFile, DFile &
         return false;
 
     int mapCount = grpData.size() / bytesPerMap;
-    if (mapCount <= 0)
+    if (mapCount <= 0 || grpData.size() % bytesPerMap != 0)
         return false;
 
     dfile.mapNum = mapCount;

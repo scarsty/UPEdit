@@ -56,9 +56,9 @@ QString Encoding::readOutStrWithCode(const void *data, int len, int code)
     return QString::fromUtf8(utf8.c_str(), static_cast<int>(utf8.size()));
 }
 
-void Encoding::writeInStr(const QString &str, void *data, int len)
+bool Encoding::writeInStr(const QString &str, void *data, int len)
 {
-    writeInStrWithCode(str, data, len, dataCode);
+    return writeInStrWithCode(str, data, len, dataCode);
 }
 
 int Encoding::encodedByteLength(const QString &str)
@@ -66,28 +66,27 @@ int Encoding::encodedByteLength(const QString &str)
     return encodedByteLengthWithCode(str, dataCode);
 }
 
-void Encoding::writeInStrWithCode(const QString &str, void *data, int len, int code)
+bool Encoding::writeInStrWithCode(const QString &str, void *data, int len, int code)
 {
-    if (!data || len <= 0)
-        return;
-
-    memset(data, 0, len);
+    if (len < 0 || (!data && len > 0)) return false;
+    QByteArray result;
 
     if (code == 2) {
         // UTF-16LE
         const ushort *u16 = str.utf16();
-        int bytes = qMin(static_cast<int>(str.size() * 2), len);
-        memcpy(data, u16, bytes);
-        return;
+        result = QByteArray(reinterpret_cast<const char *>(u16), str.size() * 2);
+    } else {
+        const char *encName = iconvNameForCode(code);
+        if (!encName) return false;
+        std::string encoded = PotConv::conv(str.toUtf8().toStdString(), "utf-8", encName);
+        std::string restored = PotConv::conv(encoded, encName, "utf-8");
+        if (QString::fromUtf8(restored.data(), restored.size()) != str) return false;
+        result = QByteArray(encoded.data(), encoded.size());
     }
-
-    const char *encName = iconvNameForCode(code);
-    if (!encName) return;
-
-    std::string utf8 = str.toUtf8().toStdString();
-    std::string encoded = PotConv::conv(utf8, "utf-8", encName);
-    int copyLen = qMin(static_cast<int>(encoded.size()), len);
-    memcpy(data, encoded.c_str(), copyLen);
+    if (result.size() > len) return false;
+    if (len > 0) memset(data, 0, len);
+    if (!result.isEmpty()) memcpy(data, result.constData(), result.size());
+    return true;
 }
 
 int Encoding::encodedByteLengthWithCode(const QString &str, int code)

@@ -11,6 +11,7 @@
 #include <QImage>
 
 namespace ImzIO {
+    QImage decodeImage(const QByteArray &bytes);
     // 从文件读取 IMZ（自动判断 .imz / 文件夹）
     bool readImz(const QString &path, Imz &imz);
     // 保存 IMZ 到 ZIP 文件

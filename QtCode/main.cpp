@@ -8,12 +8,17 @@
 
 int main(int argc, char *argv[])
 {
+    if (argc > 1 && QByteArray(argv[1]) == "--verify-resources")
+        qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
     app.setApplicationName("UPedit");
     app.setOrganizationName("Upwinded");
     app.setApplicationVersion("1.0.0");
     if (app.arguments().size() > 2 && app.arguments()[1] == "--self-test")
         return runSelfTests(app.arguments()[2]);
+    if ((app.arguments().size() == 4 || (app.arguments().size() == 5 && app.arguments()[4] == "--data-only"))
+        && app.arguments()[1] == "--verify-resources")
+        return verifyResources(app.arguments()[2], app.arguments()[3]);
     QString argument = app.arguments().size() > 1 ? QFileInfo(app.arguments()[1]).absoluteFilePath() : QString();
 
     // 设置工作目录为可执行文件所在目录

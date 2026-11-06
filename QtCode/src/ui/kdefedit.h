@@ -31,6 +31,7 @@ private slots:
 
 private:
     friend int runSelfTests(const QString &reportPath);
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
     QByteArray stateBytes() const;
     bool confirmDiscard();
     void closeEvent(QCloseEvent *event) override;
@@ -46,6 +47,7 @@ private:
     QString getParamName(int code, int paramIndex) const;
     void mutateInstructions(int operation);
     void editTalks();
+    void editTextRecords(bool names);
 
     QComboBox *m_sceneCombo;
     QTableWidget *m_eventTable;     // 事件列表

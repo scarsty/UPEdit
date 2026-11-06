@@ -35,6 +35,7 @@ private slots:
 
 private:
     friend int runSelfTests(const QString &reportPath);
+    friend int verifyResources(const QString &iniPath, const QString &reportPath);
     struct WarRowInfo { int fieldIdx = -1; int valueIdx = -1; };
     QVector<WarRowInfo> m_rowMap;
     bool readWIni();

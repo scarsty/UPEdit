@@ -179,6 +179,7 @@ void SceneMapEdit::loadSceneGrpFile(int saveSlot)
         m_dFile = session.events;
         restoredScene = session.scene;
     } else {
+    m_invalidSaveSlots.insert(saveSlot);
     QString path = cfg.gamePath + "/" + cfg.sGrp[saveSlot];
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
@@ -192,9 +193,13 @@ void SceneMapEdit::loadSceneGrpFile(int saveSlot)
 
     m_dFile.mapNum = 0;
     m_dFile.mapEvent.clear();
+    m_invalidSaveSlots.insert(saveSlot);
     if (saveSlot < cfg.dIdx.size() && saveSlot < cfg.dGrp.size()) {
-        EventIO::readEvents(cfg.gamePath + "/" + cfg.dIdx[saveSlot],
-                            cfg.gamePath + "/" + cfg.dGrp[saveSlot], m_dFile);
+        if (EventIO::readEvents(cfg.gamePath + "/" + cfg.dIdx[saveSlot],
+                            cfg.gamePath + "/" + cfg.dGrp[saveSlot], m_dFile)
+            && m_sceneRawData.size() % 49152 == 0
+            && m_dFile.mapEvent.size() == m_sceneRawData.size() / 49152)
+            m_invalidSaveSlots.remove(saveSlot);
     }
     }
     if (!m_savedSessions.contains(saveSlot)) m_savedSessions[saveSlot] = {m_sceneRawData, m_dFile, 0};
@@ -656,6 +661,10 @@ void SceneMapEdit::onRedo()
 void SceneMapEdit::onSaveScene()
 {
     IniConfig &cfg = IniConfig::instance();
+    if (m_invalidSaveSlots.contains(m_currentSave)) {
+        QMessageBox::warning(this, tr("保存"), tr("场景或事件文件读取不完整，禁止保存以保护原数据"));
+        return;
+    }
     if (m_currentScene < 0 && m_sceneCount > 0) return;
 
     const int stride = 64 * 64 * 6 * 2;
@@ -682,9 +691,12 @@ void SceneMapEdit::onSaveScene()
         eventData.append(reinterpret_cast<const char *>(m_dFile.mapEvent[scene].sceneEvent), 200 * sizeof(SceneEvent));
         qToLittleEndian<quint32>(eventData.size(), eventIndex.data() + scene * 4);
     }
-    if (!FileIO::writeFiles({{grpPath, m_sceneRawData}, {idxPath, idxData},
-        {cfg.gamePath + "/" + cfg.dIdx[m_currentSave], eventIndex},
-        {cfg.gamePath + "/" + cfg.dGrp[m_currentSave], eventData}})) {
+    QMap<QString, QByteArray> writes = {{grpPath, m_sceneRawData},
+        {cfg.gamePath + "/" + cfg.dGrp[m_currentSave], eventData}};
+    if (cfg.sIdx.count(cfg.sIdx[m_currentSave]) == 1) writes.insert(idxPath, idxData);
+    if (cfg.dIdx.count(cfg.dIdx[m_currentSave]) == 1)
+        writes.insert(cfg.gamePath + "/" + cfg.dIdx[m_currentSave], eventIndex);
+    if (!FileIO::writeFiles(writes)) {
         QMessageBox::warning(this, tr("保存"), tr("场景保存失败；请保留目录内 .upedit-old-* 备份")); return;
     }
     QMessageBox::information(this, tr("保存"), tr("场景保存成功"));

@@ -58,6 +58,9 @@ struct RDataSingle {
     int16_t dataType = 0; // 0=整数, 1=字符串
     int     dataLen  = 0;
     QByteArray data;
+    QByteArray originalBytes;
+    QByteArray originalText;
+    int originalCode = -1;
 };
 
 struct RArray {
@@ -76,6 +79,7 @@ struct RData {
 };
 
 struct RType {
+    QByteArray trailingBytes;
     int dataNum  = 0;
     int namePos  = -1;
     int mapPos   = -1;
@@ -83,6 +87,8 @@ struct RType {
 };
 
 struct RFile {
+    QByteArray trailingBytes;
+    QByteArray extraIndexBytes;
     int typeNumber = 0;
     QVector<RType> rType;
 };

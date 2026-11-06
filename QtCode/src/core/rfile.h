@@ -55,5 +55,5 @@ namespace RFileIO {
 
     // 对话数据读写
     QString readTalkStr(const TalkStr &ts);
-    void writeTalkStr(TalkStr &ts, const QString &str);
+    bool writeTalkStr(TalkStr &ts, const QString &str);
 }

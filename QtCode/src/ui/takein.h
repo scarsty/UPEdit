@@ -20,6 +20,8 @@ private slots:
     void onImportToGrp();
     void onSetTransColor();
     void onConfirmSize();
+    void onEditImage();
+    void onCropImage();
 
 private:
     friend int runSelfTests(const QString &reportPath);
@@ -32,9 +34,12 @@ private:
     QLabel *m_imageLabel;
     QLineEdit *m_widthEdit, *m_heightEdit;
     QLineEdit *m_xoffEdit, *m_yoffEdit;
+    QSpinBox *m_cropX, *m_cropY;
     QLineEdit *m_transColorEdit;
     QCheckBox *m_transCheck;
+    QCheckBox *m_allFrames;
     QComboBox *m_grpCombo;
+    QLineEdit *m_idxPath, *m_grpPath, *m_palettePath;
     QProgressBar *m_progress;
 
     QImage m_sourceImage;

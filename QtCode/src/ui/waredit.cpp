@@ -881,7 +881,7 @@ bool WarEdit::importExcel(const QString &filename)
             for (int d = 0; d < count; ++d, ++col) {
                 QString cell = (col < cells.size()) ? cells[col] : QString();
                 if (wt.isstr == 1) {
-                    Encoding::writeInStr(cell, rec.fields[f].rawBytes[d].data(), wt.datalen);
+                    if (!Encoding::writeInStr(cell, rec.fields[f].rawBytes[d].data(), wt.datalen)) return false;
                 } else {
                     bool ok = false;
                     qlonglong value = cell.isEmpty() ? 0 : cell.toLongLong(&ok);
@@ -920,8 +920,12 @@ void WarEdit::onTableItemChanged(QTableWidgetItem *item)
     const auto &wt = m_wIni.wTerm[f];
     if (wt.isstr == 1) {
         if (d < rec.fields[f].rawBytes.size()) {
-            rec.fields[f].rawBytes[d].fill(0, wt.datalen);
-            Encoding::writeInStr(item->text(), rec.fields[f].rawBytes[d].data(), wt.datalen);
+            if (!Encoding::writeInStr(item->text(), rec.fields[f].rawBytes[d].data(), wt.datalen)) {
+                QSignalBlocker blocker(m_table);
+                item->setText(Encoding::readOutStr(rec.fields[f].rawBytes[d].constData(), wt.datalen));
+                QMessageBox::warning(this, tr("修改字符串"), tr("文本过长或包含当前编码无法保存的字符"));
+                return;
+            }
         }
     } else {
         bool ok = false;
@@ -998,8 +1002,10 @@ void WarEdit::onCellDoubleClicked(int row, int /*column*/)
             QString curVal = Encoding::readOutStr(rec.fields[f].rawBytes[d].constData(), rec.fields[f].rawBytes[d].size());
             QString newVal = QInputDialog::getText(this, tr("修改字符串"), tr("修改此项:"), QLineEdit::Normal, curVal, &ok);
             if (ok) {
-                rec.fields[f].rawBytes[d].fill(0, wt.datalen);
-                Encoding::writeInStr(newVal, rec.fields[f].rawBytes[d].data(), wt.datalen);
+                if (!Encoding::writeInStr(newVal, rec.fields[f].rawBytes[d].data(), wt.datalen)) {
+                    QMessageBox::warning(this, tr("修改字符串"), tr("文本过长或包含当前编码无法保存的字符"));
+                    return;
+                }
             }
         } else {
             QString curVal = QString::number(rec.fields[f].values[d]);
