@@ -11,6 +11,8 @@
 #include <QMessageBox>
 #include <QResizeEvent>
 #include <QMouseEvent>
+#include <QAbstractItemView>
+#include <QStandardItemModel>
 #include <algorithm>
 
 MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
@@ -18,6 +20,17 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     // ── 左侧面板 ─────────────────────────────────────────
     m_layerCombo->clear();
     m_layerCombo->addItems({tr("未选择"), tr("地面"), tr("表面"), tr("建筑"), tr("引用建筑"), tr("全部")});
+    auto *layerModel = qobject_cast<QStandardItemModel *>(m_layerCombo->model());
+    for (int index = 0; index < m_layerCombo->count(); ++index) {
+        auto *item = layerModel->item(index);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Unchecked);
+    }
+    layerModel->item(0)->setFlags(layerModel->item(0)->flags() & ~Qt::ItemIsEnabled);
+    m_layerCombo->setEditable(true);
+    m_layerCombo->lineEdit()->setReadOnly(true);
+    m_layerCombo->lineEdit()->setPlaceholderText(tr("未选择"));
+    updateLayerSelectorText();
 
     auto *leftLayout = static_cast<QVBoxLayout*>(layout()->itemAt(0)->layout());
 
@@ -97,8 +110,38 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(m_hScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onHScroll);
     connect(m_vScroll, &QScrollBar::valueChanged, this, &MainMapEdit::onVScroll);
     connect(m_timer, &QTimer::timeout, this, &MainMapEdit::onTimerTick);
-    connect(m_layerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int idx){
-        m_layer = idx - 1;
+    connect(m_layerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, layerModel](int idx) {
+        if (m_layerPopupInteraction) return;
+        m_layers.clear();
+        if (idx >= 1 && idx <= 4) m_layers.insert(idx - 1);
+        else if (idx == 5) for (int layer = 0; layer < 4; ++layer) m_layers.insert(layer);
+        for (int layer = 1; layer <= 4; ++layer)
+            layerModel->item(layer)->setCheckState(m_layers.contains(layer - 1) ? Qt::Checked : Qt::Unchecked);
+        layerModel->item(5)->setCheckState(m_layers.size() == 4 ? Qt::Checked : Qt::Unchecked);
+        m_layer = selectedLayer();
+        updateLayerSelectorText();
+        m_needUpdate = true;
+    });
+    connect(m_layerCombo->view(), &QAbstractItemView::pressed, this, [this, layerModel](const QModelIndex &index) {
+        const int idx = index.row();
+        if (idx == 0) return;
+        m_layerPopupInteraction = true;
+        QTimer::singleShot(0, this, [this] { m_layerPopupInteraction = false; });
+        if (idx == 5) {
+            const bool selectAll = m_layers.size() != 4;
+            m_layers.clear();
+            if (selectAll) for (int layer = 0; layer < 4; ++layer) m_layers.insert(layer);
+            for (int layer = 1; layer <= 4; ++layer)
+                layerModel->item(layer)->setCheckState(selectAll ? Qt::Checked : Qt::Unchecked);
+        } else {
+            const int layer = idx - 1;
+            if (m_layers.contains(layer)) m_layers.remove(layer);
+            else m_layers.insert(layer);
+            layerModel->item(idx)->setCheckState(m_layers.contains(layer) ? Qt::Checked : Qt::Unchecked);
+            layerModel->item(5)->setCheckState(m_layers.size() == 4 ? Qt::Checked : Qt::Unchecked);
+        }
+        m_layer = selectedLayer();
+        updateLayerSelectorText();
         m_needUpdate = true;
     });
 
@@ -137,6 +180,20 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
         m_needUpdate = true;
         renderMap();
     }
+}
+
+int MainMapEdit::selectedLayer() const
+{
+    return m_layers.size() == 1 ? *m_layers.constBegin() : -1;
+}
+
+void MainMapEdit::updateLayerSelectorText()
+{
+    QStringList selected;
+    const QStringList labels = {tr("地面"), tr("表面"), tr("建筑"), tr("引用建筑")};
+    for (int layer = 0; layer < labels.size(); ++layer)
+        if (m_layers.contains(layer)) selected.append(labels[layer]);
+    m_layerCombo->lineEdit()->setText(selected.isEmpty() ? tr("未选择") : selected.join(tr("、")));
 }
 
 void MainMapEdit::resizeEvent(QResizeEvent *e)
@@ -252,11 +309,8 @@ void MainMapEdit::renderMap()
     m_mapImage.fill(Qt::black);
     QPainter p(&m_mapImage);
 
-    int layer = m_layer;   // -1=未选择, 0=地面, 1=表面, 2=建筑, 3=引用建筑, 4=全部
-    // 引用建筑 (layers 3-4) 是编辑元数据, 不参与渲染
-    int startLayer, endLayer;
-    if (layer < 0 || layer >= 3) { startLayer = 0; endLayer = 3; }
-    else { startLayer = layer; endLayer = layer + 1; }
+    // 引用建筑 (layers 3-4) 是编辑元数据，不参与渲染。
+    const bool renderAll = m_layers.isEmpty();
 
     // 计算可见范围: 屏幕坐标 sx = viewW/2 + (ix-CX-(iy-CY))*tw
     //                         sy = viewH/2 + (ix-CX+(iy-CY))*th
@@ -274,7 +328,8 @@ void MainMapEdit::renderMap()
     };
 
     // === 地面 + 表面 层 : 按对角线 d=ix+iy 递增遍历 ===
-    for (int ly = startLayer; ly < endLayer && ly < 2; ++ly) {
+    for (int ly = 0; ly < 2; ++ly) {
+        if (!renderAll && !hasLayer(ly)) continue;
         if (ly >= (int)curMap.mapLayer.size()) break;
         const auto &layerData = curMap.mapLayer[ly];
         for (int d = dMin; d <= dMax; ++d) {
@@ -300,7 +355,7 @@ void MainMapEdit::renderMap()
     }
 
     // === 建筑层 (收集后按深度排序) ===
-    if (startLayer <= 2 && endLayer > 2 && 2 < (int)curMap.mapLayer.size()) {
+    if ((renderAll || hasLayer(2)) && 2 < (int)curMap.mapLayer.size()) {
         struct BuildItem { int ix, iy, tileId, center; };
         QVector<BuildItem> items;
 
@@ -365,8 +420,8 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
     Map &curMap = m_mapData.map[0];
     if (ix >= curMap.x || iy >= curMap.y) return;
 
-    int layer = m_layer;
-    if (layer == 4 || (layer >= 0 && layer <= 2 && btn == Qt::RightButton && m_selectedTileId < 0)) {
+    const int layer = selectedLayer();
+    if (m_layers.size() > 1 || (layer >= 0 && layer <= 2 && btn == Qt::RightButton && m_selectedTileId < 0)) {
         if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
         if (btn == Qt::RightButton && m_moduleMap.layerNum > 0) {
             Map adjusted = m_moduleMap;
@@ -381,12 +436,13 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
                     adjusted.mapLayer[3].pic[column][row] = valid ? refX + left : 0;
                     adjusted.mapLayer[4].pic[column][row] = valid ? refY + top : 0;
                 }
-            if (layer == 4) MapIO::pasteRegion(curMap, adjusted, QPoint(ix, iy));
+            if (m_layers.size() > 1) MapIO::pasteRegion(curMap, adjusted, QPoint(ix, iy));
             else for (int column = 0; column < adjusted.x; ++column)
                 for (int row = 0; row < adjusted.y; ++row) {
                     int targetX = left + column, targetY = top + row;
                     if (targetX < 0 || targetY < 0 || targetX >= curMap.x || targetY >= curMap.y) continue;
-                    for (int selected : layer == 2 ? QList<int>{2, 3, 4} : QList<int>{layer})
+                    const QList<int> layers = layer == 2 ? QList<int>{2, 3, 4} : QList<int>{layer};
+                    for (int selected : layers)
                         curMap.mapLayer[selected].pic[targetX][targetY] = adjusted.mapLayer[selected].pic[column][row];
                 }
             m_needUpdate = true;
@@ -436,9 +492,11 @@ void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 void MainMapEdit::onHScroll(int) { m_needUpdate = true; }
 void MainMapEdit::handleMouseRelease(QMouseEvent *event)
 {
-    if (event->button() != Qt::LeftButton || m_layer < 0 || m_layer == 3 || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
+    if (event->button() != Qt::LeftButton || m_layers.isEmpty()
+        || (m_layers.size() == 1 && hasLayer(3))
+        || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
     QPoint end = screenToMapRel(event->pos().x(), event->pos().y());
-    if (m_layer != 4 && end == m_selectionStart) { m_selectionStart = QPoint(-1, -1); return; }
+    if (m_layers.size() == 1 && end == m_selectionStart) { m_selectionStart = QPoint(-1, -1); return; }
     if (end.x() >= 0) {
         QPoint first(qMin(m_selectionStart.x(), end.x()), qMin(m_selectionStart.y(), end.y()));
         QPoint last(qMax(m_selectionStart.x(), end.x()), qMax(m_selectionStart.y(), end.y()));
@@ -509,7 +567,13 @@ void MainMapEdit::onImportBlock()
         return;
     }
     m_moduleMap = module;
-    m_layerCombo->setCurrentIndex(5);
+    auto *model = qobject_cast<QStandardItemModel *>(m_layerCombo->model());
+    m_layers = {0, 1, 2, 3};
+    for (int layer = 1; layer <= 4; ++layer) model->item(layer)->setCheckState(Qt::Checked);
+    model->item(5)->setCheckState(Qt::Checked);
+    m_layer = selectedLayer();
+    updateLayerSelectorText();
+    m_needUpdate = true;
     m_statusBar->showMessage(tr("模块已载入，右键粘贴"));
 }
 

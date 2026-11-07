@@ -15,12 +15,16 @@ REditForm::REditForm(QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
 
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(4);
-    m_table->setHorizontalHeaderLabels({tr("字段"), tr("值"), tr("备注"), tr("引用")});
-    m_table->horizontalHeader()->setStretchLastSection(true);
-    m_table->setColumnWidth(0, 120);
-    m_table->setColumnWidth(1, 200);
-    m_table->setColumnWidth(2, 150);
+    m_table->setColumnCount(8);
+    m_table->setHorizontalHeaderLabels({tr("字段"), tr("值"), tr("备注"), tr("引用"),
+                                        tr("字段"), tr("值"), tr("备注"), tr("引用")});
+    m_table->horizontalHeader()->setStretchLastSection(false);
+    for (int group = 0; group < 2; ++group) {
+        m_table->setColumnWidth(group * 4, 110);
+        m_table->setColumnWidth(group * 4 + 1, 150);
+        m_table->setColumnWidth(group * 4 + 2, 110);
+        m_table->setColumnWidth(group * 4 + 3, 110);
+    }
     m_table->verticalHeader()->setDefaultSectionSize(24);
     layout->addWidget(m_table);
 
@@ -52,7 +56,8 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
         for (int dn = 0; dn < line.rArray.size(); ++dn)
             totalRows += line.rArray[dn].dataArray.size();
     }
-    m_table->setRowCount(totalRows);
+    m_rowsPerColumn = qMax(1, (totalRows + 1) / 2);
+    m_table->setRowCount(m_rowsPerColumn);
 
     // Delphi displayR 中使用 temp2 跟踪 rDataLine 对应的 rTerm 基索引
     int row = 0;
@@ -87,20 +92,23 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
                     fieldName = QString("field_%1_%2").arg(d).arg(inc);
                 }
 
+                const int visualRow = row % m_rowsPerColumn;
+                const int group = row / m_rowsPerColumn;
+                const int column = group * 4;
                 auto *nameItem = new QTableWidgetItem(fieldName);
                 nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
-                m_table->setItem(row, 0, nameItem);
+                m_table->setItem(visualRow, column, nameItem);
 
                 // 值
                 QString value = RFileIO::readRDataStr(single);
                 auto *valueItem = new QTableWidgetItem(value);
                 valueItem->setToolTip(value);
-                m_table->setItem(row, 1, valueItem);
+                m_table->setItem(visualRow, column + 1, valueItem);
 
                 // 备注
                 auto *noteItem = new QTableWidgetItem(noteStr);
                 noteItem->setFlags(noteItem->flags() & ~Qt::ItemIsEditable);
-                m_table->setItem(row, 2, noteItem);
+                m_table->setItem(visualRow, column + 2, noteItem);
 
                 // 引用
                 QString ref;
@@ -119,7 +127,7 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
                 auto *refItem = new QTableWidgetItem(ref);
                 refItem->setFlags(refItem->flags() & ~Qt::ItemIsEditable);
                 refItem->setToolTip(ref);
-                m_table->setItem(row, 3, refItem);
+                m_table->setItem(visualRow, column + 3, refItem);
 
                 row++;
             }
@@ -133,8 +141,11 @@ void REditForm::displayRecord(int typeIndex, int recordIndex)
 
 void REditForm::onCellChanged(int row, int column)
 {
-    if (m_updating || column != 1) return;
+    if (m_updating || column % 4 != 1) return;
     if (!m_pRFile) return;
+
+    const int flatRow = cellToRow(row, column);
+    if (flatRow < 0) return;
 
     if (m_typeIndex < 0 || m_recordIndex < 0) return;
     auto &rt = m_pRFile->rType[m_typeIndex];
@@ -147,7 +158,7 @@ void REditForm::onCellChanged(int row, int column)
         auto &line = rd.rDataLine[d];
         for (int dn = 0; dn < line.rArray.size(); ++dn) {
             for (int inc = 0; inc < line.rArray[dn].dataArray.size(); ++inc) {
-                if (curRow == row) {
+                if (curRow == flatRow) {
                     QString newVal = m_table->item(row, column)->text();
                     auto &field = line.rArray[dn].dataArray[inc];
                     if (!REditWidget::applyFieldOperation(field, 0, newVal)) {
@@ -196,14 +207,32 @@ REditForm::RowInfo REditForm::rowToInfo(int row) const
     return info;
 }
 
-void REditForm::onCellDoubleClicked(int row, int /*column*/)
+int REditForm::cellToRow(int row, int column) const
+{
+    if (row < 0 || row >= m_rowsPerColumn || column < 0 || column >= m_table->columnCount()) return -1;
+    const int group = column / 4;
+    if (group > 1) return -1;
+    const int flatRow = group * m_rowsPerColumn + row;
+    int totalRows = 0;
+    if (m_pRFile && m_typeIndex >= 0 && m_typeIndex < m_pRFile->rType.size()
+        && m_recordIndex >= 0 && m_recordIndex < m_pRFile->rType[m_typeIndex].rData.size()) {
+        const auto &record = m_pRFile->rType[m_typeIndex].rData[m_recordIndex];
+        for (const auto &line : record.rDataLine)
+            for (const auto &array : line.rArray) totalRows += array.dataArray.size();
+    }
+    return flatRow < totalRows ? flatRow : -1;
+}
+
+void REditForm::onCellDoubleClicked(int row, int column)
 {
     if (!m_pRFile || m_typeIndex < 0 || m_recordIndex < 0) return;
     auto &rt = m_pRFile->rType[m_typeIndex];
     if (m_recordIndex >= rt.rData.size()) return;
     auto &rd = rt.rData[m_recordIndex];
 
-    RowInfo info = rowToInfo(row);
+    const int flatRow = cellToRow(row, column);
+    if (flatRow < 0) return;
+    RowInfo info = rowToInfo(flatRow);
     if (info.dataLineIdx < 0) return;
 
     auto &single = rd.rDataLine[info.dataLineIdx].rArray[info.arrayIdx].dataArray[info.dataIdx];

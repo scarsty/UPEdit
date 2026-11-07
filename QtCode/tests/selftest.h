@@ -14,6 +14,7 @@
 #include "grplist.h"
 #include "pngimport.h"
 #include <QColorDialog>
+#include <QPainter>
 #include <QFontDialog>
 #include <QDialogButtonBox>
 #include <QProgressDialog>
@@ -3478,14 +3479,23 @@ inline int runSelfTests(const QString &reportPath)
             editor.setRFile(&records);
             editor.displayRecord(0, 0);
             auto *table = editor.findChild<QTableWidget *>();
-            require(table && table->rowCount() == 2, "R detail fields missing");
+            require(table && table->rowCount() == 1 && table->columnCount() == 8,
+                "R detail fields are not arranged in parallel groups");
             table->item(0, 1)->setText("32768");
             require(RFileIO::readRDataInt(fields[0]) == 7 && table->item(0, 1)->text() == "7",
                 "R detail accepted integer overflow");
             table->item(0, 1)->setText("-32768");
-            table->item(1, 1)->setText("");
+            table->item(0, 5)->setText("");
             require(RFileIO::readRDataInt(fields[0]) == -32768 && RFileIO::readRDataStr(fields[1]).isEmpty(),
                 "R detail rejected lower boundary or empty text");
+            fields.append(fields[0]);
+            editor.displayRecord(0, 0);
+            require(table->rowCount() == 2 && table->item(0, 5)
+                && !table->item(1, 5), "Odd R field count left an invalid trailing field");
+            table->item(0, 5)->setText("123");
+            require(RFileIO::readRDataInt(fields[2]) == 123
+                && RFileIO::readRDataInt(fields[0]) == -32768,
+                "Second R field group edited the wrong property");
         }
         output << "PASS: R detail numeric boundaries and empty text editing\n";
         {
@@ -4026,6 +4036,99 @@ inline int runSelfTests(const QString &reportPath)
                 "Invalid scene session did not reject save");
         }
         output << "PASS: event cumulative offsets and scene event roundtrip\n";
+        {
+            SceneMapEdit editor;
+            editor.m_sceneCount = 1;
+            editor.m_sceneRawData = QByteArray(64 * 64 * 6 * 2, '\0');
+            editor.m_dFile.mapEvent.resize(1);
+            editor.onLoadScene(0);
+            editor.m_mapData.map[0].mapLayer[4].pic[2][3] = 17;
+            const QByteArray originalMap = MapIO::encodeMap(editor.m_mapData.map[0]);
+            const QByteArray originalRaw = editor.m_sceneRawData;
+            editor.m_dFile.mapEvent[0].sceneEvent[0].event1 = 123;
+            editor.m_backdrop = QImage(32, 32, QImage::Format_ARGB32);
+            editor.m_backdrop.fill(Qt::blue);
+            editor.m_backdropDepth.fill(-1, 1024);
+            editor.m_backdropSlot = editor.m_currentSave;
+            editor.m_backdropScene = editor.m_currentScene;
+            editor.m_backdropEnabled->setChecked(true);
+            editor.m_anchorX->setValue(2);
+            editor.m_anchorY->setValue(2);
+            editor.m_brushRadius->setValue(2);
+            editor.paintBackdrop(QPoint(8, 8), false);
+            int wallDepth = SceneMapEdit::backdropDepth(2, 2, 64, 64);
+            require(editor.m_backdropDepth[8 * 32 + 8] == wallDepth
+                && editor.m_backdropDepth[0] == -1, "Backdrop brush changed incorrect pixels");
+            QImage sprite(1, 1, QImage::Format_ARGB32);
+            sprite.fill(Qt::red);
+            QImage result = editor.m_backdrop.copy();
+            {
+                QPainter painter(&result);
+                editor.drawBackdropSprite(painter, sprite, QPoint(8, 8), wallDepth - 1);
+                editor.drawBackdropSprite(painter, sprite, QPoint(9, 8), wallDepth + 1);
+            }
+            require(result.pixelColor(8, 8) == QColor(Qt::blue)
+                && result.pixelColor(9, 8) == QColor(Qt::red), "Backdrop depth did not hide/reveal actor pixels");
+            require(MapIO::encodeMap(editor.m_mapData.map[0]) == originalMap
+                && editor.m_sceneRawData == originalRaw
+                && editor.m_dFile.mapEvent[0].sceneEvent[0].event1 == 123,
+                "Backdrop editing changed original scene height or events");
+            QString projectPath = temporary.filePath("scene-backdrop.sbg");
+            require(editor.saveBackdrop(projectPath) && !editor.m_backdropDirty,
+                "Backdrop project save failed");
+            auto savedDepth = editor.m_backdropDepth;
+            editor.paintBackdrop(QPoint(8, 8), true);
+            require(editor.loadBackdrop(projectPath) && editor.m_backdropDepth == savedDepth
+                && editor.m_backdrop.pixelColor(0, 0) == QColor(Qt::blue),
+                "Backdrop project roundtrip lost pixels or depth");
+            QByteArray project = FileIO::readFileAll(projectPath);
+            require(FileIO::writeFileAll(projectPath, project.chopped(1)), "Cannot truncate backdrop fixture");
+            require(!editor.loadBackdrop(projectPath) && editor.m_backdropDepth == savedDepth,
+                "Truncated backdrop project changed active data");
+            editor.m_currentScene = 1;
+            require(!editor.backdropActive(), "Backdrop leaked into another scene");
+            editor.m_currentScene = 0;
+            for (auto &column : editor.m_mapData.map[0].mapLayer[3].pic) column.fill(-1);
+            editor.m_mapData.map[0].mapLayer[3].pic[2][3] = 0;
+            editor.m_dFile.mapEvent[0].sceneEvent[0].beginPic1 = 2;
+            editor.m_tileCache.resize(2);
+            editor.m_tileCache[1] = sprite;
+            editor.m_grpPics.resize(2);
+            QPoint spritePosition = editor.isoToScreen(2, 3) - QPoint(0, 17);
+            editor.m_backdropX->setValue(spritePosition.x());
+            editor.m_backdropY->setValue(spritePosition.y());
+            editor.m_backdropDepth.fill(wallDepth + 100, 1024);
+            editor.renderMap();
+            require(editor.m_mapImage.pixelColor(spritePosition) == QColor(Qt::blue),
+                "Scene event bypassed backdrop depth or original height");
+            editor.m_backdropDepth.fill(-1, 1024);
+            editor.renderMap();
+            require(editor.m_mapImage.pixelColor(spritePosition) == QColor(Qt::red),
+                "Scene event disappeared from backdrop rendering");
+            editor.m_mapData.map[0].mapLayer[3].pic[2][3] = -1;
+            editor.m_actorX->setValue(2);
+            editor.m_actorY->setValue(3);
+            editor.m_actorVisible->setChecked(true);
+            editor.renderMap();
+            require(editor.m_mapImage.pixelColor(spritePosition) == QColor(Qt::red),
+                "Backdrop preview actor ignored original elevation");
+            editor.m_backdropHistory.clear();
+            editor.m_backdropHistoryPos = -1;
+            editor.m_backdropTool->setCurrentIndex(2);
+            QPointF stroke = spritePosition + QPoint(8, 8);
+            QMouseEvent press(QEvent::MouseButtonPress, stroke, stroke, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, stroke, stroke, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &press);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &release);
+            require(editor.m_backdropDepth[8 * 32 + 8] == wallDepth,
+                "Backdrop mouse brush did not respect image offset");
+            editor.findChild<QPushButton *>("backdropUndo")->click();
+            require(editor.m_backdropDepth[8 * 32 + 8] == -1, "Backdrop brush undo failed");
+            editor.findChild<QPushButton *>("backdropRedo")->click();
+            require(editor.m_backdropDepth[8 * 32 + 8] == wallDepth, "Backdrop brush redo failed");
+            editor.m_backdropDirty = false;
+        }
+        output << "PASS: scene backdrop depth pixels, brush isolation, project roundtrip and corrupt-load preservation\n";
         {
             auto &config = IniConfig::instance();
             QScopedValueRollback<QString> gamePath(config.gamePath, temporary.path() + "/");

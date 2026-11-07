@@ -3,6 +3,7 @@
 #include <QScrollBar>
 #include <QGroupBox>
 #include <QCheckBox>
+#include <QSet>
 #include <QTimer>
 
 // 主地图编辑器 (对应 Delphi TForm13)
@@ -45,8 +46,15 @@ private:
 
     bool m_needUpdate = true;
 
-    // 当前操作层 (-1=未选, 0=地面, 1=表面, 2=建筑, 3=引用建筑, 4=全部)
+    // 当前选中的操作层：0=地面，1=表面，2=建筑，3=引用建筑。
+    // 多层选择用于预览和模块粘贴；单层操作仍使用 selectedLayer()。
+    QSet<int> m_layers;
     int m_layer = -1;
+    bool m_layerPopupInteraction = false;
+
+    int selectedLayer() const;
+    bool hasLayer(int layer) const { return m_layers.contains(layer); }
+    void updateLayerSelectorText();
 
     // 引用建筑点击记录
     int m_qbuildx = -1, m_qbuildy = -1;

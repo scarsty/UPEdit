@@ -31,10 +31,12 @@ private:
         int16_t quote = -1;
     };
     RowInfo rowToInfo(int row) const;
+    int cellToRow(int row, int column) const;
 
     QTableWidget *m_table = nullptr;
     RFile *m_pRFile       = nullptr; // 指向 REditWidget::m_rFile
     int m_typeIndex   = -1;
     int m_recordIndex = -1;
+    int m_rowsPerColumn = 1;
     bool m_updating   = false;
 };

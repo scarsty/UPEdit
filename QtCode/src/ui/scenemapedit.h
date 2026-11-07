@@ -5,6 +5,7 @@
 #include <QCheckBox>
 #include <QLineEdit>
 #include <QMap>
+#include <QVBoxLayout>
 
 // 场景地图编辑器 (对应 Delphi TForm12)
 class SceneMapEdit : public IsoMapEditor {
@@ -33,10 +34,30 @@ protected:
     void renderMap() override;
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void handleMouseMove(QMouseEvent *event) override;
+    void handleMousePress(QMouseEvent *event) override;
     void handleMouseRelease(QMouseEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
 
 private:
+    void setupBackdropTools(QVBoxLayout *layout);
+    bool backdropActive() const;
+    bool saveBackdrop(const QString &path);
+    bool loadBackdrop(const QString &path);
+    bool confirmBackdropDiscard();
+    void paintBackdrop(const QPoint &position, bool erase);
+    void drawBackdropSprite(QPainter &painter, const QImage &sprite, QPoint position, int depth);
+    static int backdropDepth(int x, int y, int width, int height);
+    QImage m_backdrop;
+    QVector<qint32> m_backdropDepth;
+    QVector<QVector<qint32>> m_backdropHistory;
+    int m_backdropHistoryPos = -1;
+    int m_backdropSlot = -1, m_backdropScene = -1;
+    bool m_backdropDirty = false;
+    QCheckBox *m_backdropEnabled = nullptr, *m_backdropOverlay = nullptr, *m_actorVisible = nullptr;
+    QComboBox *m_backdropTool = nullptr;
+    QSpinBox *m_backdropX = nullptr, *m_backdropY = nullptr, *m_brushRadius = nullptr;
+    QSpinBox *m_anchorX = nullptr, *m_anchorY = nullptr;
+    QSpinBox *m_actorX = nullptr, *m_actorY = nullptr, *m_actorTile = nullptr;
     void loadSceneGrpFile(int saveSlot);
     void readSceneData(int sceneIndex);
     void readSceneGrp();

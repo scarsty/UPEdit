@@ -23,6 +23,240 @@
 #include <QCloseEvent>
 #include <QSaveFile>
 #include <cstring>
+#include "imzdata.h"
+#include <QBuffer>
+
+int SceneMapEdit::backdropDepth(int x, int y, int width, int height)
+{
+    if (x < 0 || y < 0 || x >= width || y >= height) return -1;
+    int diagonal = qMin(x, y);
+    return diagonal * (width + height) + (y == diagonal ? x - diagonal : width - diagonal + y - diagonal - 1);
+}
+
+bool SceneMapEdit::backdropActive() const
+{
+    return m_backdropEnabled && m_backdropEnabled->isChecked() && !m_backdrop.isNull()
+        && m_backdropSlot == m_currentSave && m_backdropScene == m_currentScene;
+}
+
+bool SceneMapEdit::confirmBackdropDiscard()
+{
+    return !m_backdropDirty || QMessageBox::question(this, tr("大图场景"),
+        tr("大图或遮挡尚未保存，放弃这些修改？"), QMessageBox::Discard | QMessageBox::Cancel,
+        QMessageBox::Cancel) == QMessageBox::Discard;
+}
+
+void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
+{
+    auto *group = new QGroupBox(tr("大图场景"));
+    auto *form = new QFormLayout(group);
+    auto *importImage = new QPushButton(tr("导入 WebP / PNG"));
+    auto *loadProject = new QPushButton(tr("打开大图项目"));
+    auto *saveProject = new QPushButton(tr("保存大图项目"));
+    auto *undoMask = new QPushButton(tr("撤销遮挡"));
+    auto *redoMask = new QPushButton(tr("重做遮挡"));
+    undoMask->setObjectName("backdropUndo");
+    redoMask->setObjectName("backdropRedo");
+    form->addRow(importImage);
+    form->addRow(loadProject, saveProject);
+    form->addRow(undoMask, redoMask);
+    connect(undoMask, &QPushButton::clicked, this, [this] {
+        if (m_backdropHistoryPos <= 0) return;
+        m_backdropDepth = m_backdropHistory[--m_backdropHistoryPos];
+        m_backdropDirty = true;
+        renderMap();
+    });
+    connect(redoMask, &QPushButton::clicked, this, [this] {
+        if (m_backdropHistoryPos + 1 >= m_backdropHistory.size()) return;
+        m_backdropDepth = m_backdropHistory[++m_backdropHistoryPos];
+        m_backdropDirty = true;
+        renderMap();
+    });
+    m_backdropEnabled = new QCheckBox(tr("启用大图"));
+    m_backdropOverlay = new QCheckBox(tr("显示遮挡区域"));
+    m_actorVisible = new QCheckBox(tr("显示预览人物"));
+    form->addRow(m_backdropEnabled, m_backdropOverlay);
+    form->addRow(m_actorVisible);
+    m_backdropTool = new QComboBox;
+    m_backdropTool->addItems({tr("原场景编辑"), tr("选择建筑落地点"), tr("涂绘遮挡"), tr("擦除遮挡"), tr("移动预览人物")});
+    importImage->setToolTip(tr("使用不含动态人物、事件的干净场景图。仅支持不透明静态遮挡。"));
+    m_backdropTool->setToolTip(tr("先选择建筑落地点，再涂绘建筑轮廓；右键可擦除遮挡。大图项目单独保存，不写入 S/D。"));
+    form->addRow(tr("工具"), m_backdropTool);
+    auto addNumber = [&](const QString &label, int minimum, int maximum, int initial) {
+        auto *spin = new QSpinBox;
+        spin->setRange(minimum, maximum);
+        spin->setValue(initial);
+        form->addRow(label, spin);
+        return spin;
+    };
+    m_backdropX = addNumber(tr("图像偏移 X"), -32768, 32767, 0);
+    m_backdropY = addNumber(tr("图像偏移 Y"), -32768, 32767, 0);
+    m_brushRadius = addNumber(tr("笔刷半径"), 1, 128, 12);
+    m_anchorX = addNumber(tr("建筑落点 X"), 0, 63, 0);
+    m_anchorY = addNumber(tr("建筑落点 Y"), 0, 63, 0);
+    m_actorX = addNumber(tr("人物 X"), 0, 63, 0);
+    m_actorY = addNumber(tr("人物 Y"), 0, 63, 0);
+    m_actorTile = addNumber(tr("人物贴图编号"), 0, 32767, 1);
+    layout->insertWidget(0, group);
+    connect(importImage, &QPushButton::clicked, this, [this] {
+        if (m_currentScene < 0) return;
+        QString path = QFileDialog::getOpenFileName(this, tr("导入场景大图"), {}, "Images (*.webp *.png *.jpg *.jpeg)");
+        if (path.isEmpty() || !confirmBackdropDiscard()) return;
+        QByteArray bytes = FileIO::readFileAll(path);
+        QImage image = ImzIO::decodeImage(bytes);
+        if (image.isNull() || qint64(image.width()) * image.height() > 16000000) {
+            QMessageBox::warning(this, tr("大图场景"), tr("图片无效或超过 1600 万像素。"));
+            return;
+        }
+        m_backdrop = image;
+        m_backdropDepth.fill(-1, image.width() * image.height());
+        m_backdropHistory = {m_backdropDepth};
+        m_backdropHistoryPos = 0;
+        m_backdropSlot = m_currentSave;
+        m_backdropScene = m_currentScene;
+        m_backdropDirty = true;
+        m_backdropEnabled->setChecked(true);
+        renderMap();
+    });
+    connect(saveProject, &QPushButton::clicked, this, [this] {
+        if (!backdropActive()) return;
+        QString path = QFileDialog::getSaveFileName(this, tr("保存大图项目"), {}, "Scene backdrop (*.sbg)");
+        if (path.isEmpty()) return;
+        if (!path.endsWith(".sbg", Qt::CaseInsensitive)) path += ".sbg";
+        if (!saveBackdrop(path)) QMessageBox::warning(this, tr("大图场景"), tr("保存失败，原文件未替换。"));
+    });
+    connect(loadProject, &QPushButton::clicked, this, [this] {
+        QString path = QFileDialog::getOpenFileName(this, tr("打开大图项目"), {}, "Scene backdrop (*.sbg)");
+        if (path.isEmpty() || !confirmBackdropDiscard()) return;
+        if (!loadBackdrop(path)) QMessageBox::warning(this, tr("大图场景"), tr("项目损坏或不属于当前存档槽、场景，保留原项目。"));
+        renderMap();
+    });
+    for (auto *check : {m_backdropEnabled, m_backdropOverlay, m_actorVisible})
+        connect(check, &QCheckBox::toggled, this, [this] { renderMap(); });
+    for (auto *spin : {m_backdropX, m_backdropY, m_actorX, m_actorY, m_actorTile})
+        connect(spin, &QSpinBox::valueChanged, this, [this, spin] {
+            if (!m_backdrop.isNull() && (spin == m_backdropX || spin == m_backdropY)) m_backdropDirty = true;
+            renderMap();
+        });
+}
+
+bool SceneMapEdit::saveBackdrop(const QString &path)
+{
+    if (!backdropActive()) return false;
+    QByteArray imageBytes;
+    QBuffer buffer(&imageBytes);
+    if (!buffer.open(QIODevice::WriteOnly) || !m_backdrop.save(&buffer, "PNG")) return false;
+    QByteArray raw;
+    QDataStream depths(&raw, QIODevice::WriteOnly);
+    depths.setByteOrder(QDataStream::LittleEndian);
+    for (qint32 depth : m_backdropDepth) depths << depth;
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) return false;
+    QDataStream stream(&file);
+    stream.setVersion(QDataStream::Qt_6_0);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    stream << quint32(0x31474253) << qint32(m_currentSave) << qint32(m_currentScene)
+        << qint32(m_backdrop.width()) << qint32(m_backdrop.height())
+        << qint32(m_backdropX->value()) << qint32(m_backdropY->value()) << imageBytes << raw;
+    if (stream.status() != QDataStream::Ok || !file.commit()) return false;
+    m_backdropDirty = false;
+    return true;
+}
+
+bool SceneMapEdit::loadBackdrop(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly) || file.size() > 256 * 1024 * 1024) return false;
+    QDataStream stream(&file);
+    stream.setVersion(QDataStream::Qt_6_0);
+    stream.setByteOrder(QDataStream::LittleEndian);
+    quint32 magic;
+    qint32 slot, scene, width, height, offsetX, offsetY;
+    stream >> magic >> slot >> scene >> width >> height >> offsetX >> offsetY;
+    if (stream.status() != QDataStream::Ok || magic != 0x31474253 || slot != m_currentSave
+        || scene != m_currentScene || scene < 0 || width <= 0 || height <= 0
+        || qint64(width) * height > 16000000 || qAbs(qint64(offsetX)) > 32767 || qAbs(qint64(offsetY)) > 32767) return false;
+    auto readBlock = [&]() {
+        quint32 size = 0;
+        stream >> size;
+        if (stream.status() != QDataStream::Ok || size > quint64(file.bytesAvailable()) || size > 128 * 1024 * 1024) return QByteArray();
+        return file.read(size);
+    };
+    QByteArray encoded = readBlock(), raw = readBlock();
+    QImage image = ImzIO::decodeImage(encoded);
+    if (stream.status() != QDataStream::Ok || !file.atEnd() || image.size() != QSize(width, height)
+        || raw.size() != qint64(width) * height * 4) return false;
+    QVector<qint32> candidate(width * height);
+    QDataStream depths(raw);
+    depths.setByteOrder(QDataStream::LittleEndian);
+    for (auto &depth : candidate) {
+        depths >> depth;
+        if (depth < -1 || depth >= 8192) return false;
+    }
+    m_backdrop = image;
+    m_backdropDepth = candidate;
+    m_backdropHistory = {candidate};
+    m_backdropHistoryPos = 0;
+    m_backdropSlot = slot;
+    m_backdropScene = scene;
+    m_backdropX->setValue(offsetX);
+    m_backdropY->setValue(offsetY);
+    m_backdropEnabled->setChecked(true);
+    m_backdropDirty = false;
+    return true;
+}
+
+void SceneMapEdit::drawBackdropSprite(QPainter &painter, const QImage &sprite, QPoint position, int depth)
+{
+    QImage visible = sprite.convertToFormat(QImage::Format_ARGB32);
+    for (int row = 0; row < visible.height(); ++row) {
+        auto *pixels = reinterpret_cast<QRgb *>(visible.scanLine(row));
+        int imageY = position.y() + row - m_backdropY->value();
+        if (imageY < 0 || imageY >= m_backdrop.height()) continue;
+        for (int column = 0; column < visible.width(); ++column) {
+            int imageX = position.x() + column - m_backdropX->value();
+            if (imageX >= 0 && imageX < m_backdrop.width()
+                && m_backdropDepth[imageY * m_backdrop.width() + imageX] > depth) pixels[column] = 0;
+        }
+    }
+    painter.drawImage(position, visible);
+}
+
+void SceneMapEdit::paintBackdrop(const QPoint &position, bool erase)
+{
+    QPoint center = position - QPoint(m_backdropX->value(), m_backdropY->value());
+    int radius = m_brushRadius->value();
+    const auto &map = m_mapData.map[0];
+    int depth = erase ? -1 : backdropDepth(m_anchorX->value(), m_anchorY->value(), map.x, map.y);
+    for (int row = qMax(0, center.y() - radius); row < qMin(m_backdrop.height(), center.y() + radius + 1); ++row)
+        for (int column = qMax(0, center.x() - radius); column < qMin(m_backdrop.width(), center.x() + radius + 1); ++column)
+            if ((column - center.x()) * (column - center.x()) + (row - center.y()) * (row - center.y()) <= radius * radius)
+                m_backdropDepth[row * m_backdrop.width() + column] = depth;
+    m_backdropDirty = true;
+    renderMap();
+}
+
+void SceneMapEdit::handleMousePress(QMouseEvent *event)
+{
+    if (!backdropActive() || m_backdropTool->currentIndex() == 0) {
+        IsoMapEditor::handleMousePress(event);
+        return;
+    }
+    int tool = m_backdropTool->currentIndex();
+    if (tool == 2 || tool == 3) {
+        if (m_backdropHistory.isEmpty()) {
+            m_backdropHistory = {m_backdropDepth};
+            m_backdropHistoryPos = 0;
+        }
+        paintBackdrop(event->pos(), tool == 3 || event->button() == Qt::RightButton);
+        return;
+    }
+    QPoint tile = screenToIso(event->pos().x(), event->pos().y());
+    if (tile.x() < 0 || tile.y() < 0 || tile.x() >= 64 || tile.y() >= 64) return;
+    if (tool == 1) { m_anchorX->setValue(tile.x()); m_anchorY->setValue(tile.y()); }
+    else { m_actorX->setValue(tile.x()); m_actorY->setValue(tile.y()); m_actorVisible->setChecked(true); }
+    renderMap();
+}
 
 SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
 {
@@ -32,6 +266,7 @@ SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(m_tileSourceCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { readSceneGrp(); renderMap(); });
 
     auto *leftLayout = static_cast<QVBoxLayout*>(layout()->itemAt(0)->layout());
+    setupBackdropTools(leftLayout);
 
     m_saveCombo = new QComboBox;
     m_sceneCombo = new QComboBox;
@@ -122,6 +357,16 @@ SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
     addTileRow(tr("事件"), m_lblEventVal, m_imgEvent);
     tileGroup->setFixedWidth(200);
     leftLayout->addWidget(tileGroup);
+
+    auto *sidebar = new QWidget;
+    auto *sidebarScroll = new QScrollArea;
+    static_cast<QHBoxLayout *>(layout())->removeItem(leftLayout);
+    sidebar->setLayout(leftLayout);
+    sidebarScroll->setWidget(sidebar);
+    sidebarScroll->setWidgetResizable(true);
+    sidebarScroll->setMinimumWidth(300);
+    sidebarScroll->setMaximumWidth(440);
+    static_cast<QHBoxLayout *>(layout())->insertWidget(0, sidebarScroll);
 
     connect(m_saveCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SceneMapEdit::onSaveSlotChanged);
     connect(m_sceneCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &SceneMapEdit::onLoadScene);
@@ -353,10 +598,17 @@ void SceneMapEdit::renderMap()
     // Delphi: pointx = width/2, pointy = height/2 - 31*TileW
     m_renderCenterX = imgW / 2;
     m_renderCenterY = pad;
+    if (backdropActive()) {
+        imgW = qMax(imgW, m_backdropX->value() + m_backdrop.width());
+        imgH = qMax(imgH, m_backdropY->value() + m_backdrop.height());
+        if (qint64(imgW) * imgH > 32000000) return;
+    }
 
     m_mapImage = QImage(imgW, imgH, QImage::Format_ARGB32);
     m_mapImage.fill(m_exporting ? Qt::transparent : Qt::black);
     QPainter p(&m_mapImage);
+    const bool backdrop = backdropActive();
+    if (backdrop) p.drawImage(m_backdropX->value(), m_backdropY->value(), m_backdrop);
 
     int layer = m_layerCombo->currentIndex();
     // 层: 0=地面, 1=建筑, 2=空中, 3=事件, 4=海拔, 5=全部
@@ -370,6 +622,7 @@ void SceneMapEdit::renderMap()
         showSky = (m_exportLayers & 4) != 0;
         showEvent = (m_exportLayers & 8) != 0;
     }
+    if (backdrop) showGround = showBuilding = showSky = false;
 
     // 获取事件数据
     const MapEvent *evts = nullptr;
@@ -420,7 +673,20 @@ void SceneMapEdit::renderMap()
             if (ix < eLayer.pic.size() && iy < eLayer.pic[ix].size())
                 elev = eLayer.pic[ix][iy];
         }
-        p.drawImage(sp.x() - xoff, sp.y() - yoff - elev, tile);
+        if (backdrop) drawBackdropSprite(p, tile, QPoint(sp.x() - xoff, sp.y() - yoff - elev),
+            backdropDepth(ix, iy, mapW, mapH));
+        else p.drawImage(sp.x() - xoff, sp.y() - yoff - elev, tile);
+    };
+
+    auto drawActor = [&](int actorX, int actorY) {
+        if (!backdrop || m_exporting || !m_actorVisible->isChecked()
+            || actorX != m_actorX->value() || actorY != m_actorY->value()) return;
+        int tile = m_actorTile->value();
+        if (tile >= m_tileCache.size()) return;
+        QPoint position = isoToScreen(actorX, actorY);
+        if (curMap.mapLayer.size() > 4) position.ry() -= curMap.mapLayer[4].pic[actorX][actorY];
+        if (tile < m_grpPics.size()) position -= QPoint(m_grpPics[tile].xoff, m_grpPics[tile].yoff);
+        drawBackdropSprite(p, m_tileCache[tile], position, backdropDepth(actorX, actorY, mapW, mapH));
     };
 
     // 对角线遍历 (匹配 Delphi displayscenemap 绘制顺序, 所有层一起绘制)
@@ -433,6 +699,7 @@ void SceneMapEdit::renderMap()
             if (showBuilding) drawOneTile(1, ix, iy, sp, 4);
             if (showSky)      drawOneTile(2, ix, iy, sp, 5);
             if (showEvent)    drawEventTile(ix, iy, sp);
+            drawActor(ix, iy);
         }
         // 列扫描: ix = i, iy from i+1 to mapH-1
         for (int iy = i + 1; iy < mapH; ++iy) {
@@ -442,7 +709,19 @@ void SceneMapEdit::renderMap()
             if (showBuilding) drawOneTile(1, ix, iy, sp, 4);
             if (showSky)      drawOneTile(2, ix, iy, sp, 5);
             if (showEvent)    drawEventTile(ix, iy, sp);
+            drawActor(ix, iy);
         }
+    }
+
+    if (backdrop && !m_exporting && m_backdropOverlay->isChecked()) {
+        QImage overlay(m_backdrop.size(), QImage::Format_ARGB32);
+        overlay.fill(Qt::transparent);
+        for (int row = 0; row < overlay.height(); ++row) {
+            auto *pixels = reinterpret_cast<QRgb *>(overlay.scanLine(row));
+            for (int column = 0; column < overlay.width(); ++column)
+                if (m_backdropDepth[row * overlay.width() + column] >= 0) pixels[column] = qRgba(230, 40, 80, 100);
+        }
+        p.drawImage(m_backdropX->value(), m_backdropY->value(), overlay);
     }
 
     // 事件标签 (所有图层绘制完后单独遍历, 匹配 Delphi TextOut)
@@ -723,6 +1002,7 @@ bool SceneMapEdit::hasUnsavedChanges()
 
 void SceneMapEdit::closeEvent(QCloseEvent *event)
 {
+    if (!confirmBackdropDiscard()) { event->ignore(); return; }
     if (hasUnsavedChanges() && QMessageBox::warning(this, tr("未保存的场景"), tr("存在未保存的进度，确定放弃修改并关闭？"),
         QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) != QMessageBox::Discard) {
         event->ignore(); return;
@@ -860,6 +1140,12 @@ void SceneMapEdit::onExportImage()
 
 void SceneMapEdit::handleMouseMove(QMouseEvent *event)
 {
+    if (backdropActive() && m_backdropTool->currentIndex() != 0) {
+        int tool = m_backdropTool->currentIndex();
+        if ((tool == 2 || tool == 3) && (event->buttons() & (Qt::LeftButton | Qt::RightButton)))
+            paintBackdrop(event->pos(), tool == 3 || event->buttons().testFlag(Qt::RightButton));
+        return;
+    }
     IsoMapEditor::handleMouseMove(event);
     QPoint iso = screenToIso(event->pos().x(), event->pos().y());
     updateTilePreview(iso.x(), iso.y());
@@ -875,6 +1161,16 @@ void SceneMapEdit::syncCurrentScene()
 
 void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
 {
+    if (backdropActive() && m_backdropTool->currentIndex() != 0) {
+        if (m_backdropTool->currentIndex() == 2 || m_backdropTool->currentIndex() == 3) {
+            m_backdropHistory.resize(m_backdropHistoryPos + 1);
+            m_backdropHistory.append(m_backdropDepth);
+            const int historyLimit = qMax(2, qMin(8, int(128 * 1024 * 1024 / qMax(qint64(1), qint64(m_backdropDepth.size()) * 4))));
+            while (m_backdropHistory.size() > historyLimit) m_backdropHistory.removeFirst();
+            m_backdropHistoryPos = m_backdropHistory.size() - 1;
+        }
+        return;
+    }
     if (m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
     int layer = m_layerCombo->currentIndex();
     if (event->button() != Qt::LeftButton && !(event->button() == Qt::RightButton && (layer == 4 || layer == 6))) return;
