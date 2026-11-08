@@ -656,13 +656,24 @@ inline int runSelfTests(const QString &reportPath)
             require(editor.shapes.size() == 2 && editor.shapes[1].type == "tree", "Polygon closing failed");
             editor.tool->setCurrentIndex(4); editor.press(QPointF(220, 260), Qt::LeftButton);
             require(editor.shapes[1].pivotY == 260, "Point-picked tree root was not saved");
+            QImage holeSprite(4, 4, QImage::Format_ARGB32); holeSprite.fill(Qt::red);
+            require(qAbs(editor.maskSprite(holeSprite, QPoint(199, 199), QPointF(220, 210)).pixelColor(1, 1).alpha() - 77) <= 1,
+                "Polygon did not hide the sprite before adding a hole");
+            editor.tool->setCurrentIndex(5);
+            editor.press(QPointF(200, 200), Qt::LeftButton); editor.press(QPointF(203, 200), Qt::LeftButton);
+            editor.press(QPointF(203, 203), Qt::LeftButton); editor.press(QPointF(200, 203), Qt::LeftButton);
+            editor.press(QPointF(200, 203), Qt::RightButton);
+            require(editor.shapes[1].holes.size() == 1
+                && editor.maskSprite(holeSprite, QPoint(199, 199), QPointF(220, 210)).pixelColor(1, 1) == QColor(Qt::red),
+                "Hole polygon did not reveal sprite pixels");
             const QString path = temporary.filePath("geometry.json");
             require(editor.saveJson(path) && !editor.dirty, "Geometry JSON atomic save failed");
             const QByteArray bytes = FileIO::readFileAll(path);
             editor.reset(); origin = QPoint();
             require(editor.loadJson(path) && editor.shapes.size() == 2 && origin == QPoint(1152, 18)
-                && editor.shapes[1].pivotY == 260 && editor.hiddenAlpha->value() == 0.3,
-                "Geometry JSON lost shapes, root, origin or alpha");
+                && editor.shapes[1].pivotY == 260 && editor.shapes[1].holes.size() == 1
+                && editor.hiddenAlpha->value() == 0.3,
+                "Geometry JSON lost shapes, root, holes, origin or alpha");
             require(FileIO::writeFileAll(path, bytes.chopped(5)) && !editor.loadJson(path) && editor.shapes.size() == 2,
                 "Corrupt geometry JSON changed active shapes");
             auto html = QJsonDocument::fromJson(bytes).object();

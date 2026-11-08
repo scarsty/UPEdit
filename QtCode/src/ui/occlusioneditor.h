@@ -28,6 +28,7 @@ public:
         QString id, name, type = "wall";
         QColor color = QColor("#e6a52a");
         QPolygonF points;
+        QVector<QPolygonF> holes;
         double height = 80, pivotY = 0;
         bool visible = true, locked = false;
         QPolygonF polygon() const {
@@ -58,9 +59,9 @@ public:
         auto *form = new QFormLayout(this);
         tool = new QComboBox;
         tool->addItems({tr("原地图编辑"), tr("选择标注"), tr("墙根两点 + 高度"),
-            tr("树木 / 屋檐多边形"), tr("点选树根基准"), tr("模拟人物")});
+            tr("树木 / 屋檐多边形"), tr("点选树根基准"), tr("镂空区域"), tr("模拟人物")});
         form->addRow(tr("几何标注工具"), tool);
-        tool->setToolTip(tr("墙体：点击墙根 A、B，再向上移动点击确定高度。多边形：逐点点击，右键闭合；Esc 取消。"));
+        tool->setToolTip(tr("墙体：点击墙根 A、B，再向上移动点击确定高度。多边形或镂空：逐点点击，右键闭合；Esc 取消。"));
         overlay = new QCheckBox(tr("显示几何标注")); overlay->setChecked(true);
         form->addRow(overlay);
         grid = new QCheckBox(tr("等轴辅助网格")); form->addRow(grid);
@@ -131,7 +132,7 @@ public:
         connect(escape, &QShortcut::activated, this, [this] { cancel(); });
     }
     bool active() const { return tool->currentIndex() != 0; }
-    bool simulating() const { return tool->currentIndex() == 5; }
+    bool simulating() const { return tool->currentIndex() == 6; }
     bool confirmDiscard() {
         return !dirty || QMessageBox::question(this, tr("几何遮挡标注"), tr("标注尚未导出 JSON，放弃修改？"),
             QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Discard;
@@ -142,6 +143,27 @@ public:
         cursor = point;
         const int mode = tool->currentIndex();
         if (mode == 1 && button == Qt::LeftButton) {
+            dragShape = -1; dragHole = -1; dragVertex = -1;
+            double nearest = 8.0;
+            const int selectedRow = list->currentRow();
+            if (selectedRow >= 0 && selectedRow < shapes.size() && !shapes[selectedRow].locked) {
+                auto tryVertex = [&](const QPolygonF &polygon, int hole) {
+                    for (int vertex = 0; vertex < polygon.size(); ++vertex) {
+                        const double distance = QLineF(point, polygon[vertex]).length();
+                        if (distance < nearest) {
+                            nearest = distance; dragShape = selectedRow; dragHole = hole; dragVertex = vertex;
+                        }
+                    }
+                };
+                if (shapes[selectedRow].type == "wall") tryVertex(shapes[selectedRow].points, -1);
+                else tryVertex(shapes[selectedRow].points, -1);
+                for (int hole = 0; hole < shapes[selectedRow].holes.size(); ++hole)
+                    tryVertex(shapes[selectedRow].holes[hole], hole);
+            }
+            if (dragShape >= 0) {
+                checkpoint(); dragging = true;
+                notify(); return true;
+            }
             int selected = -1;
             for (int index = shapes.size() - 1; index >= 0; --index)
                 if (shapes[index].visible && shapes[index].polygon().containsPoint(point, Qt::OddEvenFill)) { selected = index; break; }
@@ -159,10 +181,27 @@ public:
             }
         } else if (mode == 4 && button == Qt::LeftButton) {
             edit([point](Shape &shape) { if (shape.type != "wall") shape.pivotY = point.y(); });
+        } else if (mode == 5) {
+            const int index = list->currentRow();
+            if (index < 0 || index >= shapes.size() || shapes[index].locked) return true;
+            if (button == Qt::LeftButton && shapes[index].polygon().containsPoint(point, Qt::OddEvenFill)) {
+                pending << point;
+            } else if (button == Qt::RightButton && pending.size() >= 3) {
+                checkpoint(); shapes[index].holes << pending; pending.clear(); commit();
+            }
         }
         notify(); return true;
     }
-    void move(QPointF point) { cursor = point; if (active()) notify(); }
+    void move(QPointF point) {
+        cursor = point;
+        if (dragging && dragShape >= 0 && dragShape < shapes.size()) {
+            if (dragHole < 0) shapes[dragShape].points[dragVertex] = point;
+            else shapes[dragShape].holes[dragHole][dragVertex] = point;
+            dirty = true;
+        }
+        if (active()) notify();
+    }
+    void release() { dragging = false; dragShape = dragHole = dragVertex = -1; }
     void cancel() { pending.clear(); notify(); }
     void draw(QPainter &painter, QPoint offset, QPointF foot) const {
         painter.save(); painter.translate(offset);
@@ -183,6 +222,8 @@ public:
             fill.setAlpha(shape.behind(foot) && polygon.containsPoint(foot, Qt::OddEvenFill) ? 55 : 95);
             painter.setBrush(fill); painter.setPen(QPen(index == list->currentRow() ? Qt::white : shape.color, 2));
             painter.drawPolygon(polygon);
+            painter.setBrush(Qt::NoBrush); painter.setPen(QPen(QColor("#ef4565"), 1, Qt::DashLine));
+            for (const auto &hole : shape.holes) painter.drawPolygon(hole);
             painter.setPen(QPen(QColor("#29b9d0"), 2));
             if (shape.type == "wall") {
                 painter.drawLine(shape.points[0], shape.points[1]);
@@ -191,6 +232,13 @@ public:
             } else {
                 painter.drawLine(QPointF(polygon.boundingRect().left(), shape.pivotY), QPointF(polygon.boundingRect().right(), shape.pivotY));
                 painter.setBrush(QColor("#ea4561")); painter.drawEllipse(QPointF(polygon.boundingRect().center().x(), shape.pivotY), 3, 3);
+            }
+            if (index == list->currentRow()) {
+                painter.setBrush(QColor("#2ab8d1")); painter.setPen(Qt::NoPen);
+                for (const auto &point : shape.points) painter.drawEllipse(point, 4, 4);
+                painter.setBrush(QColor("#ef4565"));
+                for (const auto &hole : shape.holes)
+                    for (const auto &point : hole) painter.drawEllipse(point, 4, 4);
             }
             painter.setPen(shape.color); painter.drawText(polygon.boundingRect().topLeft() - QPointF(0, 4), shape.name);
         }
@@ -214,13 +262,18 @@ public:
             const QRect bounds = polygon.boundingRect().toAlignedRect().translated(-position).intersected(result.rect());
             for (int row = bounds.top(); row <= bounds.bottom(); ++row) {
                 auto *pixels = reinterpret_cast<QRgb *>(result.scanLine(row));
-                for (int column = bounds.left(); column <= bounds.right(); ++column)
-                    if (!applied.scanLine(row)[column]
-                        && polygon.containsPoint(QPointF(position + QPoint(column, row)) + QPointF(0.5, 0.5), Qt::OddEvenFill)) {
+                for (int column = bounds.left(); column <= bounds.right(); ++column) {
+                    const QPointF pixelPoint = QPointF(position + QPoint(column, row)) + QPointF(0.5, 0.5);
+                    bool inHole = false;
+                    for (const auto &hole : shape.holes)
+                        if (hole.containsPoint(pixelPoint, Qt::OddEvenFill)) { inHole = true; break; }
+                    if (!inHole && !applied.scanLine(row)[column]
+                        && polygon.containsPoint(pixelPoint, Qt::OddEvenFill)) {
                         pixels[column] = qRgba(qRed(pixels[column]), qGreen(pixels[column]), qBlue(pixels[column]),
                             qRound(qAlpha(pixels[column]) * hiddenAlpha->value()));
                         applied.scanLine(row)[column] = 1;
                     }
+                }
             }
         }
         return result;
@@ -230,10 +283,12 @@ public:
         for (const auto &shape : shapes) {
             auto encode = [](const QPolygonF &points) { QJsonArray array; for (auto point : points)
                 array.append(QJsonObject{{"x", point.x()}, {"y", point.y()}}); return array; };
+            QJsonArray holes;
+            for (const auto &hole : shape.holes) holes.append(encode(hole));
             items.append(QJsonObject{{"id", shape.id}, {"name", shape.name}, {"type", shape.type},
                 {"color", shape.color.name()}, {"visible", shape.visible}, {"locked", shape.locked},
                 {"occlusionData", QJsonObject{{"wallBase", shape.type == "wall" ? encode(shape.points) : QJsonArray()},
-                    {"wallHeight", shape.height}, {"rootPivotY", shape.pivotY}, {"polygon", encode(shape.polygon())}}}});
+                    {"wallHeight", shape.height}, {"rootPivotY", shape.pivotY}, {"polygon", encode(shape.polygon())}, {"holes", holes}}}});
         }
         const QPoint origin = getOrigin ? getOrigin() : QPoint(1152, 18);
         const QJsonObject root{{"version", "2.1.0"}, {"coordinateSystem", "image-pixels"},
@@ -277,6 +332,19 @@ public:
                 if (!number(data["rootPivotY"])) return false;
                 shape.pivotY = data["rootPivotY"].toDouble();
             }
+            if (data.contains("holes")) {
+                if (!data["holes"].isArray() || data["holes"].toArray().size() > 4096) return false;
+                for (const auto &holeValue : data["holes"].toArray()) {
+                    if (!holeValue.isArray() || holeValue.toArray().size() < 3 || holeValue.toArray().size() > 4096) return false;
+                    QPolygonF hole;
+                    for (const auto &vertex : holeValue.toArray()) {
+                        const auto point = vertex.toObject();
+                        if (!number(point["x"]) || !number(point["y"])) return false;
+                        hole << QPointF(point["x"].toDouble(), point["y"].toDouble());
+                    }
+                    shape.holes << hole;
+                }
+            }
             shape.id = object["id"].toString(QUuid::createUuid().toString(QUuid::WithoutBraces));
             shape.name = object["name"].toString(); shape.color = QColor(object["color"].toString("#e6a52a"));
             if (!shape.color.isValid()) return false;
@@ -297,6 +365,8 @@ private:
     QCheckBox *visible, *locked;
     QPolygonF pending;
     QPointF cursor;
+    bool dragging = false;
+    int dragShape = -1, dragHole = -1, dragVertex = -1;
     QVector<QVector<Shape>> past, future;
     void notify() { if (changed) changed(); }
     void checkpoint() { past.append(shapes); if (past.size() > 40) past.removeFirst(); future.clear(); }

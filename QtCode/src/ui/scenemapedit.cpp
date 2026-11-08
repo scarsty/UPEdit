@@ -1439,7 +1439,7 @@ void SceneMapEdit::syncCurrentScene()
 
 void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
 {
-    if (backdropActive() && m_geometry->active()) return;
+    if (backdropActive() && m_geometry->active()) { m_geometry->release(); return; }
     if (backdropActive() && m_backdropTool->currentIndex() != 0) {
         if (m_backdropTool->currentIndex() == 2 || m_backdropTool->currentIndex() == 3) {
             m_backdropHistory.resize(m_backdropHistoryPos + 1);

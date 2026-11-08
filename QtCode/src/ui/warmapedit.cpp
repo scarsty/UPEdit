@@ -900,7 +900,7 @@ void WarMapEdit::handleMousePress(QMouseEvent *event)
 
 void WarMapEdit::handleMouseRelease(QMouseEvent *event)
 {
-    if (backdropActive() && m_geometry->active()) return;
+    if (backdropActive() && m_geometry->active()) { m_geometry->release(); return; }
     if (m_maskStroke) { recordBackdropStroke(); renderMap(); return; }
     if (backdropActive() && m_backdropTool->currentIndex() != 0) return;
     if (event->button() != Qt::LeftButton || !m_isSelecting) return;
