@@ -990,8 +990,7 @@ void SceneMapEdit::renderMap()
         }
     }
 
-    m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
-    m_mapLabel->resize(m_mapImage.size());
+    updateCanvasDisplay();
 }
 
 void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)

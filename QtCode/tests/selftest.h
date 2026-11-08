@@ -626,6 +626,44 @@ inline int runSelfTests(const QString &reportPath)
         }
         output << "PASS: immediate operation-layer pixel refresh in main, scene and war editors without timer or mouse input\n";
         {
+            SceneMapEdit editor;
+            editor.m_mapImage = QImage(1200, 900, QImage::Format_RGB32);
+            editor.m_mapImage.fill(Qt::white);
+            editor.updateCanvasDisplay();
+            output << "START: scene canvas wheel and timer dispatch\n"; output.flush();
+            QWheelEvent wheel(QPointF(300, 200), QPointF(300, 200), QPoint(), QPoint(0, 120),
+                Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(editor.m_mapLabel, &wheel);
+            require(editor.m_canvasZoomPending, "Canvas wheel did not schedule zoom");
+            QMetaObject::invokeMethod(editor.m_canvasZoomTimer, "timeout", Qt::DirectConnection);
+            require(editor.m_displayZoom > 1.0 && !editor.m_canvasZoomPending,
+                "Canvas wheel timer did not apply zoom");
+            for (int step = 0; step < 8; ++step) {
+                QWheelEvent viewportWheel(QPointF(100, 100), QPointF(100, 100), QPoint(),
+                    QPoint(0, step < 4 ? 120 : -120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+                QApplication::sendEvent(editor.m_scroll->viewport(), &viewportWheel);
+                QMetaObject::invokeMethod(editor.m_canvasZoomTimer, "timeout", Qt::DirectConnection);
+                require(std::isfinite(editor.m_displayZoom) && editor.m_displayZoom > 0,
+                    "Viewport repeated wheel produced invalid zoom");
+            }
+        }
+        {
+            SceneMapEdit editor;
+            editor.m_mapImage = QImage(2604, 1452, QImage::Format_RGB32);
+            editor.m_mapImage.fill(Qt::white);
+            editor.updateCanvasDisplay();
+            editor.setCanvasZoom(4.0, QPoint(100, 100));
+            QMetaObject::invokeMethod(editor.m_canvasZoomTimer, "timeout", Qt::DirectConnection);
+            require(editor.m_displayZoom == 4.0 && editor.m_mapLabel->size() == QSize(10416, 5808)
+                && editor.canvasPoint(QPoint(400, 800)) == QPoint(100, 200),
+                "Large canvas cannot reach 400 percent or zoom coordinates drift");
+            editor.setCanvasZoom(0.25, QPoint(100, 100));
+            QMetaObject::invokeMethod(editor.m_canvasZoomTimer, "timeout", Qt::DirectConnection);
+            require(editor.m_displayZoom == 0.25 && editor.canvasPoint(QPoint(100, 200)) == QPoint(400, 800),
+                "Large canvas cannot return to 25 percent");
+        }
+        output << "PASS: scene canvas wheel and timer dispatch, large canvas 25-400 percent\n";
+        {
             OcclusionEditor editor;
             QPoint origin(1152, 18);
             editor.getOrigin = [&] { return origin; };
@@ -649,6 +687,16 @@ inline int runSelfTests(const QString &reportPath)
             require(qAbs(editor.maskSprite(sprite, QPoint(59, 100), QPointF(60, 120)).pixelColor(0, 0).alpha() - 77) <= 1,
                 "Overlapping geometry repeatedly attenuated sprite alpha");
             editor.shapes.removeLast();
+            editor.tool->setCurrentIndex(1);
+            editor.press(QPointF(110, 70), Qt::LeftButton);
+            editor.move(QPointF(110, 50)); editor.release();
+            require(editor.shapes[0].height == 100, "Wall top control point did not change height");
+            editor.press(QPointF(60, 100), Qt::LeftButton);
+            editor.move(QPointF(80, 120)); editor.release();
+            require(editor.shapes[0].points[0] == QPointF(30, 120)
+                && editor.shapes[0].points[1] == QPointF(130, 170)
+                && editor.shapes[0].height == 100,
+                "Dragging inside a shape did not move the complete annotation");
             editor.tool->setCurrentIndex(3);
             editor.press(QPointF(200, 200), Qt::LeftButton); editor.press(QPointF(240, 200), Qt::LeftButton);
             editor.press(QPointF(240, 240), Qt::LeftButton); editor.press(QPointF(200, 240), Qt::LeftButton);
@@ -686,6 +734,16 @@ inline int runSelfTests(const QString &reportPath)
             items[0] = item; invalid["items"] = items;
             require(FileIO::writeFileAll(path, QJsonDocument(invalid).toJson()) && !editor.loadJson(path)
                 && editor.shapes.size() == 2, "Invalid wall JSON replaced current geometry");
+            editor.loadJson(path);
+            editor.selectShape(1);
+            const QString sourceId = editor.shapes[1].id;
+            require(editor.copySelected(), "Selected geometry could not be copied");
+            editor.beginPaste();
+            editor.press(QPointF(400, 400), Qt::LeftButton);
+            require(editor.shapes.size() == 3 && editor.shapes[2].id != sourceId
+                && editor.shapes[2].holes.size() == 1
+                && editor.shapes[2].points[0] == editor.shapes[1].points[0] + QPointF(180, 180),
+                "Copied geometry did not paste as an offset independent shape");
             QImage overlay(300, 300, QImage::Format_ARGB32); overlay.fill(Qt::transparent);
             { QPainter painter(&overlay); editor.draw(painter, QPoint(), QPointF(60, 120)); }
             require(overlay.pixelColor(60, 100).alpha() > 0, "Geometry display has no visible polygon fill");

@@ -22,6 +22,8 @@
 #include <QDialog>
 #include <QListWidget>
 #include <QDialogButtonBox>
+#include <QWheelEvent>
+#include <QScrollBar>
 
 // ============ IsoMapEditor 基类 ============
 
@@ -49,8 +51,13 @@ IsoMapEditor::IsoMapEditor(QWidget *parent) : QWidget(parent)
     m_mapLabel = new QLabel;
     m_mapLabel->setMouseTracking(true);
     m_mapLabel->installEventFilter(this);
+    m_scroll->viewport()->installEventFilter(this);
     m_scroll->setWidget(m_mapLabel);
     m_scroll->setWidgetResizable(false);
+    m_canvasZoomTimer = new QTimer(this);
+    m_canvasZoomTimer->setSingleShot(true);
+    m_canvasZoomTimer->setInterval(120);
+    connect(m_canvasZoomTimer, &QTimer::timeout, this, &IsoMapEditor::applyCanvasZoom);
 
     mainLayout->addLayout(leftPanel);
     mainLayout->addWidget(m_scroll, 1);
@@ -99,6 +106,46 @@ QPoint IsoMapEditor::screenToIso(int sx, int sy) const
     double ix = (dx / tw + dy / th) / 2.0;
     double iy = (dy / th - dx / tw) / 2.0;
     return {qFloor(ix + 0.5), qFloor(iy + 0.5)};
+}
+
+QPoint IsoMapEditor::canvasPoint(const QPoint &viewPoint) const
+{
+    return QPoint(qRound(viewPoint.x() / m_displayZoom), qRound(viewPoint.y() / m_displayZoom));
+}
+
+void IsoMapEditor::updateCanvasDisplay()
+{
+    if (m_mapImage.isNull()) { m_mapLabel->clear(); return; }
+    const QSize size(qMax(1, qRound(m_mapImage.width() * m_displayZoom)),
+        qMax(1, qRound(m_mapImage.height() * m_displayZoom)));
+    m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
+    m_mapLabel->resize(size);
+    m_mapLabel->update();
+}
+
+void IsoMapEditor::setCanvasZoom(double zoom, const QPoint &anchor)
+{
+    if (!m_scroll || !m_mapLabel || m_mapImage.isNull() || !std::isfinite(zoom)) return;
+    const double next = qBound(0.25, zoom, 4.0);
+    if (qFuzzyCompare(next, m_canvasZoom)) return;
+    m_canvasZoom = next;
+    m_canvasZoomPending = true;
+    m_canvasZoomAnchor = anchor;
+    m_canvasZoomTimer->start();
+}
+
+void IsoMapEditor::applyCanvasZoom()
+{
+    if (!m_canvasZoomPending || !m_scroll || !m_mapLabel) return;
+    m_canvasZoomPending = false;
+    const QPoint anchor = m_canvasZoomAnchor;
+    const QPoint oldContent = m_mapLabel->mapFrom(m_scroll->viewport(), anchor);
+    const double oldZoom = m_displayZoom;
+    m_displayZoom = m_canvasZoom;
+    updateCanvasDisplay();
+    const double ratio = m_displayZoom / oldZoom;
+    m_scroll->horizontalScrollBar()->setValue(qRound(oldContent.x() * ratio - anchor.x()));
+    m_scroll->verticalScrollBar()->setValue(qRound(oldContent.y() * ratio - anchor.y()));
 }
 
 void IsoMapEditor::drawIsoTile(QPainter &p, int ix, int iy, const QImage &sprite, int xoff, int yoff)
@@ -187,17 +234,42 @@ void IsoMapEditor::setupSections(QVBoxLayout *left, const QString &prefix, const
 
 bool IsoMapEditor::eventFilter(QObject *obj, QEvent *event)
 {
-    if (obj == m_mapLabel) {
+    if (obj == m_mapLabel && event->type() == QEvent::Paint && !m_mapImage.isNull()) {
+        QPainter painter(m_mapLabel);
+        painter.scale(m_displayZoom, m_displayZoom);
+        painter.drawImage(QPoint(), m_mapImage);
+        return true;
+    }
+    if (obj == m_mapLabel || obj == m_scroll->viewport()) {
+        const bool onViewport = obj == m_scroll->viewport();
         if (event->type() == QEvent::MouseButtonPress) {
-            handleMousePress(static_cast<QMouseEvent*>(event));
+            auto *source = static_cast<QMouseEvent*>(event);
+            const QPoint position = onViewport ? m_mapLabel->mapFrom(m_scroll->viewport(), source->pos()) : source->pos();
+            QMouseEvent translated(source->type(), canvasPoint(position), source->button(), source->buttons(), source->modifiers());
+            handleMousePress(&translated);
             return true;
         }
         if (event->type() == QEvent::MouseMove) {
-            handleMouseMove(static_cast<QMouseEvent*>(event));
+            auto *source = static_cast<QMouseEvent*>(event);
+            const QPoint position = onViewport ? m_mapLabel->mapFrom(m_scroll->viewport(), source->pos()) : source->pos();
+            QMouseEvent translated(source->type(), canvasPoint(position), source->button(), source->buttons(), source->modifiers());
+            handleMouseMove(&translated);
             return true;
         }
         if (event->type() == QEvent::MouseButtonRelease) {
-            handleMouseRelease(static_cast<QMouseEvent*>(event));
+            auto *source = static_cast<QMouseEvent*>(event);
+            const QPoint position = onViewport ? m_mapLabel->mapFrom(m_scroll->viewport(), source->pos()) : source->pos();
+            QMouseEvent translated(source->type(), canvasPoint(position), source->button(), source->buttons(), source->modifiers());
+            handleMouseRelease(&translated);
+            return true;
+        }
+        if (event->type() == QEvent::Wheel) {
+            auto *wheel = static_cast<QWheelEvent*>(event);
+            if (wheel->angleDelta().isNull() && wheel->pixelDelta().isNull()) return true;
+            const double factor = wheel->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
+            const QPoint anchor = onViewport ? wheel->position().toPoint()
+                : m_mapLabel->mapTo(m_scroll->viewport(), wheel->position().toPoint());
+            setCanvasZoom(m_canvasZoom * factor, anchor);
             return true;
         }
     }
@@ -811,8 +883,7 @@ void WarMapEdit::renderMap()
     if (m_isSelecting && inCurrentMap(m_pressIsoX, m_pressIsoY) && inCurrentMap(m_hoverIsoX, m_hoverIsoY))
         drawRegion(p, QRect(QPoint(m_pressIsoX, m_pressIsoY), QPoint(m_hoverIsoX, m_hoverIsoY)).normalized(), Qt::yellow);
 
-    m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
-    m_mapLabel->resize(m_mapImage.size());
+    updateCanvasDisplay();
 
     updateThumbnail();
 }

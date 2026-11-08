@@ -76,6 +76,7 @@ public:
         visible = new QCheckBox(tr("显示并参与遮挡")); locked = new QCheckBox(tr("锁定标注"));
         form->addRow(visible, locked);
         auto *color = new QPushButton(tr("标注颜色")); auto *remove = new QPushButton(tr("删除标注")); form->addRow(color, remove);
+        auto *copy = new QPushButton(tr("复制当前标注")); auto *paste = new QPushButton(tr("粘贴标注到画布")); form->addRow(copy, paste);
         auto *undo = new QPushButton(tr("撤销标注")); auto *redo = new QPushButton(tr("重做标注")); form->addRow(undo, redo);
         auto *load = new QPushButton(tr("导入标注 JSON")); auto *save = new QPushButton(tr("导出标注 JSON")); form->addRow(load, save);
         connect(tool, &QComboBox::currentIndexChanged, this, [this] { pending.clear(); notify(); });
@@ -107,6 +108,8 @@ public:
             const int index = list->currentRow(); if (index < 0 || shapes[index].locked) return;
             checkpoint(); shapes.removeAt(index); commit();
         });
+        connect(copy, &QPushButton::clicked, this, [this] { copySelected(); });
+        connect(paste, &QPushButton::clicked, this, [this] { beginPaste(); });
         connect(undo, &QPushButton::clicked, this, [this] {
             if (past.isEmpty()) return;
             future.append(shapes); shapes = past.takeLast(); dirty = true; pending.clear(); refresh(); notify();
@@ -138,11 +141,27 @@ public:
             QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Discard;
     }
     void reset() { shapes.clear(); pending.clear(); past.clear(); future.clear(); dirty = false; refresh(); }
+    bool copySelected() {
+        const int index = list->currentRow();
+        if (index < 0 || index >= shapes.size()) return false;
+        clipboard = shapes[index]; hasClipboard = true; pasteMode = false; return true;
+    }
+    void selectShape(int index) { list->setCurrentRow(index); }
+    void beginPaste() { if (hasClipboard) { tool->setCurrentIndex(1); pasteMode = true; notify(); } }
     bool press(QPointF point, Qt::MouseButton button) {
         if (!active()) return false;
         cursor = point;
         const int mode = tool->currentIndex();
         if (mode == 1 && button == Qt::LeftButton) {
+            if (pasteMode && hasClipboard) {
+                Shape pasted = clipboard;
+                const QPointF delta = point - clipboard.polygon().boundingRect().center();
+                pasted.points.translate(delta);
+                for (auto &hole : pasted.holes) hole.translate(delta);
+                if (pasted.type != "wall") pasted.pivotY += delta.y();
+                pasted.locked = false;
+                append(pasted); pasteMode = false; return true;
+            }
             dragShape = -1; dragHole = -1; dragVertex = -1;
             double nearest = 8.0;
             const int selectedRow = list->currentRow();
@@ -157,17 +176,31 @@ public:
                 };
                 if (shapes[selectedRow].type == "wall") tryVertex(shapes[selectedRow].points, -1);
                 else tryVertex(shapes[selectedRow].points, -1);
+                if (shapes[selectedRow].type == "wall") {
+                    const auto &shape = shapes[selectedRow];
+                    for (int vertex = 0; vertex < 2; ++vertex) {
+                        const QPointF top = shape.points[vertex] - QPointF(0, shape.height);
+                        const double distance = QLineF(point, top).length();
+                        if (distance < nearest) {
+                            nearest = distance; dragShape = selectedRow; dragHole = -3; dragVertex = vertex;
+                        }
+                    }
+                }
                 for (int hole = 0; hole < shapes[selectedRow].holes.size(); ++hole)
                     tryVertex(shapes[selectedRow].holes[hole], hole);
             }
             if (dragShape >= 0) {
-                checkpoint(); dragging = true;
+                checkpoint(); dragging = true; dragLastPoint = point;
                 notify(); return true;
             }
             int selected = -1;
             for (int index = shapes.size() - 1; index >= 0; --index)
                 if (shapes[index].visible && shapes[index].polygon().containsPoint(point, Qt::OddEvenFill)) { selected = index; break; }
             list->setCurrentRow(selected);
+            if (selected >= 0 && !shapes[selected].locked) {
+                dragShape = selected; dragHole = -2; dragVertex = -1;
+                dragging = true; dragLastPoint = point; checkpoint();
+            }
         } else if (mode == 2 && button == Qt::LeftButton) {
             if (pending.size() < 2) pending << point;
             else if (qAbs(pending[1].x() - pending[0].x()) >= 1) {
@@ -195,8 +228,17 @@ public:
     void move(QPointF point) {
         cursor = point;
         if (dragging && dragShape >= 0 && dragShape < shapes.size()) {
-            if (dragHole < 0) shapes[dragShape].points[dragVertex] = point;
-            else shapes[dragShape].holes[dragHole][dragVertex] = point;
+            Shape &shape = shapes[dragShape];
+            if (dragHole == -2) {
+                const QPointF delta = point - dragLastPoint;
+                shape.points.translate(delta);
+                for (auto &hole : shape.holes) hole.translate(delta);
+                if (shape.type != "wall") shape.pivotY += delta.y();
+            } else if (dragHole == -3 && shape.type == "wall") {
+                shape.height = qMax(1.0, shape.points[dragVertex].y() - point.y());
+            } else if (dragHole < 0) shape.points[dragVertex] = point;
+            else shape.holes[dragHole][dragVertex] = point;
+            dragLastPoint = point;
             dirty = true;
         }
         if (active()) notify();
@@ -236,6 +278,10 @@ public:
             if (index == list->currentRow()) {
                 painter.setBrush(QColor("#2ab8d1")); painter.setPen(Qt::NoPen);
                 for (const auto &point : shape.points) painter.drawEllipse(point, 4, 4);
+                if (shape.type == "wall") {
+                    painter.setBrush(QColor("#f2bd4b"));
+                    for (const auto &point : shape.polygon()) painter.drawEllipse(point, 4, 4);
+                }
                 painter.setBrush(QColor("#ef4565"));
                 for (const auto &hole : shape.holes)
                     for (const auto &point : hole) painter.drawEllipse(point, 4, 4);
@@ -367,6 +413,9 @@ private:
     QPointF cursor;
     bool dragging = false;
     int dragShape = -1, dragHole = -1, dragVertex = -1;
+    QPointF dragLastPoint;
+    Shape clipboard;
+    bool hasClipboard = false, pasteMode = false;
     QVector<QVector<Shape>> past, future;
     void notify() { if (changed) changed(); }
     void checkpoint() { past.append(shapes); if (past.size() > 40) past.removeFirst(); future.clear(); }

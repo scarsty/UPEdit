@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QSpinBox>
 #include <QToolButton>
+#include <QTimer>
 #include "head.h"
 #include "occlusioneditor.h"
 
@@ -54,6 +55,11 @@ protected:
     QVector<QImage> m_tileCache;  // 解码后的精灵缓存
 
     int m_tileScale = 1;
+    double m_canvasZoom = 1.0;
+    double m_displayZoom = 1.0;
+    QTimer *m_canvasZoomTimer = nullptr;
+    bool m_canvasZoomPending = false;
+    QPoint m_canvasZoomAnchor;
     int m_currentLayer = 0;
     int m_selectedTileId = -1;
     int m_selIsoX = -1, m_selIsoY = -1;
@@ -61,6 +67,10 @@ protected:
 
     // 渲染坐标原点 (isoToScreen 使用)
     int m_renderCenterX = 0, m_renderCenterY = 0;
+    QPoint canvasPoint(const QPoint &viewPoint) const;
+    void updateCanvasDisplay();
+    void setCanvasZoom(double zoom, const QPoint &anchor);
+    void applyCanvasZoom();
 
 protected:
     bool eventFilter(QObject *obj, QEvent *event) override;
