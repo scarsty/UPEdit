@@ -29,6 +29,7 @@ protected:
     void resizeEvent(QResizeEvent *e) override;
     void handleMouseRelease(QMouseEvent *event) override;
     void handleMousePress(QMouseEvent *event) override;
+    void handleMouseMove(QMouseEvent *event) override;
 
 private:
     void readMainMapFile();
@@ -65,6 +66,7 @@ private:
     int m_copyMapMode = 0;
     Map m_moduleMap;
     QPoint m_selectionStart{-1, -1};
+    QRect m_selectedRegion;
 
     // 左侧面板元素
     QLabel *m_lblEarthVal = nullptr, *m_lblSurfVal = nullptr;

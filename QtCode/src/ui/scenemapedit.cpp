@@ -25,6 +25,7 @@
 #include <cstring>
 #include "imzdata.h"
 #include <QBuffer>
+#include <cmath>
 
 int SceneMapEdit::backdropDepth(int x, int y, int width, int height)
 {
@@ -46,9 +47,23 @@ bool SceneMapEdit::confirmBackdropDiscard()
         QMessageBox::Cancel) == QMessageBox::Discard;
 }
 
+void SceneMapEdit::alignImportedBackdrop()
+{
+    if (m_mapData.map.isEmpty() || m_backdrop.isNull()) return;
+    const auto &map = m_mapData.map[0];
+    const QSize padded((map.x + map.y) * tileW() + 2 * tilePadding(),
+        (map.x + map.y) * tileH() + 2 * tilePadding());
+    const bool includesPadding = m_backdrop.size() == padded;
+    const QSignalBlocker blockX(m_backdropX);
+    const QSignalBlocker blockY(m_backdropY);
+    m_backdropX->setValue(includesPadding ? 0 : tilePadding());
+    m_backdropY->setValue(includesPadding ? 0 : tilePadding() - 2 * tileH());
+}
+
 void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
 {
     auto *group = new QGroupBox(tr("大图场景"));
+    group->setObjectName("backdropSection");
     auto *form = new QFormLayout(group);
     auto *importImage = new QPushButton(tr("导入 WebP / PNG"));
     auto *loadProject = new QPushButton(tr("打开大图项目"));
@@ -89,14 +104,23 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
         form->addRow(label, spin);
         return spin;
     };
-    m_backdropX = addNumber(tr("图像偏移 X"), -32768, 32767, 0);
-    m_backdropY = addNumber(tr("图像偏移 Y"), -32768, 32767, 0);
+    m_backdropX = new QSpinBox(group);
+    m_backdropY = new QSpinBox(group);
+    for (auto *offset : {m_backdropX, m_backdropY}) {
+        offset->setRange(-32768, 32767);
+        offset->hide();
+    }
+    m_backdropDepthInfo = new QLabel(tr("像素：—\n深度：—\n落点：—"));
+    m_backdropDepthInfo->setWordWrap(false);
+    m_backdropDepthInfo->setFixedHeight(m_backdropDepthInfo->fontMetrics().lineSpacing() * 3 + 6);
+    m_backdropDepthInfo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_backdropDepthInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    form->addRow(tr("鼠标处遮挡值"), m_backdropDepthInfo);
     m_brushRadius = addNumber(tr("笔刷半径"), 1, 128, 12);
     m_anchorX = addNumber(tr("建筑落点 X"), 0, 63, 0);
     m_anchorY = addNumber(tr("建筑落点 Y"), 0, 63, 0);
     m_actorX = addNumber(tr("人物 X"), 0, 63, 0);
     m_actorY = addNumber(tr("人物 Y"), 0, 63, 0);
-    m_actorTile = addNumber(tr("人物贴图编号"), 0, 32767, 1);
     layout->insertWidget(0, group);
     connect(importImage, &QPushButton::clicked, this, [this] {
         if (m_currentScene < 0) return;
@@ -114,6 +138,7 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
         m_backdropHistoryPos = 0;
         m_backdropSlot = m_currentSave;
         m_backdropScene = m_currentScene;
+        alignImportedBackdrop();
         m_backdropDirty = true;
         m_backdropEnabled->setChecked(true);
         renderMap();
@@ -133,7 +158,22 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
     });
     for (auto *check : {m_backdropEnabled, m_backdropOverlay, m_actorVisible})
         connect(check, &QCheckBox::toggled, this, [this] { renderMap(); });
-    for (auto *spin : {m_backdropX, m_backdropY, m_actorX, m_actorY, m_actorTile})
+    connect(m_backdropTool, &QComboBox::currentIndexChanged, this, [this](int tool) {
+        if (tool == 2 || tool == 3) m_backdropOverlay->setChecked(true);
+        if (tool == 4) m_actorVisible->setChecked(true);
+        renderMap();
+    });
+    connect(m_actorVisible, &QCheckBox::toggled, this, [this](bool visible) {
+        if (!visible) return;
+        if (m_hoverIsoX >= 0 && m_hoverIsoY >= 0) {
+            m_actorX->setValue(m_hoverIsoX);
+            m_actorY->setValue(m_hoverIsoY);
+        }
+        if (m_tileCache.size() <= 2501 || m_tileCache[2501].isNull())
+            m_statusBar->showMessage(tr("场景贴图库缺少预览人物图片 2501"));
+        renderMap();
+    });
+    for (auto *spin : {m_backdropX, m_backdropY, m_actorX, m_actorY})
         connect(spin, &QSpinBox::valueChanged, this, [this, spin] {
             if (!m_backdrop.isNull() && (spin == m_backdropX || spin == m_backdropY)) m_backdropDirty = true;
             renderMap();
@@ -236,10 +276,54 @@ void SceneMapEdit::paintBackdrop(const QPoint &position, bool erase)
     renderMap();
 }
 
+QPoint SceneMapEdit::screenToIso(int sx, int sy) const
+{
+    const double horizontal = double(sx - m_renderCenterX) / tileW();
+    const double vertical = double(sy - m_renderCenterY + tileH()) / tileH();
+    return QPoint(int(std::floor((horizontal + vertical) / 2.0 + 0.5)),
+        int(std::floor((vertical - horizontal) / 2.0 + 0.5)));
+}
+
+void SceneMapEdit::drawSelection(QPainter &painter, int ix, int iy)
+{
+    const QPoint center = isoToScreen(ix, iy) - QPoint(0, tileH());
+    QPolygon outline;
+    outline << center - QPoint(0, tileH()) << center + QPoint(tileW(), 0)
+        << center + QPoint(0, tileH()) << center - QPoint(tileW(), 0);
+    painter.setPen(QPen(Qt::red, 2));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawPolygon(outline);
+}
+
+QPoint SceneMapEdit::eventClickTile(const QPoint &position) const
+{
+    const int layer = m_layerCombo->currentIndex();
+    QPoint hit = screenToIso(position.x(), position.y());
+    if (m_deleteMode->isChecked() || (layer != 3 && layer != 5)
+        || (backdropActive() && m_backdropTool->currentIndex() != 0) || m_mapData.map.isEmpty()) return hit;
+    const auto &map = m_mapData.map[0];
+    int hitDepth = -1;
+    for (int column = 0; column < map.x; ++column)
+        for (int row = 0; row < map.y; ++row) {
+            const int reference = eventIndexAt(column, row);
+            const int depth = backdropDepth(column, row, map.x, map.y);
+            if (reference >= 0 && eventLabelRect(column, row, reference).contains(position) && depth > hitDepth) {
+                hit = QPoint(column, row);
+                hitDepth = depth;
+            }
+        }
+    return hit;
+}
+
 void SceneMapEdit::handleMousePress(QMouseEvent *event)
 {
     if (!backdropActive() || m_backdropTool->currentIndex() == 0) {
-        IsoMapEditor::handleMousePress(event);
+        handleMouseMove(event);
+        const QPoint tile = event->button() == Qt::LeftButton ? eventClickTile(event->pos())
+            : screenToIso(event->pos().x(), event->pos().y());
+        m_selIsoX = tile.x();
+        m_selIsoY = tile.y();
+        onTileClicked(tile.x(), tile.y(), event->button());
         return;
     }
     int tool = m_backdropTool->currentIndex();
@@ -260,6 +344,7 @@ void SceneMapEdit::handleMousePress(QMouseEvent *event)
 
 SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
 {
+    m_mapLabel->setMouseTracking(true);
     m_layerCombo->clear();
     m_layerCombo->addItems({tr("地面"), tr("建筑"), tr("空中"), tr("事件"), tr("建筑海拔"), tr("全部"), tr("空中海拔")});
     m_layerCombo->setCurrentIndex(5);  // 默认全部
@@ -358,8 +443,59 @@ SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
     tileGroup->setFixedWidth(200);
     leftLayout->addWidget(tileGroup);
 
+    auto *backdropGroup = findChild<QGroupBox *>("backdropSection");
+    while (auto *item = leftLayout->takeAt(0)) {
+        if (auto *widget = item->widget()) widget->hide();
+        delete item;
+    }
+    int sectionIndex = 0;
+    auto addSection = [this, leftLayout, &sectionIndex](const QString &title, QWidget *content, bool expanded) {
+        return IsoMapEditor::addSection(leftLayout, "Scene" + QString::number(sectionIndex++), title, content, expanded);
+    };
+    auto *sceneContent = new QWidget;
+    auto *sceneForm = new QFormLayout(sceneContent);
+    sceneForm->addRow(tr("进度"), m_saveCombo);
+    sceneForm->addRow(tr("场景"), m_sceneCombo);
+    for (auto *button : {m_btnSave, btnNew, btnDel, btnImport, btnExport, btnExportImg}) {
+        sceneForm->addRow(button);
+        button->show();
+    }
+    m_saveCombo->show(); m_sceneCombo->show();
+    addSection(tr("场景文件"), sceneContent, true);
+    auto *editContent = new QWidget;
+    auto *editForm = new QFormLayout(editContent);
+    editForm->addRow(tr("操作层"), m_layerCombo);
+    editForm->addRow(tr("贴图来源"), m_tileSourceCombo);
+    editForm->addRow(m_btnSelectTile);
+    editForm->addRow(m_deleteMode);
+    editForm->addRow(tr("海拔值"), m_altitude);
+    editForm->addRow(btnUndo, btnRedo);
+    editForm->addRow(tr("撤销限制"), m_undoLimitSpin);
+    const QList<QWidget *> editWidgets{m_layerCombo, m_tileSourceCombo, m_btnSelectTile,
+        m_deleteMode, m_altitude, btnUndo, btnRedo, m_undoLimitSpin};
+    for (auto *widget : editWidgets) widget->show();
+    addSection(tr("地图编辑"), editContent, true);
+    auto *moduleContent = new QWidget;
+    auto *moduleLayout = new QVBoxLayout(moduleContent);
+    moduleLayout->addWidget(btnImportModule);
+    moduleLayout->addWidget(btnExportModule);
+    btnImportModule->show(); btnExportModule->show();
+    addSection(tr("区域模块"), moduleContent, true);
+    backdropGroup->setTitle(QString());
+    addSection(tr("大图与遮挡"), backdropGroup, false);
+    evtGroup->setTitle(QString());
+    m_eventSectionToggle = addSection(tr("事件编辑"), evtGroup, false);
+    tileGroup->setTitle(QString());
+    tileGroup->setMinimumWidth(0);
+    tileGroup->setMaximumWidth(QWIDGETSIZE_MAX);
+    addSection(tr("当前位置贴图"), tileGroup, true);
+    leftLayout->addStretch();
+    leftLayout->addWidget(m_statusBar);
+    m_statusBar->show();
+
     auto *sidebar = new QWidget;
     auto *sidebarScroll = new QScrollArea;
+    m_sidebarScroll = sidebarScroll;
     static_cast<QHBoxLayout *>(layout())->removeItem(leftLayout);
     sidebar->setLayout(leftLayout);
     sidebarScroll->setWidget(sidebar);
@@ -492,6 +628,10 @@ void SceneMapEdit::readSceneData(int sceneIndex)
     m_selectedEventIndex = -1;
     m_selectedEventX = -1;
     m_selectedEventY = -1;
+    m_hoverIsoX = -1;
+    m_hoverIsoY = -1;
+    m_selectedRegion = QRect();
+    m_selectionStart = QPoint(-1, -1);
 
     // 从缓存的原始数据中提取指定场景 (64×64, 6 层, 无文件头)
     const int sceneStride = 64 * 64 * 6 * 2;
@@ -518,6 +658,13 @@ int SceneMapEdit::eventIndexAt(int ix, int iy) const
     return eventIndex;
 }
 
+QRect SceneMapEdit::eventLabelRect(int ix, int iy, int eventIndex) const
+{
+    QPoint baseline = isoToScreen(ix, iy) - QPoint(5, tileW());
+    return QFontMetrics(QFont("Arial", 8)).boundingRect(QString("[%1]").arg(eventIndex))
+        .translated(baseline).adjusted(-3, -3, 3, 3);
+}
+
 void SceneMapEdit::loadEventToEditor(int eventIndex, int ix, int iy)
 {
     if (m_currentScene < 0 || m_currentScene >= m_dFile.mapEvent.size()) return;
@@ -538,6 +685,8 @@ void SceneMapEdit::loadEventToEditor(int eventIndex, int ix, int iy)
     m_evtAnim->setText(QString::number(evt.picDelay));
     m_evtX->setText(QString::number(evt.xPos));
     m_evtY->setText(QString::number(evt.yPos));
+    if (m_eventSectionToggle) m_eventSectionToggle->setChecked(true);
+    if (m_sidebarScroll) m_sidebarScroll->ensureWidgetVisible(m_evtEvent1);
 }
 
 int SceneMapEdit::displayedEventPic(const SceneEvent &evt) const
@@ -681,7 +830,7 @@ void SceneMapEdit::renderMap()
     auto drawActor = [&](int actorX, int actorY) {
         if (!backdrop || m_exporting || !m_actorVisible->isChecked()
             || actorX != m_actorX->value() || actorY != m_actorY->value()) return;
-        int tile = m_actorTile->value();
+        const int tile = 2501;
         if (tile >= m_tileCache.size()) return;
         QPoint position = isoToScreen(actorX, actorY);
         if (curMap.mapLayer.size() > 4) position.ry() -= curMap.mapLayer[4].pic[actorX][actorY];
@@ -741,8 +890,60 @@ void SceneMapEdit::renderMap()
         }
     }
 
-    if (!m_exporting && m_selIsoX >= 0 && m_selIsoY >= 0)
-        drawSelection(p, m_selIsoX, m_selIsoY);
+    if (!m_exporting) {
+        drawRegionOutline(p, m_selectedRegion, Qt::yellow);
+        if (m_selectionStart.x() >= 0 && m_hoverIsoX >= 0)
+            drawRegionOutline(p, QRect(m_selectionStart, QPoint(m_hoverIsoX, m_hoverIsoY)).normalized()
+                .intersected(QRect(0, 0, mapW, mapH)), Qt::yellow);
+    }
+    if (!m_exporting && m_hoverIsoX >= 0 && m_hoverIsoY >= 0)
+        drawSelection(p, m_hoverIsoX, m_hoverIsoY);
+    if (!m_exporting && !pastePreviewBounds().isEmpty()) {
+        const QPoint origin(m_hoverIsoX - m_moduleMap.x + 1, m_hoverIsoY - m_moduleMap.y + 1);
+        const int selectedLayer = m_layerCombo->currentIndex();
+        p.setOpacity(0.65);
+        for (int column = 0; column < m_moduleMap.x; ++column)
+            for (int row = 0; row < m_moduleMap.y; ++row) {
+                const QPoint target = origin + QPoint(column, row);
+                if (target.x() < 0 || target.y() < 0 || target.x() >= mapW || target.y() >= mapH) continue;
+                for (int ly = 0; ly < 4; ++ly) {
+                    if (selectedLayer != 5 && ly != selectedLayer) continue;
+                    int tile = m_moduleMap.mapLayer[ly].pic[column][row] / 2;
+                    if (ly == 3) {
+                        const int reference = m_moduleMap.mapLayer[3].pic[column][row];
+                        if (!m_moduleEvents.contains(reference)) continue;
+                        tile = displayedEventPic(m_moduleEvents[reference]) / 2;
+                    }
+                    if (tile < 0 || (ly > 0 && tile == 0) || tile >= m_tileCache.size()) continue;
+                    QPoint position = isoToScreen(target.x(), target.y());
+                    if (tile < m_grpPics.size()) position -= QPoint(m_grpPics[tile].xoff, m_grpPics[tile].yoff);
+                    if (ly > 0) position.ry() -= m_moduleMap.mapLayer[ly == 2 ? 5 : 4].pic[column][row];
+                    p.drawImage(position, m_tileCache[tile]);
+                }
+            }
+        p.setOpacity(1);
+        drawRegionOutline(p, pastePreviewBounds(), Qt::green);
+    }
+
+    m_backdropDepthInfo->setText(tr("像素：—\n深度：—\n落点：—"));
+    if (backdrop) {
+        const QPoint pixel = m_backdropCursor - QPoint(m_backdropX->value(), m_backdropY->value());
+        if (m_backdrop.rect().contains(pixel)) {
+            const int depth = m_backdropDepth[pixel.y() * m_backdrop.width() + pixel.x()];
+            QString value = tr("像素 (%1, %2)\n深度 %3").arg(pixel.x()).arg(pixel.y()).arg(depth);
+            if (depth < 0) value += tr("（无遮挡）\n落点：—");
+            else {
+                QString anchor = tr("—");
+                for (int column = 0; column < mapW; ++column)
+                    for (int row = 0; row < mapH; ++row)
+                        if (backdropDepth(column, row, mapW, mapH) == depth)
+                            anchor = QString("(%1, %2)").arg(column).arg(row);
+                value += tr("\n落点 %1").arg(anchor);
+            }
+            m_backdropDepthInfo->setText(value);
+            m_backdropDepthInfo->setToolTip(value);
+        }
+    }
 
     m_mapLabel->setPixmap(QPixmap::fromImage(m_mapImage));
     m_mapLabel->resize(m_mapImage.size());
@@ -750,6 +951,17 @@ void SceneMapEdit::renderMap()
 
 void SceneMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
 {
+    const int selectedLayer = m_layerCombo->currentIndex();
+    if (btn == Qt::LeftButton && !m_deleteMode->isChecked()
+        && (selectedLayer == 3 || selectedLayer == 5)) {
+        int eventIndex = eventIndexAt(ix, iy);
+        if (eventIndex >= 0) {
+            m_selectionStart = QPoint(-1, -1);
+            loadEventToEditor(eventIndex, ix, iy);
+            renderMap();
+            return;
+        }
+    }
     int layer = m_layerCombo->currentIndex();
     if (layer >= 0 && layer <= 2 && !m_mapData.map.isEmpty()) {
         if (btn == Qt::LeftButton) m_selectionStart = QPoint(ix, iy);
@@ -887,7 +1099,7 @@ void SceneMapEdit::onEventConfirm()
         loadEventToEditor(eventIndex, newX, newY);
         addUndoSave();
         renderMap();
-        updateTilePreview(newX, newY);
+        updateTilePreview(m_hoverIsoX, m_hoverIsoY);
     }
 }
 
@@ -1140,15 +1352,33 @@ void SceneMapEdit::onExportImage()
 
 void SceneMapEdit::handleMouseMove(QMouseEvent *event)
 {
+    m_backdropCursor = event->pos();
+    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
+    m_statusBar->showMessage(QString("(%1, %2)").arg(iso.x()).arg(iso.y()));
+    if (!m_mapData.map.isEmpty() && iso.x() >= 0 && iso.y() >= 0
+        && iso.x() < m_mapData.map[0].x && iso.y() < m_mapData.map[0].y) {
+        m_hoverIsoX = iso.x();
+        m_hoverIsoY = iso.y();
+    } else {
+        m_hoverIsoX = -1;
+        m_hoverIsoY = -1;
+    }
+    updateTilePreview(iso.x(), iso.y());
+    if (backdropActive() && m_actorVisible->isChecked() && m_hoverIsoX >= 0 && m_hoverIsoY >= 0) {
+        const QSignalBlocker blockX(m_actorX);
+        const QSignalBlocker blockY(m_actorY);
+        m_actorX->setValue(m_hoverIsoX);
+        m_actorY->setValue(m_hoverIsoY);
+    }
     if (backdropActive() && m_backdropTool->currentIndex() != 0) {
         int tool = m_backdropTool->currentIndex();
         if ((tool == 2 || tool == 3) && (event->buttons() & (Qt::LeftButton | Qt::RightButton)))
             paintBackdrop(event->pos(), tool == 3 || event->buttons().testFlag(Qt::RightButton));
+        else
+            renderMap();
         return;
     }
-    IsoMapEditor::handleMouseMove(event);
-    QPoint iso = screenToIso(event->pos().x(), event->pos().y());
-    updateTilePreview(iso.x(), iso.y());
+    renderMap();
 }
 
 void SceneMapEdit::syncCurrentScene()
@@ -1179,7 +1409,12 @@ void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
     QPoint last(qMax(m_selectionStart.x(), end.x()), qMax(m_selectionStart.y(), end.y()));
     QRect bounds = QRect(first, last).intersected(QRect(0, 0, 64, 64));
     if (bounds.isEmpty()) { m_selectionStart = QPoint(-1, -1); return; }
-    if (layer <= 2 && bounds.size() == QSize(1, 1)) { m_selectionStart = QPoint(-1, -1); return; }
+    m_selectedRegion = bounds;
+    if (layer <= 2 && bounds.size() == QSize(1, 1)) {
+        m_selectionStart = QPoint(-1, -1);
+        renderMap();
+        return;
+    }
     if (layer == 4 || layer == 6) {
         if (end == m_selectionStart) {
             auto &height = m_mapData.map[0].mapLayer[layer == 4 ? 4 : 5].pic[first.x()][first.y()];
@@ -1214,7 +1449,32 @@ void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
                     m_moduleEvents.insert(reference, event);
                 }
     m_selectionStart = QPoint(-1, -1);
+    renderMap();
     m_statusBar->showMessage(tr("已复制模块 %1 x %2，右键粘贴").arg(m_moduleMap.x).arg(m_moduleMap.y));
+}
+
+QRect SceneMapEdit::pastePreviewBounds() const
+{
+    const int layer = m_layerCombo->currentIndex();
+    if (m_mapData.map.isEmpty() || m_moduleMap.layerNum != 6 || m_moduleMap.x <= 0 || m_moduleMap.y <= 0
+        || m_hoverIsoX < 0 || m_hoverIsoY < 0 || m_selectionStart.x() >= 0
+        || (layer != 5 && (layer < 0 || layer > 2))
+        || (backdropActive() && m_backdropTool->currentIndex() != 0)) return QRect();
+    return QRect(QPoint(m_hoverIsoX - m_moduleMap.x + 1, m_hoverIsoY - m_moduleMap.y + 1),
+        QSize(m_moduleMap.x, m_moduleMap.y)).intersected(QRect(0, 0, m_mapData.map[0].x, m_mapData.map[0].y));
+}
+
+void SceneMapEdit::drawRegionOutline(QPainter &painter, const QRect &bounds, const QColor &color)
+{
+    if (bounds.isEmpty()) return;
+    QPolygon outline;
+    outline << isoToScreen(bounds.left(), bounds.top()) - QPoint(0, 2 * tileH())
+        << isoToScreen(bounds.right(), bounds.top()) + QPoint(tileW(), -tileH())
+        << isoToScreen(bounds.right(), bounds.bottom())
+        << isoToScreen(bounds.left(), bounds.bottom()) - QPoint(tileW(), tileH());
+    painter.setPen(QPen(color, 2));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawPolygon(outline);
 }
 
 void SceneMapEdit::onImportModule()
@@ -1381,6 +1641,8 @@ bool SceneMapEdit::pasteModule(const QPoint &anchor)
 
 void SceneMapEdit::updateTilePreview(int ix, int iy)
 {
+    for (auto *label : {m_lblGroundVal, m_lblBuildingVal, m_lblSkyVal, m_lblEventVal}) label->clear();
+    for (auto *image : {m_imgGround, m_imgBuilding, m_imgSky, m_imgEvent}) image->clear();
     if (m_mapData.map.isEmpty()) return;
     const Map &curMap = m_mapData.map[0];
     if (ix < 0 || iy < 0 || ix >= curMap.x || iy >= curMap.y) return;
@@ -1391,7 +1653,9 @@ void SceneMapEdit::updateTilePreview(int ix, int iy)
         if (ix >= layer.pic.size() || iy >= layer.pic[ix].size()) return;
         int tileId = layer.pic[ix][iy] / 2;
         valLbl->setText(QString::number(tileId));
-        if (tileId >= 0 && tileId < m_tileCache.size() && !m_tileCache[tileId].isNull()) {
+        if ((layerIdx == 0 ? layer.pic[ix][iy] >= 0 : layer.pic[ix][iy] > 0)
+            && tileId >= 0 && (layerIdx == 0 || tileId > 0)
+            && tileId < m_tileCache.size() && !m_tileCache[tileId].isNull()) {
             imgLbl->setPixmap(QPixmap::fromImage(m_tileCache[tileId]).scaled(
                 imgLbl->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         } else {

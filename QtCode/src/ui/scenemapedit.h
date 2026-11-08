@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QMap>
 #include <QVBoxLayout>
+#include <QToolButton>
 
 // 场景地图编辑器 (对应 Delphi TForm12)
 class SceneMapEdit : public IsoMapEditor {
@@ -40,6 +41,7 @@ protected:
 
 private:
     void setupBackdropTools(QVBoxLayout *layout);
+    void alignImportedBackdrop();
     bool backdropActive() const;
     bool saveBackdrop(const QString &path);
     bool loadBackdrop(const QString &path);
@@ -57,7 +59,9 @@ private:
     QComboBox *m_backdropTool = nullptr;
     QSpinBox *m_backdropX = nullptr, *m_backdropY = nullptr, *m_brushRadius = nullptr;
     QSpinBox *m_anchorX = nullptr, *m_anchorY = nullptr;
-    QSpinBox *m_actorX = nullptr, *m_actorY = nullptr, *m_actorTile = nullptr;
+    QSpinBox *m_actorX = nullptr, *m_actorY = nullptr;
+    QLabel *m_backdropDepthInfo = nullptr;
+    QPoint m_backdropCursor{-1, -1};
     void loadSceneGrpFile(int saveSlot);
     void readSceneData(int sceneIndex);
     void readSceneGrp();
@@ -77,7 +81,15 @@ private:
     bool hasUnsavedChanges();
     bool m_sessionLoaded = false;
     QPoint m_selectionStart{-1, -1};
+    QRect m_selectedRegion;
+    QRect pastePreviewBounds() const;
+    void drawRegionOutline(QPainter &painter, const QRect &bounds, const QColor &color);
+    QToolButton *m_eventSectionToggle = nullptr;
     int eventIndexAt(int ix, int iy) const;
+    QRect eventLabelRect(int ix, int iy, int eventIndex) const;
+    QPoint screenToIso(int sx, int sy) const;
+    void drawSelection(QPainter &painter, int ix, int iy);
+    QPoint eventClickTile(const QPoint &position) const;
     void loadEventToEditor(int eventIndex, int ix, int iy);
     int displayedEventPic(const SceneEvent &evt) const;
 
@@ -115,6 +127,9 @@ private:
     int m_selectedEventIndex = -1;
     int m_selectedEventX = -1;
     int m_selectedEventY = -1;
+    int m_hoverIsoX = -1;
+    int m_hoverIsoY = -1;
+    QScrollArea *m_sidebarScroll = nullptr;
 
     // 贴图预览
     void updateTilePreview(int ix, int iy);

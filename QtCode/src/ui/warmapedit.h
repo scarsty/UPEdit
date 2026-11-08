@@ -7,6 +7,10 @@
 #include <QLabel>
 #include <QStatusBar>
 #include <QTimer>
+#include <QVBoxLayout>
+#include <QCheckBox>
+#include <QSpinBox>
+#include <QToolButton>
 #include "head.h"
 
 // 等距地图编辑器基类
@@ -20,13 +24,17 @@ public:
 protected:
     // 等距坐标转换
     QPoint isoToScreen(int ix, int iy) const;
-    QPoint screenToIso(int sx, int sy) const;
+    virtual QPoint screenToIso(int sx, int sy) const;
     int tileW() const { return 18 * m_tileScale; }
     int tileH() const { return  9 * m_tileScale; }
     int tilePadding() const { return 150 * m_tileScale; }
 
     void drawIsoTile(QPainter &p, int ix, int iy, const QImage &sprite, int xoff = 0, int yoff = 0);
     void drawSelection(QPainter &p, int ix, int iy);
+    void drawRegion(QPainter &p, const QRect &bounds, const QColor &color);
+    QToolButton *addSection(QVBoxLayout *layout, const QString &key, const QString &title, QWidget *content, bool expanded);
+    void setupSections(QVBoxLayout *layout, const QString &prefix, const QList<QPair<QString, QList<QWidget *>>> &sections,
+        const QStringList &keys = {});
 
     virtual void renderMap() = 0;
     virtual void onTileClicked(int ix, int iy, Qt::MouseButton btn) = 0;
@@ -83,9 +91,20 @@ protected:
     void onTileClicked(int ix, int iy, Qt::MouseButton btn) override;
     void handleMouseMove(QMouseEvent *event) override;
     void handleMouseRelease(QMouseEvent *event) override;
+    void handleMousePress(QMouseEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
     void selectTile(int tileId) override { m_selectedTileId = tileId; m_hasClipboard = false; }
 
 private:
+    bool backdropActive() const;
+    QPoint backdropOffset() const;
+    int backdropDepth(int x, int y) const;
+    void paintBackdrop(QPoint position, bool erase);
+    void drawBackdropSprite(QPainter &painter, const QImage &sprite, QPoint position, int depth);
+    void recordBackdropStroke();
+    bool saveBackdrop(const QString &path);
+    bool loadBackdrop(const QString &path);
+    bool confirmBackdropDiscard();
     void readWarMapDef();
     QImage exportImage(bool ground, bool building) const;
     void readWarMapGrp();
@@ -120,4 +139,18 @@ private:
     int m_hoverIsoY = -1;
     bool m_hasClipboard = false;
     Map m_clipboardMap;
+    QRect m_selectedRegion;
+    QImage m_backdrop;
+    int m_backdropMap = -1;
+    QCheckBox *m_backdropEnabled = nullptr;
+    QVector<qint32> m_backdropDepth;
+    QVector<QVector<qint32>> m_backdropHistory;
+    int m_backdropHistoryPos = -1;
+    bool m_backdropDirty = false;
+    bool m_maskStroke = false;
+    QComboBox *m_backdropTool = nullptr;
+    QCheckBox *m_backdropOverlay = nullptr, *m_actorVisible = nullptr;
+    QSpinBox *m_brushRadius = nullptr, *m_anchorX = nullptr, *m_anchorY = nullptr;
+    QLabel *m_backdropDepthInfo = nullptr;
+    QPoint m_backdropCursor{-1, -1};
 };

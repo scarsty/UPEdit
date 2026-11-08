@@ -19,6 +19,8 @@ bool saveMapMode(const QString &path, int mode);
 bool saveFileSettings(const QString &path, const QMap<QString, int> &values);
 bool saveTalkArrange(const QString &path, int width);
 bool saveWarSelection(const QString &path, bool keep);
+bool loadMapSectionExpanded(const QString &path, const QString &key, bool fallback);
+bool saveMapSectionExpanded(const QString &path, const QString &key, bool expanded);
 
 class IniConfig {
 public:

@@ -89,6 +89,20 @@ bool saveMapMode(const QString &path, int mode)
     return saveFileSettings(path, {{"MMapMode", mode}});
 }
 
+bool loadMapSectionExpanded(const QString &path, const QString &key, bool fallback)
+{
+    QTemporaryFile temporary;
+    QString prepared;
+    if (!prepareIniPath(path, temporary, prepared)) return fallback;
+    QSettings settings(prepared, QSettings::IniFormat);
+    return settings.value("MapSections/" + key, fallback).toBool();
+}
+
+bool saveMapSectionExpanded(const QString &path, const QString &key, bool expanded)
+{
+    return saveIniValues(path, "MapSections", {{key, expanded ? "1" : "0"}});
+}
+
 bool saveTalkArrange(const QString &path, int width)
 {
     return saveIniValues(path, "KDEF", {{"talkarrange", QString::number(width)}});

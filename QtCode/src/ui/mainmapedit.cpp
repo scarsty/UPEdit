@@ -71,6 +71,12 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
     leftLayout->addWidget(tileGroup);
 
     leftLayout->addStretch();
+    setupSections(leftLayout, "Main", {
+        {tr("地图文件"), {m_btnSave, btnExport}},
+        {tr("地图编辑"), {m_layerCombo, m_tileSourceCombo, m_btnSelectTile}},
+        {tr("区域模块"), {btnImport, btnExBlock}},
+        {tr("当前位置贴图"), {tileGroup}}
+    });
 
     // ── 右侧地图区 ───────────────────────────────────────
     auto *mainArea = static_cast<QHBoxLayout*>(layout());
@@ -390,9 +396,50 @@ void MainMapEdit::renderMap()
         }
     }
 
+    auto drawBounds = [&](const QRect &bounds, const QColor &color) {
+        if (bounds.isEmpty()) return;
+        QPolygon outline;
+        outline << tileScreen(bounds.left(), bounds.top()) - QPoint(0, 2 * th)
+            << tileScreen(bounds.right(), bounds.top()) + QPoint(tw, -th)
+            << tileScreen(bounds.right(), bounds.bottom())
+            << tileScreen(bounds.left(), bounds.bottom()) - QPoint(tw, th);
+        p.setPen(QPen(color, 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawPolygon(outline);
+    };
+    drawBounds(m_selectedRegion, Qt::yellow);
+    if (m_selectionStart.x() >= 0 && m_hoverIX >= 0)
+        drawBounds(QRect(m_selectionStart, QPoint(m_hoverIX, m_hoverIY)).normalized(), Qt::yellow);
+    const int activeLayer = selectedLayer();
+    if (m_selectionStart.x() < 0 && m_hoverIX >= 0 && !m_layers.isEmpty()
+        && (m_layers.size() > 1 || (activeLayer >= 0 && activeLayer <= 2))) {
+        const bool module = m_moduleMap.layerNum == 5 && (m_layers.size() > 1 || m_selectedTileId < 0);
+        if (module || m_selectedTileId >= 0) {
+            const int width = module ? m_moduleMap.x : 1;
+            const int height = module ? m_moduleMap.y : 1;
+            const QPoint origin(m_hoverIX - width + 1, m_hoverIY - height + 1);
+            p.setOpacity(0.65);
+            for (int column = 0; column < width; ++column)
+                for (int row = 0; row < height; ++row) {
+                    const QPoint target = origin + QPoint(column, row);
+                    if (target.x() < 0 || target.y() < 0 || target.x() >= curMap.x || target.y() >= curMap.y) continue;
+                    for (int ly = 0; ly < 3; ++ly) {
+                        if (m_layers.size() == 1 && ly != activeLayer) continue;
+                        const int tile = module ? m_moduleMap.mapLayer[ly].pic[column][row] / 2 : m_selectedTileId;
+                        if (tile <= 0 || tile >= m_tileCache.size()) continue;
+                        QPoint position = tileScreen(target.x(), target.y());
+                        if (tile < m_grpPics.size()) position -= QPoint(m_grpPics[tile].xoff, m_grpPics[tile].yoff);
+                        p.drawImage(position, m_tileCache[tile]);
+                    }
+                }
+            p.setOpacity(1);
+            drawBounds(QRect(origin, QSize(width, height)).intersected(QRect(0, 0, curMap.x, curMap.y)), Qt::green);
+        }
+    }
+
     // === 光标高亮 ===
     if (m_hoverIX >= 0 && m_hoverIY >= 0) {
-        QPoint sp = tileScreen(m_hoverIX, m_hoverIY);
+        QPoint sp = tileScreen(m_hoverIX, m_hoverIY) - QPoint(0, th);
         QPolygon diamond;
         diamond << QPoint(sp.x(), sp.y() - th) << QPoint(sp.x() + tw, sp.y())
                 << QPoint(sp.x(), sp.y() + th) << QPoint(sp.x() - tw, sp.y());
@@ -410,6 +457,17 @@ void MainMapEdit::handleMousePress(QMouseEvent *event)
     m_hoverIX = position.x();
     m_hoverIY = position.y();
     onTileClicked(position.x(), position.y(), event->button());
+    renderMap();
+}
+
+void MainMapEdit::handleMouseMove(QMouseEvent *event)
+{
+    const QPoint position = screenToMapRel(event->pos().x(), event->pos().y());
+    m_hoverIX = position.x();
+    m_hoverIY = position.y();
+    m_statusBar->showMessage(tr("坐标: (%1, %2)").arg(m_hoverIX).arg(m_hoverIY));
+    updateTilePreview();
+    renderMap();
 }
 
 void MainMapEdit::onTileClicked(int ix, int iy, Qt::MouseButton btn)
@@ -496,11 +554,18 @@ void MainMapEdit::handleMouseRelease(QMouseEvent *event)
         || (m_layers.size() == 1 && hasLayer(3))
         || m_selectionStart.x() < 0 || m_mapData.map.isEmpty()) return;
     QPoint end = screenToMapRel(event->pos().x(), event->pos().y());
-    if (m_layers.size() == 1 && end == m_selectionStart) { m_selectionStart = QPoint(-1, -1); return; }
+    if (m_layers.size() == 1 && end == m_selectionStart) {
+        m_selectedRegion = QRect(end, QSize(1, 1));
+        m_selectionStart = QPoint(-1, -1);
+        renderMap();
+        return;
+    }
     if (end.x() >= 0) {
         QPoint first(qMin(m_selectionStart.x(), end.x()), qMin(m_selectionStart.y(), end.y()));
         QPoint last(qMax(m_selectionStart.x(), end.x()), qMax(m_selectionStart.y(), end.y()));
         QRect bounds(first, last);
+        bounds = bounds.intersected(QRect(0, 0, m_mapData.map[0].x, m_mapData.map[0].y));
+        m_selectedRegion = bounds;
         m_moduleMap = MapIO::extractRegion(m_mapData.map[0], bounds);
         m_selectedTileId = -1;
         for (int column = 0; column < m_moduleMap.x; ++column)
@@ -515,6 +580,7 @@ void MainMapEdit::handleMouseRelease(QMouseEvent *event)
         m_statusBar->showMessage(tr("已复制模块 %1 x %2，右键粘贴").arg(m_moduleMap.x).arg(m_moduleMap.y));
     }
     m_selectionStart = QPoint(-1, -1);
+    renderMap();
 }
 void MainMapEdit::onVScroll(int) { m_needUpdate = true; }
 
@@ -626,8 +692,8 @@ QPoint MainMapEdit::screenToMapRel(int sx, int sy) const
 
     // 反算: sx = vw/2 + (rx-ry)*tw, sy = vh/2 + (rx+ry)*th
     // dx/tw = rx-ry, dy/th = rx+ry
-    double dx = sx - viewW / 2.0;
-    double dy = sy - viewH / 2.0;
+    double dx = sx - viewW / 2;
+    double dy = sy - viewH / 2 + th;
     double fi = (dx / tw + dy / th) / 2.0 + CX;
     double fj = (dy / th - dx / tw) / 2.0 + CY;
     int ix = (int)qRound(fi);
@@ -641,7 +707,8 @@ void MainMapEdit::onTimerTick()
 {
     // 获取鼠标在 m_mapLabel 上的位置
     QPoint pos = m_mapLabel->mapFromGlobal(QCursor::pos());
-    QPoint mp = screenToMapRel(pos.x(), pos.y());
+    QPoint mp = m_mapLabel->rect().contains(pos) && m_scroll->viewport()->underMouse()
+        ? screenToMapRel(pos.x(), pos.y()) : QPoint(-1, -1);
 
     if (mp.x() != m_hoverIX || mp.y() != m_hoverIY) {
         m_hoverIX = mp.x();

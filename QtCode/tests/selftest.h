@@ -503,6 +503,78 @@ inline int runSelfTests(const QString &reportPath)
         }
         require(temporary.isValid(), "Temporary directory unavailable");
         {
+            auto &config = IniConfig::instance();
+            const QString path = temporary.filePath("map-sections.ini");
+            QScopedValueRollback<QString> ini(config.iniPath, path);
+            const QString original = "[run]\r\ngamepath=D:/unchanged/\r\n; keep this comment\r\n";
+            QStringEncoder encoder(QStringConverter::Utf16LE);
+            QByteArray bytes = encoder(original);
+            bytes.prepend(QByteArray::fromHex("fffe"));
+            require(FileIO::writeFileAll(path, bytes), "Cannot create section settings fixture");
+            {
+                MainMapEdit main;
+                main.m_timer->stop();
+                WarMapEdit war;
+                SceneMapEdit scene;
+                auto *combined = war.findChild<QToolButton *>("mapSection_War3");
+                require(combined && combined->text() == QString::fromUtf8("大图与遮挡")
+                    && !war.findChild<QToolButton *>("mapSection_War4")
+                    && war.findChild<QToolButton *>("mapSection_War5")
+                    && war.findChild<QToolButton *>("mapSection_War6"),
+                    "War backdrop section was not merged or changed existing settings keys");
+                auto *sectionLayout = combined->parentWidget()->layout();
+                auto *combinedContent = sectionLayout->itemAt(sectionLayout->indexOf(combined) + 1)->widget();
+                require(combinedContent->isAncestorOf(war.m_backdropEnabled)
+                    && combinedContent->isAncestorOf(war.m_backdropTool)
+                    && combinedContent->isAncestorOf(war.m_backdropDepthInfo)
+                    && combinedContent->findChildren<QPushButton *>().size() == 6,
+                    "War backdrop and mask controls are not in the same collapsible section");
+                for (QWidget *editor : QList<QWidget *>{&main, &war, &scene}) {
+                    const auto toggles = editor->findChildren<QToolButton *>(QRegularExpression("^mapSection_"));
+                    require(!toggles.isEmpty(), "Map section headers missing");
+                    editor->resize(1000, 700);
+                    editor->show();
+                    QApplication::processEvents();
+                    for (auto *toggle : toggles) {
+                        auto *parentLayout = toggle->parentWidget()->layout();
+                        const int index = parentLayout->indexOf(toggle);
+                        require(toggle->sizePolicy().horizontalPolicy() == QSizePolicy::Expanding
+                            && toggle->width() >= parentLayout->contentsRect().width() - 2,
+                            "Section header does not fill the sidebar horizontally");
+                        toggle->setChecked(false);
+                        require(toggle->arrowType() == Qt::RightArrow
+                            && parentLayout->itemAt(index + 1)->widget()->isHidden(),
+                            "Collapsing section did not synchronize arrow and content");
+                    }
+                    editor->hide();
+                }
+            }
+            {
+                MainMapEdit main;
+                main.m_timer->stop();
+                WarMapEdit war;
+                SceneMapEdit scene;
+                for (QWidget *editor : QList<QWidget *>{&main, &war, &scene})
+                    for (auto *toggle : editor->findChildren<QToolButton *>(QRegularExpression("^mapSection_"))) {
+                        auto *parentLayout = toggle->parentWidget()->layout();
+                        const int index = parentLayout->indexOf(toggle);
+                        require(!toggle->isChecked() && toggle->arrowType() == Qt::RightArrow
+                            && parentLayout->itemAt(index + 1)->widget()->isHidden(),
+                            "Recreated editor did not restore collapsed section");
+                        toggle->setChecked(true);
+                    }
+            }
+            require(loadMapSectionExpanded(path, "Main0", false)
+                && loadMapSectionExpanded(path, "War0", false)
+                && loadMapSectionExpanded(path, "Scene0", false), "Expanded section state was not persisted");
+            const QByteArray saved = FileIO::readFileAll(path);
+            QStringDecoder decoder(QStringConverter::Utf16LE);
+            const QString decoded = decoder(saved);
+            require(saved.startsWith(QByteArray::fromHex("fffe")) && decoded.contains(original),
+                "Section settings changed original INI encoding or unrelated configuration");
+        }
+        output << "PASS: full-width map section headers, INI collapse restoration and UTF16 configuration preservation\n";
+        {
             QByteArray bytes("keep");
             require(!Encoding::writeInStrWithCode(QString::fromUtf8("\xe6\xb8\xac"), bytes.data(), 2, 3)
                 && bytes == "keep", "Short UTF8 field changed after rejected write");
@@ -4046,6 +4118,25 @@ inline int runSelfTests(const QString &reportPath)
             const QByteArray originalMap = MapIO::encodeMap(editor.m_mapData.map[0]);
             const QByteArray originalRaw = editor.m_sceneRawData;
             editor.m_dFile.mapEvent[0].sceneEvent[0].event1 = 123;
+            editor.m_backdrop = QImage(2304, 1153, QImage::Format_ARGB32);
+            editor.m_backdrop.fill(Qt::transparent);
+            editor.m_backdrop.setPixelColor(1152, 18, Qt::green);
+            editor.m_backdropX->setValue(701);
+            editor.m_backdropY->setValue(702);
+            editor.alignImportedBackdrop();
+            require(editor.m_backdropX->value() == 150 && editor.m_backdropY->value() == 132,
+                "Full-scene backdrop did not reset to the map origin");
+            require(QPoint(1152, 18) + QPoint(editor.m_backdropX->value(), editor.m_backdropY->value())
+                == editor.isoToScreen(0, 0), "Backdrop and events use different map origins");
+            editor.m_backdrop.fill(Qt::blue);
+            editor.alignImportedBackdrop();
+            require(editor.m_backdrop.size() == QSize(2304, 1153)
+                && editor.m_backdropX->value() == 150 && editor.m_backdropY->value() == 132,
+                "Backdrop alignment depends on nonempty content bounds");
+            editor.m_backdrop = QImage(2604, 1452, QImage::Format_ARGB32);
+            editor.alignImportedBackdrop();
+            require(editor.m_backdropX->value() == 0 && editor.m_backdropY->value() == 0,
+                "Already padded backdrop was shifted twice");
             editor.m_backdrop = QImage(32, 32, QImage::Format_ARGB32);
             editor.m_backdrop.fill(Qt::blue);
             editor.m_backdropDepth.fill(-1, 1024);
@@ -4059,6 +4150,28 @@ inline int runSelfTests(const QString &reportPath)
             int wallDepth = SceneMapEdit::backdropDepth(2, 2, 64, 64);
             require(editor.m_backdropDepth[8 * 32 + 8] == wallDepth
                 && editor.m_backdropDepth[0] == -1, "Backdrop brush changed incorrect pixels");
+            editor.m_backdropCursor = QPoint(8, 8);
+            editor.renderMap();
+            require(editor.m_backdropDepthInfo->text().contains(QString::number(wallDepth))
+                && editor.m_backdropDepthInfo->text().contains("(2, 2)"),
+                "Backdrop inspector does not show the stored depth and anchor");
+            require(editor.m_backdropX->isHidden() && editor.m_backdropY->isHidden(),
+                "Backdrop offset inputs remain user-editable");
+            require(!editor.m_backdropDepthInfo->wordWrap()
+                && editor.m_backdropDepthInfo->text().count('\n') == 2
+                && editor.m_backdropDepthInfo->minimumHeight() == editor.m_backdropDepthInfo->maximumHeight(),
+                "Backdrop information can resize the controls below it");
+            editor.m_backdropCursor = QPoint(0, 0);
+            editor.renderMap();
+            require(editor.m_backdropDepthInfo->text().count('\n') == 2
+                && editor.m_backdropDepthInfo->text().contains("-1"),
+                "Unmasked backdrop information does not retain three lines");
+            require(editor.m_eventSectionToggle && !editor.m_eventSectionToggle->isChecked(),
+                "Scene event section did not start collapsed");
+            editor.m_eventSectionToggle->setChecked(true);
+            require(!editor.m_evtEvent1->parentWidget()->isHidden(), "Expanding scene section did not show its content");
+            editor.m_eventSectionToggle->setChecked(false);
+            require(editor.m_evtEvent1->parentWidget()->isHidden(), "Collapsing scene section did not hide its content");
             QImage sprite(1, 1, QImage::Format_ARGB32);
             sprite.fill(Qt::red);
             QImage result = editor.m_backdrop.copy();
@@ -4108,10 +4221,29 @@ inline int runSelfTests(const QString &reportPath)
             editor.m_mapData.map[0].mapLayer[3].pic[2][3] = -1;
             editor.m_actorX->setValue(2);
             editor.m_actorY->setValue(3);
+            editor.m_tileCache.resize(2502);
+            editor.m_tileCache[2501] = sprite;
             editor.m_actorVisible->setChecked(true);
             editor.renderMap();
             require(editor.m_mapImage.pixelColor(spritePosition) == QColor(Qt::red),
                 "Backdrop preview actor ignored original elevation");
+            editor.m_actorVisible->setChecked(false);
+            editor.m_hoverIsoX = 2;
+            editor.m_hoverIsoY = 3;
+            editor.m_actorVisible->setChecked(true);
+            require(editor.m_actorX->value() == 2
+                && editor.m_actorY->value() == 3, "Enabling actor preview retained an unavailable sprite or stale location");
+            const QPoint followPosition = editor.isoToScreen(4, 5) - QPoint(0, editor.tileH());
+            QMouseEvent follow(QEvent::MouseMove, QPointF(followPosition), QPointF(followPosition),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &follow);
+            require(editor.m_actorX->value() == 4 && editor.m_actorY->value() == 5
+                && editor.m_mapImage.pixelColor(editor.isoToScreen(4, 5)) == QColor(Qt::red),
+                "Fixed preview sprite 2501 did not follow the mouse without a button");
+            editor.m_backdropOverlay->setChecked(false);
+            editor.m_backdropTool->setCurrentIndex(2);
+            require(editor.m_backdropOverlay->isChecked(), "Occlusion painting has no visible mask feedback");
+            editor.m_backdropTool->setCurrentIndex(0);
             editor.m_backdropHistory.clear();
             editor.m_backdropHistoryPos = -1;
             editor.m_backdropTool->setCurrentIndex(2);
@@ -4330,8 +4462,8 @@ inline int runSelfTests(const QString &reportPath)
                 && result.mapLayer[3].pic[8][9] == 0 && result.mapLayer[5].pic[8][9] == 0,
                 "Single scene layer paste changed unrelated layers");
             auto drag = [&](QPoint first, QPoint last) {
-                QPointF start = editor.isoToScreen(first.x(), first.y());
-                QPointF finish = editor.isoToScreen(last.x(), last.y());
+                QPointF start = editor.isoToScreen(first.x(), first.y()) - QPoint(0, editor.tileH());
+                QPointF finish = editor.isoToScreen(last.x(), last.y()) - QPoint(0, editor.tileH());
                 QMouseEvent press(QEvent::MouseButtonPress, start, start, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
                 QCoreApplication::sendEvent(editor.m_mapLabel, &press);
                 QMouseEvent release(QEvent::MouseButtonRelease, finish, finish, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
@@ -4342,6 +4474,25 @@ inline int runSelfTests(const QString &reportPath)
             require(editor.m_moduleMap.x == 2 && editor.m_moduleMap.y == 2
                 && editor.m_moduleMap.mapLayer[1].pic[0][0] == 11,
                 "Scene drag handlers copied wrong region");
+            require(editor.m_selectedRegion == QRect(2, 3, 2, 2), "Scene selection region was not retained");
+            const QPoint previewPosition = editor.isoToScreen(10, 11) - QPoint(0, editor.tileH());
+            editor.m_tileCache.resize(6);
+            editor.m_tileCache[5] = QImage(3, 3, QImage::Format_ARGB32);
+            editor.m_tileCache[5].fill(Qt::magenta);
+            editor.m_grpPics.resize(6);
+            const QByteArray beforePreview = MapIO::encodeMap(editor.m_mapData.map[0]);
+            QMouseEvent previewMove(QEvent::MouseMove, QPointF(previewPosition), QPointF(previewPosition),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &previewMove);
+            require(editor.pastePreviewBounds() == QRect(9, 10, 2, 2), "Paste preview differs from paste anchor semantics");
+            require(editor.m_mapImage.pixelColor(editor.isoToScreen(2, 3) - QPoint(0, 2 * editor.tileH())) == QColor(Qt::yellow),
+                "Selected scene region has no yellow outline");
+            require(editor.m_mapImage.pixelColor(editor.isoToScreen(9, 10) - QPoint(0, 2 * editor.tileH())) == QColor(Qt::green),
+                "Scene paste preview has no green outline");
+            require(beforePreview == MapIO::encodeMap(editor.m_mapData.map[0]), "Paste preview changed map data");
+            const QColor previewPixel = editor.m_mapImage.pixelColor(editor.isoToScreen(9, 10) - QPoint(0, 14) + QPoint(1, 1));
+            require(previewPixel.red() > 100 && previewPixel.blue() > 100 && previewPixel.green() < 10,
+                "Scene green outline contains no module sprite preview");
             editor.m_layerCombo->setCurrentIndex(4);
             editor.m_altitude->setValue(23);
             editor.m_undoStack.clear(); editor.m_undoPos = -1; editor.addUndoSave();
@@ -4356,7 +4507,7 @@ inline int runSelfTests(const QString &reportPath)
             drag(QPoint(5, 6), QPoint(5, 6));
             require(editor.m_mapData.map[0].mapLayer[4].pic[5][6] == 1,
                 "Scene altitude left click did not increment once");
-            QPointF point = editor.isoToScreen(5, 6);
+            QPointF point = editor.isoToScreen(5, 6) - QPoint(0, editor.tileH());
             QMouseEvent down(QEvent::MouseButtonPress, point, point, Qt::RightButton, Qt::RightButton, Qt::NoModifier);
             QMouseEvent up(QEvent::MouseButtonRelease, point, point, Qt::RightButton, Qt::NoButton, Qt::NoModifier);
             QCoreApplication::sendEvent(editor.m_mapLabel, &down);
@@ -4373,6 +4524,35 @@ inline int runSelfTests(const QString &reportPath)
                 redoShortcut |= button->shortcut() == QKeySequence("Ctrl+Shift+Z");
             }
             require(undoShortcut && redoShortcut, "Scene undo/redo shortcuts are missing");
+            editor.m_tileCache.resize(3);
+            editor.m_grpPics.resize(3);
+            for (int tile : {1, 2}) {
+                QImage ground(36, 18, QImage::Format_ARGB32);
+                ground.fill(Qt::transparent);
+                QPainter groundPainter(&ground);
+                groundPainter.setPen(Qt::NoPen);
+                groundPainter.setBrush(tile == 1 ? Qt::green : Qt::blue);
+                groundPainter.drawPolygon(QPolygon({QPoint(18, 0), QPoint(35, 9), QPoint(18, 17), QPoint(0, 9)}));
+                groundPainter.end();
+                editor.m_tileCache[tile] = ground;
+                editor.m_grpPics[tile].xoff = 18;
+                editor.m_grpPics[tile].yoff = 17;
+            }
+            for (auto &column : editor.m_mapData.map[0].mapLayer[0].pic) column.fill(2);
+            editor.m_mapData.map[0].mapLayer[0].pic[2][3] = 4;
+            editor.m_layerCombo->setCurrentIndex(0);
+            editor.renderMap();
+            const QPoint groundCenter(editor.m_renderCenterX - 18, editor.m_renderCenterY + 5 * 9 - 9);
+            for (const QPoint offset : {QPoint(0, 0), QPoint(0, -2), QPoint(0, 2), QPoint(-4, 0), QPoint(4, 0)}) {
+                const QPoint position = groundCenter + offset;
+                QMouseEvent move(QEvent::MouseMove, QPointF(position), QPointF(position), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(editor.m_mapLabel, &move);
+                require(QPoint(editor.m_hoverIsoX, editor.m_hoverIsoY) == QPoint(2, 3)
+                    && editor.m_lblGroundVal->text() == "2", "Real-offset ground center selects a neighboring preview tile");
+                require(editor.m_mapImage.pixelColor(groundCenter) == QColor(Qt::blue)
+                    && editor.m_imgGround->pixmap().toImage().pixelColor(42, 25) == QColor(Qt::blue),
+                    "Rendered ground under the cursor differs from its preview");
+            }
         }
         output << "PASS: scene single layer isolation, reverse mouse drag, altitude region and undo\n";
         {
@@ -4399,6 +4579,119 @@ inline int runSelfTests(const QString &reportPath)
                 && editor.m_dFile.mapEvent[0].sceneEvent[0].event1 == 123
                 && editor.m_dFile.mapEvent[0].sceneEvent[0].num == 17,
                 "Event edit/move confused D slot with editable num field");
+            editor.m_layerCombo->setCurrentIndex(5);
+            editor.renderMap();
+            require(editor.m_mapLabel->hasMouseTracking(), "Scene canvas requires a pressed button for hover");
+            QPoint cursorPosition = editor.isoToScreen(4, 5) - QPoint(0, editor.tileH());
+            require(editor.screenToIso(cursorPosition.x(), cursorPosition.y() - 1) == QPoint(4, 5)
+                && editor.screenToIso(cursorPosition.x(), cursorPosition.y() + 1) == QPoint(4, 5),
+                "Scene cell center rounding shifts both axes by one");
+            QMouseEvent hover(QEvent::MouseMove, QPointF(cursorPosition), QPointF(cursorPosition),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &hover);
+            require(editor.m_hoverIsoX == 4 && editor.m_hoverIsoY == 5,
+                "Scene hover did not track the current tile without a button");
+            int outlinePixels = 0;
+            for (int row = -editor.tileH() - 2; row <= editor.tileH() + 2; ++row)
+                for (int column = -editor.tileW() - 2; column <= editor.tileW() + 2; ++column)
+                    if (editor.m_mapImage.pixelColor(cursorPosition + QPoint(column, row)) == QColor(Qt::red))
+                        ++outlinePixels;
+            require(outlinePixels > 20, "Scene hover diamond was not drawn on the canvas");
+            QByteArray beforeClick = MapIO::encodeMap(editor.m_mapData.map[0]);
+            int undoBeforeClick = editor.m_undoStack.size();
+            editor.m_evtEvent1->clear();
+            QMouseEvent eventPress(QEvent::MouseButtonPress, QPointF(cursorPosition), QPointF(cursorPosition),
+                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent eventRelease(QEvent::MouseButtonRelease, QPointF(cursorPosition), QPointF(cursorPosition),
+                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &eventPress);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &eventRelease);
+            require(editor.m_selectedEventIndex == 0 && editor.m_evtIndex->text() == "17"
+                && editor.m_evtEvent1->text() == "123" && editor.m_evtX->text() == "4"
+                && editor.m_evtY->text() == "5" && editor.m_selectionStart == QPoint(-1, -1),
+                "All-layer event click did not load the D slot into the editor");
+            require(beforeClick == MapIO::encodeMap(editor.m_mapData.map[0])
+                && undoBeforeClick == editor.m_undoStack.size(), "Inspecting an event changed scene data");
+            QPoint labelPosition = editor.eventLabelRect(4, 5, 0).center();
+            require(editor.screenToIso(labelPosition.x(), labelPosition.y()) != QPoint(4, 5),
+                "Event label test must exercise the displaced visual label");
+            editor.m_selectedEventIndex = -1;
+            editor.m_evtEvent1->clear();
+            QMouseEvent labelPress(QEvent::MouseButtonPress, QPointF(labelPosition), QPointF(labelPosition),
+                Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent labelRelease(QEvent::MouseButtonRelease, QPointF(labelPosition), QPointF(labelPosition),
+                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QMouseEvent labelHover(QEvent::MouseMove, QPointF(labelPosition), QPointF(labelPosition),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &labelHover);
+            const QPoint labelGround = editor.screenToIso(labelPosition.x(), labelPosition.y());
+            const QString labelStatus = QString("(%1, %2)").arg(labelGround.x()).arg(labelGround.y());
+            const MapStruct previewMap = editor.m_mapData;
+            const QVector<QImage> previewCache = editor.m_tileCache;
+            editor.m_tileCache.resize(4);
+            for (int tile = 0; tile < 4; ++tile) {
+                editor.m_tileCache[tile] = QImage(4, 4, QImage::Format_ARGB32);
+                editor.m_tileCache[tile].fill(tile == 0 ? Qt::yellow : tile == 1 ? Qt::red : tile == 2 ? Qt::green : Qt::blue);
+            }
+            for (int layer = 0; layer < 3; ++layer) {
+                editor.m_mapData.map[0].mapLayer[layer].pic[labelGround.x()][labelGround.y()] = (layer + 1) * 2;
+                editor.m_mapData.map[0].mapLayer[layer].pic[4][5] = 0;
+            }
+            QCoreApplication::sendEvent(editor.m_mapLabel, &labelHover);
+            require(QPoint(editor.m_hoverIsoX, editor.m_hoverIsoY) == labelGround
+                && editor.m_statusBar->currentMessage() == labelStatus,
+                "Event label attracted the hover cursor away from the mouse tile");
+            QCoreApplication::sendEvent(editor.m_mapLabel, &labelPress);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &labelRelease);
+            require(editor.m_selectedEventIndex == 0 && editor.m_evtEvent1->text() == "123"
+                && QPoint(editor.m_hoverIsoX, editor.m_hoverIsoY) == labelGround,
+                "Clicking the visible event label did not select its owning event");
+            require(editor.m_statusBar->currentMessage() == labelStatus,
+                "Event click left stale status coordinates");
+            require(editor.m_lblGroundVal->text() == "1" && editor.m_lblBuildingVal->text() == "2"
+                && editor.m_lblSkyVal->text() == "3", "Event click replaced hover tile previews with event-cell tiles");
+            require(editor.m_imgGround->pixmap().toImage().pixelColor(1, 1) == QColor(Qt::red)
+                && editor.m_imgBuilding->pixmap().toImage().pixelColor(1, 1) == QColor(Qt::green)
+                && editor.m_imgSky->pixmap().toImage().pixelColor(1, 1) == QColor(Qt::blue),
+                "Three scene preview images do not match the hovered cell");
+            editor.updateTilePreview(4, 5);
+            require(!editor.m_imgGround->pixmap().isNull() && editor.m_imgBuilding->pixmap().isNull()
+                && editor.m_imgSky->pixmap().isNull(), "Empty building/sky preview incorrectly displays tile zero");
+            editor.updateTilePreview(-1, -1);
+            require(editor.m_imgGround->pixmap().isNull() && editor.m_lblGroundVal->text().isEmpty(),
+                "Out-of-map scene preview retained stale images");
+            editor.m_mapData = previewMap;
+            editor.m_tileCache = previewCache;
+            require(beforeClick == MapIO::encodeMap(editor.m_mapData.map[0])
+                && undoBeforeClick == editor.m_undoStack.size(), "Event label click changed map data");
+            for (int layer : {0, 1, 3, 4, 5, 6}) {
+                editor.m_layerCombo->setCurrentIndex(layer);
+                for (int delta = -12; delta <= 12; delta += 3) {
+                    const QPoint position = labelPosition + QPoint(delta, delta / 2);
+                    const QPoint expected = editor.screenToIso(position.x(), position.y());
+                    QMouseEvent movement(QEvent::MouseMove, QPointF(position), QPointF(position),
+                        Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+                    QCoreApplication::sendEvent(editor.m_mapLabel, &movement);
+                    require(QPoint(editor.m_hoverIsoX, editor.m_hoverIsoY) == expected
+                        && editor.m_statusBar->currentMessage() == QString("(%1, %2)").arg(expected.x()).arg(expected.y()),
+                        "Scene hover changed geometry near an event label across operation layers");
+                }
+            }
+            editor.m_layerCombo->setCurrentIndex(5);
+            QMouseEvent dragging(QEvent::MouseMove, QPointF(labelPosition), QPointF(labelPosition),
+                Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &dragging);
+            require(QPoint(editor.m_hoverIsoX, editor.m_hoverIsoY) == labelGround,
+                "Dragging across a label snapped the scene cursor");
+            require(beforeClick == MapIO::encodeMap(editor.m_mapData.map[0])
+                && undoBeforeClick == editor.m_undoStack.size(), "Hovering over labels changed map data");
+            QPoint outsidePosition = editor.isoToScreen(70, 70);
+            QMouseEvent outside(QEvent::MouseMove, QPointF(outsidePosition), QPointF(outsidePosition),
+                Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(editor.m_mapLabel, &outside);
+            require(editor.m_hoverIsoX == -1 && editor.m_hoverIsoY == -1,
+                "Scene hover remained on the canvas outside map bounds");
+            editor.m_layerCombo->setCurrentIndex(3);
             editor.m_moduleMap = MapIO::extractRegion(editor.m_mapData.map[0], QRect(4, 5, 1, 1));
             editor.m_moduleEvents[0] = editor.m_dFile.mapEvent[0].sceneEvent[0];
             require(editor.pasteModule(QPoint(8, 9)), "Cannot paste event module");
@@ -4463,23 +4756,141 @@ inline int runSelfTests(const QString &reportPath)
         }
         output << "PASS: sprite hit testing, clean war export and clipboard mode\n";
         {
+            WarMapEdit war;
+            Map battlefield;
+            require(MapIO::readSingleMap(QByteArray(64 * 64 * 2 * 2, '\0'), 0, battlefield, 2, 64, 64),
+                "Cannot create full-size battlefield fixture");
+            war.m_mapData.map = {battlefield}; war.m_mapData.num = 1; war.m_currentMapIndex = 0;
+            war.m_tileCache.resize(2); war.m_grpPics.resize(2);
+            war.m_tileCache[1] = QImage(5, 5, QImage::Format_ARGB32);
+            war.m_tileCache[1].fill(Qt::magenta);
+            war.m_grpPics[1].xoff = 2; war.m_grpPics[1].yoff = 10;
+            war.m_layerCombo->setCurrentIndex(1);
+            war.m_selectedTileId = 1;
+            war.renderMap();
+            const QByteArray before = MapIO::encodeMap(war.m_mapData.map[0]);
+            const QPoint position = war.isoToScreen(1, 1) - QPoint(0, war.tileH());
+            QMouseEvent move(QEvent::MouseMove, QPointF(position), QPointF(position), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            war.handleMouseMove(&move);
+            const QColor pixel = war.m_mapImage.pixelColor(position + QPoint(1, 1));
+            require(war.m_hoverIsoX == 1 && war.m_hoverIsoY == 1 && pixel.red() > 100 && pixel.blue() > 100,
+                "War hover coordinates or actual sprite preview failed");
+            require(before == MapIO::encodeMap(war.m_mapData.map[0]), "War hover preview changed map data");
+            war.m_mapData.map[0].mapLayer[0].pic[1][1] = 2;
+            war.onTileClicked(1, 1, Qt::LeftButton);
+            const QPoint finish = war.isoToScreen(2, 2) - QPoint(0, war.tileH());
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(finish), QPointF(finish),
+                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            war.handleMouseRelease(&release);
+            require(war.m_hasClipboard && war.m_selectedRegion == QRect(1, 1, 2, 2),
+                "War copied selection did not retain its yellow region");
+            war.m_hoverIsoX = 10; war.m_hoverIsoY = 10; war.renderMap();
+            const QPoint pasteOrigin = war.isoToScreen(9, 9);
+            require(war.m_mapImage.pixelColor(pasteOrigin - QPoint(0, 2 * war.tileH())) == QColor(Qt::green)
+                && war.m_mapImage.pixelColor(pasteOrigin - QPoint(1, 9)).red() > 100,
+                "War module preview outline or actual copied sprite is missing");
+            war.m_mapData.map[0].mapLayer[0].pic[1][1] = 0;
+            auto sections = war.findChildren<QToolButton *>();
+            require(sections.size() >= 6, "War controls are not collapsible sections");
+            war.m_backdrop = QImage(16, 16, QImage::Format_ARGB32); war.m_backdrop.fill(Qt::cyan);
+            war.m_backdropMap = 0; war.m_backdropEnabled->setChecked(true);
+            const QPoint origin(war.m_renderCenterX - battlefield.y * war.tileW(), war.m_renderCenterY - 2 * war.tileH());
+            require(war.m_mapImage.pixelColor(origin) == QColor(Qt::cyan)
+                && war.exportImage(true, true).pixelColor(origin) == QColor(Qt::cyan),
+                "War backdrop origin or clean export failed");
+            war.m_backdropMap = 1; war.renderMap();
+            require(war.m_mapImage.pixelColor(origin) != QColor(Qt::cyan), "War backdrop leaked to another map");
+            require(before == MapIO::encodeMap(war.m_mapData.map[0]), "War backdrop changed original data");
+        }
+        output << "PASS: war folded controls, geometric hover, sprite preview isolation and bound backdrop export\n";
+        {
+            WarMapEdit war;
+            Map map;
+            require(MapIO::readSingleMap(QByteArray(64 * 64 * 2 * 2, '\0'), 0, map, 2, 64, 64),
+                "Cannot create war mask fixture");
+            war.m_mapData.map = {map}; war.m_mapData.num = 1; war.m_currentMapIndex = 0;
+            const QByteArray original = MapIO::encodeMap(map);
+            war.m_backdrop = QImage(2304, 1153, QImage::Format_ARGB32); war.m_backdrop.fill(Qt::blue);
+            war.m_backdropMap = 0;
+            war.m_backdropDepth.fill(-1, 2304 * 1153);
+            war.m_backdropEnabled->setChecked(true);
+            war.m_anchorX->setValue(4); war.m_anchorY->setValue(4); war.m_brushRadius->setValue(2);
+            war.m_backdropTool->setCurrentIndex(2);
+            require(war.m_backdropOverlay->isChecked(), "War paint tool has no visible mask feedback");
+            const QPoint position = war.isoToScreen(2, 2) - QPoint(0, war.tileH());
+            const QPoint pixel = position - war.backdropOffset();
+            auto stroke = [&](Qt::MouseButton button) {
+                QMouseEvent press(QEvent::MouseButtonPress, QPointF(position), QPointF(position), button, button, Qt::NoModifier);
+                QMouseEvent release(QEvent::MouseButtonRelease, QPointF(position), QPointF(position), button, Qt::NoButton, Qt::NoModifier);
+                QCoreApplication::sendEvent(war.m_mapLabel, &press);
+                QCoreApplication::sendEvent(war.m_mapLabel, &release);
+            };
+            stroke(Qt::LeftButton);
+            const int offset = pixel.y() * war.m_backdrop.width() + pixel.x();
+            require(war.m_backdropDepth[offset] == war.backdropDepth(4, 4)
+                && war.m_backdropDepthInfo->text().count('\n') == 2, "War mouse brush or three-line inspector failed");
+            war.findChild<QPushButton *>("warBackdropUndo")->click();
+            require(war.m_backdropDepth[offset] == -1, "War mask undo failed");
+            war.findChild<QPushButton *>("warBackdropRedo")->click();
+            require(war.m_backdropDepth[offset] == war.backdropDepth(4, 4), "War mask redo failed");
+            war.m_tileCache.resize(2502); war.m_grpPics.resize(2502);
+            war.m_tileCache[2501] = QImage(1, 1, QImage::Format_ARGB32); war.m_tileCache[2501].fill(Qt::red);
+            war.m_grpPics[2501].yoff = war.tileH();
+            war.m_backdropOverlay->setChecked(false);
+            war.m_backdropTool->setCurrentIndex(4);
+            require(war.m_mapImage.pixelColor(position) == QColor(Qt::blue), "War actor bypassed foreground mask");
+            war.m_anchorX->setValue(1); war.m_anchorY->setValue(1);
+            war.paintBackdrop(position, false); war.recordBackdropStroke(); war.renderMap();
+            require(war.m_mapImage.pixelColor(position) == QColor(Qt::red), "War actor behind lower-depth mask is invisible");
+            const QString path = temporary.filePath("battle-mask.wbg");
+            require(war.saveBackdrop(path) && !war.m_backdropDirty, "War mask project save failed");
+            const auto saved = war.m_backdropDepth;
+            war.m_backdropTool->setCurrentIndex(2); stroke(Qt::RightButton);
+            require(war.m_backdropDepth[offset] == -1, "War right brush did not erase");
+            require(war.loadBackdrop(path) && war.m_backdropDepth == saved
+                && war.m_backdrop.pixelColor(0, 0) == QColor(Qt::blue), "War mask project roundtrip failed");
+            const QByteArray bytes = FileIO::readFileAll(path);
+            require(FileIO::writeFileAll(path, bytes.chopped(1)), "Cannot truncate war mask project");
+            require(!war.loadBackdrop(path) && war.m_backdropDepth == saved, "Corrupt war project replaced active mask");
+            war.m_mapData.map.append(map); war.m_mapData.num = 2; war.m_currentMapIndex = 1;
+            require(!war.backdropActive(), "War mask leaked to another battlefield");
+            require(FileIO::writeFileAll(path, bytes) && !war.loadBackdrop(path), "War project loaded under wrong map index");
+            require(MapIO::encodeMap(war.m_mapData.map[0]) == original, "War mask tools changed original battlefield");
+            war.m_backdropDirty = false;
+        }
+        output << "PASS: war mask mouse painting, erasing, undo, actor depth, project roundtrip and corrupt-load isolation\n";
+        {
             MainMapEdit editor;
             editor.m_timer->stop();
             editor.m_layerCombo->setCurrentIndex(1);
             editor.m_hoverIX = -1;
             editor.m_hoverIY = -1;
             editor.m_selectedTileId = 12;
-            QPoint position = editor.mapToScreen(240, 240);
+            QPoint position = editor.mapToScreen(240, 240) - QPoint(0, editor.tileH());
             QMouseEvent click(QEvent::MouseButtonPress, QPointF(position), QPointF(position),
                 Qt::RightButton, Qt::RightButton, Qt::NoModifier);
             editor.handleMousePress(&click);
             require(editor.m_mapData.map[0].mapLayer[0].pic[240][240] == 24, "Main map click used stale hover coordinates");
+            editor.m_tileCache.resize(13); editor.m_grpPics.resize(13);
+            editor.m_tileCache[12] = QImage(5, 5, QImage::Format_ARGB32);
+            editor.m_tileCache[12].fill(Qt::magenta);
+            editor.m_grpPics[12].yoff = editor.tileH();
+            const QByteArray before = MapIO::encodeMap(editor.m_mapData.map[0]);
+            const QPoint emptyPosition = editor.mapToScreen(241, 241) - QPoint(0, editor.tileH());
+            editor.m_mapData.map[0].mapLayer[0].pic[241][241] = 0;
+            QMouseEvent move(QEvent::MouseMove, QPointF(emptyPosition), QPointF(emptyPosition), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            editor.handleMouseMove(&move);
+            const QColor pixel = editor.m_mapImage.pixelColor(emptyPosition + QPoint(1, 1));
+            require(pixel.red() > 100 && pixel.blue() > 100 && pixel.green() < 10,
+                "Main map green outline contains no sprite preview");
+            require(before == MapIO::encodeMap(editor.m_mapData.map[0]), "Main map hover preview changed data");
+            require(editor.findChildren<QToolButton *>().size() >= 4, "Main map controls are not collapsible sections");
             editor.m_mapData.map[0].mapLayer[2].pic[240][240] = 2;
             editor.m_mapData.map[0].mapLayer[3].pic[241][240] = 240;
             editor.m_mapData.map[0].mapLayer[4].pic[241][240] = 240;
             editor.m_layerCombo->setCurrentIndex(5);
             editor.m_selectionStart = QPoint(241, 240);
-            QPoint end = editor.mapToScreen(240, 240);
+            QPoint end = editor.mapToScreen(240, 240) - QPoint(0, editor.tileH());
             QMouseEvent release(QEvent::MouseButtonRelease, QPointF(end), QPointF(end),
                 Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
             editor.handleMouseRelease(&release);
