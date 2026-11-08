@@ -525,10 +525,13 @@ inline int runSelfTests(const QString &reportPath)
                 auto *sectionLayout = combined->parentWidget()->layout();
                 auto *combinedContent = sectionLayout->itemAt(sectionLayout->indexOf(combined) + 1)->widget();
                 require(combinedContent->isAncestorOf(war.m_backdropEnabled)
-                    && combinedContent->isAncestorOf(war.m_backdropTool)
-                    && combinedContent->isAncestorOf(war.m_backdropDepthInfo)
-                    && combinedContent->findChildren<QPushButton *>().size() == 6,
-                    "War backdrop and mask controls are not in the same collapsible section");
+                    && combinedContent->isAncestorOf(war.m_geometry)
+                    && combinedContent->isAncestorOf(war.m_originX)
+                    && war.m_backdropTool->isHidden() && war.m_backdropDepthInfo->isHidden()
+                    && scene.m_backdropTool->isHidden() && scene.m_backdropDepthInfo->isHidden()
+                    && war.findChild<QPushButton *>("warBackdropUndo")->isHidden()
+                    && scene.findChild<QPushButton *>("backdropUndo")->isHidden(),
+                    "Geometry-only workflow still exposes legacy pixel controls");
                 for (QWidget *editor : QList<QWidget *>{&main, &war, &scene}) {
                     const auto toggles = editor->findChildren<QToolButton *>(QRegularExpression("^mapSection_"));
                     require(!toggles.isEmpty(), "Map section headers missing");
@@ -574,6 +577,110 @@ inline int runSelfTests(const QString &reportPath)
                 "Section settings changed original INI encoding or unrelated configuration");
         }
         output << "PASS: full-width map section headers, INI collapse restoration and UTF16 configuration preservation\n";
+        {
+            QVector<QImage> tiles(3);
+            tiles[1] = QImage(1, 1, QImage::Format_ARGB32); tiles[1].fill(Qt::red);
+            tiles[2] = QImage(1, 1, QImage::Format_ARGB32); tiles[2].fill(Qt::green);
+            Map map;
+            require(MapIO::readSingleMap(QByteArray(64 * 64 * 6 * 2, '\0'), 0, map, 6, 64, 64),
+                "Cannot create layer refresh fixture");
+            map.mapLayer[0].pic[2][2] = 2;
+            map.mapLayer[1].pic[2][2] = 4;
+            WarMapEdit war;
+            war.m_mapData.map = {map}; war.m_mapData.num = 1; war.m_currentMapIndex = 0;
+            war.m_tileCache = tiles; war.m_grpPics.clear();
+            war.m_layerCombo->setCurrentIndex(1);
+            require(war.m_mapImage.pixelColor(war.isoToScreen(2, 2)) == QColor(Qt::red),
+                "War ground layer did not render immediately");
+            war.m_layerCombo->setCurrentIndex(2);
+            require(war.m_mapImage.pixelColor(war.isoToScreen(2, 2)) == QColor(Qt::green),
+                "War layer switch waits for mouse input");
+            SceneMapEdit scene;
+            scene.m_mapData.map = {map}; scene.m_mapData.num = 1;
+            scene.m_tileCache = tiles; scene.m_grpPics.clear();
+            scene.m_layerCombo->setCurrentIndex(0);
+            require(scene.m_mapImage.pixelColor(scene.isoToScreen(2, 2)) == QColor(Qt::red),
+                "Scene ground layer did not render immediately");
+            scene.m_layerCombo->setCurrentIndex(1);
+            require(scene.m_mapImage.pixelColor(scene.isoToScreen(2, 2)) == QColor(Qt::green),
+                "Scene layer switch waits for mouse input");
+            MainMapEdit main;
+            main.m_timer->stop();
+            main.m_tileCache = tiles; main.m_grpPics.clear();
+            main.m_mapData.map[0].mapLayer[0].pic[240][240] = 2;
+            main.m_mapData.map[0].mapLayer[1].pic[240][240] = 4;
+            main.m_layerCombo->setCurrentIndex(1);
+            require(main.m_mapImage.pixelColor(main.mapToScreen(240, 240)) == QColor(Qt::red),
+                "Main map layer switch depends on timer");
+            main.m_layerCombo->setCurrentIndex(2);
+            require(main.m_mapImage.pixelColor(main.mapToScreen(240, 240)) == QColor(Qt::green),
+                "Main map layer switch waits for mouse input");
+            const QModelIndex ground = main.m_layerCombo->model()->index(1, 0);
+            require(QMetaObject::invokeMethod(main.m_layerCombo->view(), "pressed", Qt::DirectConnection,
+                Q_ARG(QModelIndex, ground)), "Cannot trigger layer checkbox selection");
+            require(main.m_layers.contains(0) && main.m_layers.contains(1), "Layer checkbox did not select both layers");
+            const QModelIndex surface = main.m_layerCombo->model()->index(2, 0);
+            QMetaObject::invokeMethod(main.m_layerCombo->view(), "pressed", Qt::DirectConnection, Q_ARG(QModelIndex, surface));
+            require(main.m_mapImage.pixelColor(main.mapToScreen(240, 240)) == QColor(Qt::red),
+                "Main map checkbox layer switch did not redraw synchronously");
+        }
+        output << "PASS: immediate operation-layer pixel refresh in main, scene and war editors without timer or mouse input\n";
+        {
+            OcclusionEditor editor;
+            QPoint origin(1152, 18);
+            editor.getOrigin = [&] { return origin; };
+            editor.setOrigin = [&](QPoint point) { origin = point; };
+            editor.binding = [] { return QString("scene:0:0"); };
+            editor.tool->setCurrentIndex(2);
+            editor.press(QPointF(10, 100), Qt::LeftButton);
+            editor.press(QPointF(110, 150), Qt::LeftButton);
+            editor.move(QPointF(110, 70));
+            editor.press(QPointF(110, 70), Qt::LeftButton);
+            require(editor.shapes.size() == 1 && editor.shapes[0].height == 80
+                && editor.shapes[0].polygon()[2] == QPointF(110, 70), "Wall three-click construction failed");
+            require(editor.shapes[0].behind(QPointF(60, 120)) && !editor.shapes[0].behind(QPointF(60, 130)),
+                "Sloped wall depth does not interpolate its baseline");
+            QImage sprite(4, 4, QImage::Format_ARGB32); sprite.fill(Qt::red);
+            require(editor.maskSprite(sprite, QPoint(59, 100), QPointF(60, 120)).pixelColor(0, 0).alpha() == 0
+                && editor.maskSprite(sprite, QPoint(59, 100), QPointF(60, 130)).pixelColor(0, 0) == QColor(Qt::red),
+                "Geometric wall did not hide/reveal actual sprite pixels");
+            editor.hiddenAlpha->setValue(0.3);
+            editor.shapes << editor.shapes[0];
+            require(qAbs(editor.maskSprite(sprite, QPoint(59, 100), QPointF(60, 120)).pixelColor(0, 0).alpha() - 77) <= 1,
+                "Overlapping geometry repeatedly attenuated sprite alpha");
+            editor.shapes.removeLast();
+            editor.tool->setCurrentIndex(3);
+            editor.press(QPointF(200, 200), Qt::LeftButton); editor.press(QPointF(240, 200), Qt::LeftButton);
+            editor.press(QPointF(240, 240), Qt::LeftButton); editor.press(QPointF(200, 240), Qt::LeftButton);
+            editor.press(QPointF(200, 240), Qt::RightButton);
+            require(editor.shapes.size() == 2 && editor.shapes[1].type == "tree", "Polygon closing failed");
+            editor.tool->setCurrentIndex(4); editor.press(QPointF(220, 260), Qt::LeftButton);
+            require(editor.shapes[1].pivotY == 260, "Point-picked tree root was not saved");
+            const QString path = temporary.filePath("geometry.json");
+            require(editor.saveJson(path) && !editor.dirty, "Geometry JSON atomic save failed");
+            const QByteArray bytes = FileIO::readFileAll(path);
+            editor.reset(); origin = QPoint();
+            require(editor.loadJson(path) && editor.shapes.size() == 2 && origin == QPoint(1152, 18)
+                && editor.shapes[1].pivotY == 260 && editor.hiddenAlpha->value() == 0.3,
+                "Geometry JSON lost shapes, root, origin or alpha");
+            require(FileIO::writeFileAll(path, bytes.chopped(5)) && !editor.loadJson(path) && editor.shapes.size() == 2,
+                "Corrupt geometry JSON changed active shapes");
+            auto html = QJsonDocument::fromJson(bytes).object();
+            html.remove("map"); html.remove("origin"); html.remove("coordinateSystem"); html.remove("hiddenActorAlpha");
+            html["version"] = "2.0.0";
+            require(FileIO::writeFileAll(path, QJsonDocument(html).toJson()) && editor.loadJson(path)
+                && editor.shapes.size() == 2, "HTML version-2 JSON schema is not accepted");
+            auto invalid = html; auto items = invalid["items"].toArray(); auto item = items[0].toObject();
+            auto data = item["occlusionData"].toObject(); data["wallHeight"] = -5; item["occlusionData"] = data;
+            items[0] = item; invalid["items"] = items;
+            require(FileIO::writeFileAll(path, QJsonDocument(invalid).toJson()) && !editor.loadJson(path)
+                && editor.shapes.size() == 2, "Invalid wall JSON replaced current geometry");
+            QImage overlay(300, 300, QImage::Format_ARGB32); overlay.fill(Qt::transparent);
+            { QPainter painter(&overlay); editor.draw(painter, QPoint(), QPointF(60, 120)); }
+            require(overlay.pixelColor(60, 100).alpha() > 0, "Geometry display has no visible polygon fill");
+            editor.dirty = false;
+        }
+        output << "PASS: geometric wall and polygon annotation, root picking, sprite depth/alpha and HTML-compatible JSON preservation\n";
         {
             QByteArray bytes("keep");
             require(!Encoding::writeInStrWithCode(QString::fromUtf8("\xe6\xb8\xac"), bytes.data(), 2, 3)
@@ -4135,8 +4242,12 @@ inline int runSelfTests(const QString &reportPath)
                 "Backdrop alignment depends on nonempty content bounds");
             editor.m_backdrop = QImage(2604, 1452, QImage::Format_ARGB32);
             editor.alignImportedBackdrop();
+            require(editor.m_originX->value() == 1152 && editor.m_originY->value() == 18
+                && editor.m_backdropX->value() == 150 && editor.m_backdropY->value() == 132,
+                "Image dimensions overrode configured game origin");
+            editor.m_originX->setValue(1302); editor.m_originY->setValue(150);
             require(editor.m_backdropX->value() == 0 && editor.m_backdropY->value() == 0,
-                "Already padded backdrop was shifted twice");
+                "Configurable scene image origin did not update drawing offset");
             editor.m_backdrop = QImage(32, 32, QImage::Format_ARGB32);
             editor.m_backdrop.fill(Qt::blue);
             editor.m_backdropDepth.fill(-1, 1024);
@@ -4194,6 +4305,8 @@ inline int runSelfTests(const QString &reportPath)
             require(editor.loadBackdrop(projectPath) && editor.m_backdropDepth == savedDepth
                 && editor.m_backdrop.pixelColor(0, 0) == QColor(Qt::blue),
                 "Backdrop project roundtrip lost pixels or depth");
+            require(editor.m_originX->value() == 1302 && editor.m_originY->value() == 150,
+                "Scene project did not restore game image origin");
             QByteArray project = FileIO::readFileAll(projectPath);
             require(FileIO::writeFileAll(projectPath, project.chopped(1)), "Cannot truncate backdrop fixture");
             require(!editor.loadBackdrop(projectPath) && editor.m_backdropDepth == savedDepth,
@@ -4839,6 +4952,10 @@ inline int runSelfTests(const QString &reportPath)
             war.m_backdropOverlay->setChecked(false);
             war.m_backdropTool->setCurrentIndex(4);
             require(war.m_mapImage.pixelColor(position) == QColor(Qt::blue), "War actor bypassed foreground mask");
+            const QPoint oldOffset = war.backdropOffset();
+            war.m_originX->setValue(1149); war.m_originY->setValue(16);
+            require(war.backdropOffset() == oldOffset + QPoint(3, 2), "War custom game origin did not move image");
+            war.m_originX->setValue(1152); war.m_originY->setValue(18);
             war.m_anchorX->setValue(1); war.m_anchorY->setValue(1);
             war.paintBackdrop(position, false); war.recordBackdropStroke(); war.renderMap();
             require(war.m_mapImage.pixelColor(position) == QColor(Qt::red), "War actor behind lower-depth mask is invisible");
@@ -4849,6 +4966,11 @@ inline int runSelfTests(const QString &reportPath)
             require(war.m_backdropDepth[offset] == -1, "War right brush did not erase");
             require(war.loadBackdrop(path) && war.m_backdropDepth == saved
                 && war.m_backdrop.pixelColor(0, 0) == QColor(Qt::blue), "War mask project roundtrip failed");
+            war.m_originX->setValue(1100); war.m_originY->setValue(25);
+            require(war.saveBackdrop(path), "War custom origin save failed");
+            war.m_originX->setValue(1152); war.m_originY->setValue(18);
+            require(war.loadBackdrop(path) && war.m_originX->value() == 1100 && war.m_originY->value() == 25,
+                "War project lost custom image origin");
             const QByteArray bytes = FileIO::readFileAll(path);
             require(FileIO::writeFileAll(path, bytes.chopped(1)), "Cannot truncate war mask project");
             require(!war.loadBackdrop(path) && war.m_backdropDepth == saved, "Corrupt war project replaced active mask");

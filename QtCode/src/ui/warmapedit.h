@@ -12,6 +12,7 @@
 #include <QSpinBox>
 #include <QToolButton>
 #include "head.h"
+#include "occlusioneditor.h"
 
 // 等距地图编辑器基类
 class IsoMapEditor : public QWidget {
@@ -151,6 +152,8 @@ private:
     QComboBox *m_backdropTool = nullptr;
     QCheckBox *m_backdropOverlay = nullptr, *m_actorVisible = nullptr;
     QSpinBox *m_brushRadius = nullptr, *m_anchorX = nullptr, *m_anchorY = nullptr;
+    QSpinBox *m_originX = nullptr, *m_originY = nullptr;
     QLabel *m_backdropDepthInfo = nullptr;
     QPoint m_backdropCursor{-1, -1};
+    OcclusionEditor *m_geometry = nullptr;
 };

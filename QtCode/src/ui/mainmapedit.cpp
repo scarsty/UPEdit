@@ -126,7 +126,8 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
         layerModel->item(5)->setCheckState(m_layers.size() == 4 ? Qt::Checked : Qt::Unchecked);
         m_layer = selectedLayer();
         updateLayerSelectorText();
-        m_needUpdate = true;
+        m_needUpdate = false;
+        renderMap();
     });
     connect(m_layerCombo->view(), &QAbstractItemView::pressed, this, [this, layerModel](const QModelIndex &index) {
         const int idx = index.row();
@@ -148,7 +149,8 @@ MainMapEdit::MainMapEdit(QWidget *parent) : IsoMapEditor(parent)
         }
         m_layer = selectedLayer();
         updateLayerSelectorText();
-        m_needUpdate = true;
+        m_needUpdate = false;
+        renderMap();
     });
 
     // ── 加载数据 ──────────────────────────────────────────

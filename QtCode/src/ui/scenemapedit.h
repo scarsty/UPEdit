@@ -58,10 +58,12 @@ private:
     QCheckBox *m_backdropEnabled = nullptr, *m_backdropOverlay = nullptr, *m_actorVisible = nullptr;
     QComboBox *m_backdropTool = nullptr;
     QSpinBox *m_backdropX = nullptr, *m_backdropY = nullptr, *m_brushRadius = nullptr;
+    QSpinBox *m_originX = nullptr, *m_originY = nullptr;
     QSpinBox *m_anchorX = nullptr, *m_anchorY = nullptr;
     QSpinBox *m_actorX = nullptr, *m_actorY = nullptr;
     QLabel *m_backdropDepthInfo = nullptr;
     QPoint m_backdropCursor{-1, -1};
+    OcclusionEditor *m_geometry = nullptr;
     void loadSceneGrpFile(int saveSlot);
     void readSceneData(int sceneIndex);
     void readSceneGrp();

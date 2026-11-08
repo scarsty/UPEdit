@@ -42,22 +42,16 @@ bool SceneMapEdit::backdropActive() const
 
 bool SceneMapEdit::confirmBackdropDiscard()
 {
-    return !m_backdropDirty || QMessageBox::question(this, tr("大图场景"),
-        tr("大图或遮挡尚未保存，放弃这些修改？"), QMessageBox::Discard | QMessageBox::Cancel,
-        QMessageBox::Cancel) == QMessageBox::Discard;
+    return !m_geometry || m_geometry->confirmDiscard();
 }
 
 void SceneMapEdit::alignImportedBackdrop()
 {
     if (m_mapData.map.isEmpty() || m_backdrop.isNull()) return;
-    const auto &map = m_mapData.map[0];
-    const QSize padded((map.x + map.y) * tileW() + 2 * tilePadding(),
-        (map.x + map.y) * tileH() + 2 * tilePadding());
-    const bool includesPadding = m_backdrop.size() == padded;
     const QSignalBlocker blockX(m_backdropX);
     const QSignalBlocker blockY(m_backdropY);
-    m_backdropX->setValue(includesPadding ? 0 : tilePadding());
-    m_backdropY->setValue(includesPadding ? 0 : tilePadding() - 2 * tileH());
+    m_backdropX->setValue(m_renderCenterX - m_originX->value());
+    m_backdropY->setValue(m_renderCenterY - m_originY->value());
 }
 
 void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
@@ -73,8 +67,9 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
     undoMask->setObjectName("backdropUndo");
     redoMask->setObjectName("backdropRedo");
     form->addRow(importImage);
-    form->addRow(loadProject, saveProject);
-    form->addRow(undoMask, redoMask);
+    for (auto *button : {loadProject, saveProject, undoMask, redoMask}) {
+        button->setParent(group); button->hide();
+    }
     connect(undoMask, &QPushButton::clicked, this, [this] {
         if (m_backdropHistoryPos <= 0) return;
         m_backdropDepth = m_backdropHistory[--m_backdropHistoryPos];
@@ -90,13 +85,14 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
     m_backdropEnabled = new QCheckBox(tr("启用大图"));
     m_backdropOverlay = new QCheckBox(tr("显示遮挡区域"));
     m_actorVisible = new QCheckBox(tr("显示预览人物"));
-    form->addRow(m_backdropEnabled, m_backdropOverlay);
+    m_backdropOverlay->setParent(group); m_backdropOverlay->hide();
+    form->addRow(m_backdropEnabled);
     form->addRow(m_actorVisible);
     m_backdropTool = new QComboBox;
     m_backdropTool->addItems({tr("原场景编辑"), tr("选择建筑落地点"), tr("涂绘遮挡"), tr("擦除遮挡"), tr("移动预览人物")});
     importImage->setToolTip(tr("使用不含动态人物、事件的干净场景图。仅支持不透明静态遮挡。"));
     m_backdropTool->setToolTip(tr("先选择建筑落地点，再涂绘建筑轮廓；右键可擦除遮挡。大图项目单独保存，不写入 S/D。"));
-    form->addRow(tr("工具"), m_backdropTool);
+    m_backdropTool->setParent(group); m_backdropTool->hide();
     auto addNumber = [&](const QString &label, int minimum, int maximum, int initial) {
         auto *spin = new QSpinBox;
         spin->setRange(minimum, maximum);
@@ -110,15 +106,29 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
         offset->setRange(-32768, 32767);
         offset->hide();
     }
+    m_originX = addNumber(tr("大图内地图原点 X"), -32767, 32767, 1152);
+    m_originY = addNumber(tr("大图内地图原点 Y"), -32767, 32767, 18);
+    for (auto *origin : {m_originX, m_originY})
+        connect(origin, &QSpinBox::valueChanged, this, [this] {
+            alignImportedBackdrop();
+            if (!m_backdrop.isNull() && m_geometry) m_geometry->dirty = true;
+            renderMap();
+        });
+    m_geometry = new OcclusionEditor;
+    form->addRow(m_geometry);
+    m_geometry->getOrigin = [this] { return QPoint(m_originX->value(), m_originY->value()); };
+    m_geometry->setOrigin = [this](QPoint origin) { m_originX->setValue(origin.x()); m_originY->setValue(origin.y()); };
+    m_geometry->binding = [this] { return QString("scene:%1:%2").arg(m_currentSave).arg(m_currentScene); };
+    m_geometry->changed = [this] { renderMap(); };
     m_backdropDepthInfo = new QLabel(tr("像素：—\n深度：—\n落点：—"));
     m_backdropDepthInfo->setWordWrap(false);
     m_backdropDepthInfo->setFixedHeight(m_backdropDepthInfo->fontMetrics().lineSpacing() * 3 + 6);
     m_backdropDepthInfo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     m_backdropDepthInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    form->addRow(tr("鼠标处遮挡值"), m_backdropDepthInfo);
-    m_brushRadius = addNumber(tr("笔刷半径"), 1, 128, 12);
-    m_anchorX = addNumber(tr("建筑落点 X"), 0, 63, 0);
-    m_anchorY = addNumber(tr("建筑落点 Y"), 0, 63, 0);
+    m_backdropDepthInfo->setParent(group); m_backdropDepthInfo->hide();
+    m_brushRadius = new QSpinBox(group); m_brushRadius->setRange(1, 128); m_brushRadius->setValue(12); m_brushRadius->hide();
+    m_anchorX = new QSpinBox(group); m_anchorX->setRange(0, 63); m_anchorX->hide();
+    m_anchorY = new QSpinBox(group); m_anchorY->setRange(0, 63); m_anchorY->hide();
     m_actorX = addNumber(tr("人物 X"), 0, 63, 0);
     m_actorY = addNumber(tr("人物 Y"), 0, 63, 0);
     layout->insertWidget(0, group);
@@ -133,9 +143,10 @@ void SceneMapEdit::setupBackdropTools(QVBoxLayout *layout)
             return;
         }
         m_backdrop = image;
-        m_backdropDepth.fill(-1, image.width() * image.height());
-        m_backdropHistory = {m_backdropDepth};
-        m_backdropHistoryPos = 0;
+        m_geometry->reset();
+        m_backdropDepth.clear();
+        m_backdropHistory.clear();
+        m_backdropHistoryPos = -1;
         m_backdropSlot = m_currentSave;
         m_backdropScene = m_currentScene;
         alignImportedBackdrop();
@@ -234,6 +245,7 @@ bool SceneMapEdit::loadBackdrop(const QString &path)
         if (depth < -1 || depth >= 8192) return false;
     }
     m_backdrop = image;
+    m_geometry->reset();
     m_backdropDepth = candidate;
     m_backdropHistory = {candidate};
     m_backdropHistoryPos = 0;
@@ -241,6 +253,11 @@ bool SceneMapEdit::loadBackdrop(const QString &path)
     m_backdropScene = scene;
     m_backdropX->setValue(offsetX);
     m_backdropY->setValue(offsetY);
+    {
+        const QSignalBlocker blockX(m_originX), blockY(m_originY);
+        m_originX->setValue(m_renderCenterX - offsetX);
+        m_originY->setValue(m_renderCenterY - offsetY);
+    }
     m_backdropEnabled->setChecked(true);
     m_backdropDirty = false;
     return true;
@@ -248,8 +265,15 @@ bool SceneMapEdit::loadBackdrop(const QString &path)
 
 void SceneMapEdit::drawBackdropSprite(QPainter &painter, const QImage &sprite, QPoint position, int depth)
 {
-    QImage visible = sprite.convertToFormat(QImage::Format_ARGB32);
-    for (int row = 0; row < visible.height(); ++row) {
+    const QPoint offset(m_backdropX->value(), m_backdropY->value());
+    const int order = m_mapData.map.isEmpty() ? 128 : m_mapData.map[0].x + m_mapData.map[0].y;
+    const int diagonal = depth / order;
+    const int remainder = depth % order;
+    const int width = m_mapData.map.isEmpty() ? 64 : m_mapData.map[0].x;
+    const QPoint tile = remainder < width - diagonal ? QPoint(diagonal + remainder, diagonal)
+        : QPoint(diagonal, remainder - width + 2 * diagonal + 1);
+    QImage visible = m_geometry->maskSprite(sprite, position - offset, isoToScreen(tile.x(), tile.y()) - offset);
+    for (int row = 0; m_backdropDepth.size() == m_backdrop.width() * m_backdrop.height() && row < visible.height(); ++row) {
         auto *pixels = reinterpret_cast<QRgb *>(visible.scanLine(row));
         int imageY = position.y() + row - m_backdropY->value();
         if (imageY < 0 || imageY >= m_backdrop.height()) continue;
@@ -317,6 +341,9 @@ QPoint SceneMapEdit::eventClickTile(const QPoint &position) const
 
 void SceneMapEdit::handleMousePress(QMouseEvent *event)
 {
+    if (backdropActive() && m_geometry->active()) {
+        m_geometry->press(event->pos() - QPoint(m_backdropX->value(), m_backdropY->value()), event->button()); return;
+    }
     if (!backdropActive() || m_backdropTool->currentIndex() == 0) {
         handleMouseMove(event);
         const QPoint tile = event->button() == Qt::LeftButton ? eventClickTile(event->pos())
@@ -519,6 +546,7 @@ SceneMapEdit::SceneMapEdit(QWidget *parent) : IsoMapEditor(parent)
     connect(btnEvtConfirm, &QPushButton::clicked, this, &SceneMapEdit::onEventConfirm);
 
     // 填充进度下拉框 (场景下拉框在选中进度后动态填充)
+    connect(m_layerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { renderMap(); });
     IniConfig &cfg = IniConfig::instance();
     for (int i = 0; i < cfg.rFileNum && i < cfg.rFileNote.size(); ++i)
         m_saveCombo->addItem(Encoding::displayStr(cfg.rFileNote[i]));
@@ -540,6 +568,12 @@ void SceneMapEdit::loadSceneGrpFile(int saveSlot)
 {
     IniConfig &cfg = IniConfig::instance();
     if (saveSlot < 0 || saveSlot >= cfg.sGrp.size()) return;
+    if (saveSlot != m_currentSave && m_geometry && (!m_geometry->shapes.isEmpty() || m_geometry->dirty)) {
+        if (!m_geometry->confirmDiscard()) {
+            const QSignalBlocker block(m_saveCombo); m_saveCombo->setCurrentIndex(m_currentSave); return;
+        }
+        m_geometry->reset();
+    }
 
     if (m_sessionLoaded) {
         syncCurrentScene();
@@ -724,6 +758,12 @@ void SceneMapEdit::readSceneGrp()
 void SceneMapEdit::onLoadScene(int index)
 {
     if (index < 0 || index >= m_sceneCount) return;
+    if (index != m_currentScene && m_geometry && (!m_geometry->shapes.isEmpty() || m_geometry->dirty)) {
+        if (!m_geometry->confirmDiscard()) {
+            const QSignalBlocker block(m_sceneCombo); m_sceneCombo->setCurrentIndex(m_currentScene); return;
+        }
+        m_geometry->reset();
+    }
     syncCurrentScene();
     if (m_tileCache.isEmpty()) readSceneGrp();
     if (m_sceneRawData.isEmpty()) return;
@@ -828,7 +868,7 @@ void SceneMapEdit::renderMap()
     };
 
     auto drawActor = [&](int actorX, int actorY) {
-        if (!backdrop || m_exporting || !m_actorVisible->isChecked()
+        if (!backdrop || m_exporting || (!m_actorVisible->isChecked() && !m_geometry->simulating())
             || actorX != m_actorX->value() || actorY != m_actorY->value()) return;
         const int tile = 2501;
         if (tile >= m_tileCache.size()) return;
@@ -862,7 +902,8 @@ void SceneMapEdit::renderMap()
         }
     }
 
-    if (backdrop && !m_exporting && m_backdropOverlay->isChecked()) {
+    if (backdrop && !m_exporting && m_backdropOverlay->isChecked()
+        && m_backdropDepth.size() == m_backdrop.width() * m_backdrop.height()) {
         QImage overlay(m_backdrop.size(), QImage::Format_ARGB32);
         overlay.fill(Qt::transparent);
         for (int row = 0; row < overlay.height(); ++row) {
@@ -898,7 +939,7 @@ void SceneMapEdit::renderMap()
     }
     if (!m_exporting && m_hoverIsoX >= 0 && m_hoverIsoY >= 0)
         drawSelection(p, m_hoverIsoX, m_hoverIsoY);
-    if (!m_exporting && !pastePreviewBounds().isEmpty()) {
+    if (!m_exporting && !m_geometry->active() && !pastePreviewBounds().isEmpty()) {
         const QPoint origin(m_hoverIsoX - m_moduleMap.x + 1, m_hoverIsoY - m_moduleMap.y + 1);
         const int selectedLayer = m_layerCombo->currentIndex();
         p.setOpacity(0.65);
@@ -925,11 +966,15 @@ void SceneMapEdit::renderMap()
         drawRegionOutline(p, pastePreviewBounds(), Qt::green);
     }
 
+    if (backdrop && !m_exporting)
+        m_geometry->draw(p, QPoint(m_backdropX->value(), m_backdropY->value()),
+            isoToScreen(m_hoverIsoX, m_hoverIsoY) - QPoint(m_backdropX->value(), m_backdropY->value()));
     m_backdropDepthInfo->setText(tr("像素：—\n深度：—\n落点：—"));
     if (backdrop) {
         const QPoint pixel = m_backdropCursor - QPoint(m_backdropX->value(), m_backdropY->value());
         if (m_backdrop.rect().contains(pixel)) {
-            const int depth = m_backdropDepth[pixel.y() * m_backdrop.width() + pixel.x()];
+            const int depth = m_backdropDepth.size() == m_backdrop.width() * m_backdrop.height()
+                ? m_backdropDepth[pixel.y() * m_backdrop.width() + pixel.x()] : -1;
             QString value = tr("像素 (%1, %2)\n深度 %3").arg(pixel.x()).arg(pixel.y()).arg(depth);
             if (depth < 0) value += tr("（无遮挡）\n落点：—");
             else {
@@ -1364,11 +1409,14 @@ void SceneMapEdit::handleMouseMove(QMouseEvent *event)
         m_hoverIsoY = -1;
     }
     updateTilePreview(iso.x(), iso.y());
-    if (backdropActive() && m_actorVisible->isChecked() && m_hoverIsoX >= 0 && m_hoverIsoY >= 0) {
+    if (backdropActive() && (m_actorVisible->isChecked() || m_geometry->simulating()) && m_hoverIsoX >= 0 && m_hoverIsoY >= 0) {
         const QSignalBlocker blockX(m_actorX);
         const QSignalBlocker blockY(m_actorY);
         m_actorX->setValue(m_hoverIsoX);
         m_actorY->setValue(m_hoverIsoY);
+    }
+    if (backdropActive() && m_geometry->active()) {
+        m_geometry->move(event->pos() - QPoint(m_backdropX->value(), m_backdropY->value())); return;
     }
     if (backdropActive() && m_backdropTool->currentIndex() != 0) {
         int tool = m_backdropTool->currentIndex();
@@ -1391,6 +1439,7 @@ void SceneMapEdit::syncCurrentScene()
 
 void SceneMapEdit::handleMouseRelease(QMouseEvent *event)
 {
+    if (backdropActive() && m_geometry->active()) return;
     if (backdropActive() && m_backdropTool->currentIndex() != 0) {
         if (m_backdropTool->currentIndex() == 2 || m_backdropTool->currentIndex() == 3) {
             m_backdropHistory.resize(m_backdropHistoryPos + 1);

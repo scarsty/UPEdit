@@ -297,11 +297,28 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
     m_backdropDepthInfo->setFixedHeight(m_backdropDepthInfo->fontMetrics().lineSpacing() * 3 + 6);
     m_backdropDepthInfo->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     m_backdropDepthInfo->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    maskLayout->addRow(tr("笔刷半径"), m_brushRadius);
-    maskLayout->addRow(tr("建筑落点 X"), m_anchorX);
-    maskLayout->addRow(tr("建筑落点 Y"), m_anchorY);
-    maskLayout->addRow(tr("鼠标处遮挡值"), m_backdropDepthInfo);
+    m_brushRadius->setParent(maskControls); m_brushRadius->hide();
+    m_originX = new QSpinBox; m_originX->setRange(-32767, 32767); m_originX->setValue(1152);
+    m_originY = new QSpinBox; m_originY->setRange(-32767, 32767); m_originY->setValue(18);
+    maskLayout->addRow(tr("大图内地图原点 X"), m_originX);
+    maskLayout->addRow(tr("大图内地图原点 Y"), m_originY);
+    for (auto *origin : {m_originX, m_originY})
+        connect(origin, &QSpinBox::valueChanged, this, [this] {
+            if (!m_backdrop.isNull() && m_geometry) m_geometry->dirty = true;
+            renderMap();
+        });
+    for (QWidget *widget : QList<QWidget *>{m_anchorX, m_anchorY, m_backdropDepthInfo}) {
+        widget->setParent(maskControls); widget->hide();
+    }
     m_backdropEnabled = new QCheckBox(tr("启用战场大图"));
+    m_geometry = new OcclusionEditor;
+    m_geometry->getOrigin = [this] { return QPoint(m_originX->value(), m_originY->value()); };
+    m_geometry->setOrigin = [this](QPoint origin) { m_originX->setValue(origin.x()); m_originY->setValue(origin.y()); };
+    m_geometry->binding = [this] { return QString("war:%1").arg(m_currentMapIndex); };
+    m_geometry->changed = [this] { renderMap(); };
+    for (QWidget *widget : QList<QWidget *>{loadProject, saveProject, undoMask, redoMask, m_backdropTool, m_backdropOverlay}) {
+        widget->setParent(this); widget->hide();
+    }
     connect(importBackdrop, &QPushButton::clicked, this, [this] {
         if (m_currentMapIndex < 0) return;
         const QString path = QFileDialog::getOpenFileName(this, tr("导入战场大图"), {}, "Images (*.webp *.png *.jpg *.jpeg)");
@@ -311,9 +328,10 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
             QMessageBox::warning(this, tr("战场大图"), tr("图片无效或超过 1600 万像素")); return;
         }
         m_backdrop = image;
-        m_backdropDepth.fill(-1, image.width() * image.height());
-        m_backdropHistory = {m_backdropDepth};
-        m_backdropHistoryPos = 0;
+        m_geometry->reset();
+        m_backdropDepth.clear();
+        m_backdropHistory.clear();
+        m_backdropHistoryPos = -1;
         m_backdropDirty = true;
         m_maskStroke = false;
         m_backdropMap = m_currentMapIndex;
@@ -372,13 +390,14 @@ WarMapEdit::WarMapEdit(QWidget *parent) : IsoMapEditor(parent)
         {tr("战场文件"), {m_mapCombo, m_btnSave, btnNew, btnDel, btnExport}},
         {tr("地图编辑"), {m_layerCombo, m_tileSourceCombo, m_btnSelectTile}},
         {tr("区域模块"), {btnImportModule, btnExportModule}},
-        {tr("大图与遮挡"), {importBackdrop, saveBackdrop, loadProject, saveProject, m_backdropEnabled,
-            undoMask, redoMask, m_backdropTool, m_backdropOverlay, m_actorVisible, maskControls}},
+        {tr("大图与遮挡"), {importBackdrop, saveBackdrop, m_backdropEnabled,
+            m_geometry, m_actorVisible, maskControls}},
         {tr("当前位置贴图"), {tileGroup}},
         {tr("缩略图与坐标"), {m_thumbLabel, m_statusBar}}
     }, {"War0", "War1", "War2", "War3", "War5", "War6"});
 
     connect(m_mapCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WarMapEdit::onLoadMap);
+    connect(m_layerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { renderMap(); });
     connect(m_btnSave, &QPushButton::clicked, this, &WarMapEdit::onSaveMap);
     connect(btnNew, &QPushButton::clicked, this, &WarMapEdit::onNewMap);
     connect(btnDel, &QPushButton::clicked, this, &WarMapEdit::onDeleteMap);
@@ -408,8 +427,8 @@ QPoint WarMapEdit::backdropOffset() const
     const auto &map = m_mapData.map[m_currentMapIndex];
     const QSize padded((map.x + map.y) * tileW() + 2 * tilePadding(),
         (map.x + map.y) * tileH() + 2 * tilePadding());
-    return m_backdrop.size() == padded ? QPoint() : QPoint(padded.width() / 2 - map.y * tileW(),
-        padded.height() / 2 - 31 * tileW() - 2 * tileH());
+    return QPoint(padded.width() / 2 - m_originX->value(),
+        padded.height() / 2 - 31 * tileW() - m_originY->value());
 }
 
 int WarMapEdit::backdropDepth(int x, int y) const
@@ -453,7 +472,8 @@ void WarMapEdit::recordBackdropStroke()
 
 void WarMapEdit::drawBackdropSprite(QPainter &painter, const QImage &sprite, QPoint position, int depth)
 {
-    QImage visible = sprite.convertToFormat(QImage::Format_ARGB32);
+    QImage visible = m_geometry->maskSprite(sprite, position - backdropOffset(),
+        isoToScreen(m_hoverIsoX, m_hoverIsoY) - backdropOffset());
     const QPoint offset = backdropOffset();
     if (m_backdropDepth.size() == m_backdrop.width() * m_backdrop.height())
         for (int row = 0; row < visible.height(); ++row) {
@@ -469,8 +489,7 @@ void WarMapEdit::drawBackdropSprite(QPainter &painter, const QImage &sprite, QPo
 
 bool WarMapEdit::confirmBackdropDiscard()
 {
-    return !m_backdropDirty || QMessageBox::question(this, tr("战场遮挡"), tr("大图或遮挡尚未保存，放弃修改？"),
-        QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Discard;
+    return m_geometry->confirmDiscard();
 }
 
 void WarMapEdit::closeEvent(QCloseEvent *event)
@@ -493,8 +512,9 @@ bool WarMapEdit::saveBackdrop(const QString &path)
     QDataStream stream(&file);
     stream.setVersion(QDataStream::Qt_6_0); stream.setByteOrder(QDataStream::LittleEndian);
     const auto &map = m_mapData.map[m_currentMapIndex];
-    stream << quint32(0x31474257) << qint32(m_currentMapIndex) << qint32(map.x) << qint32(map.y)
-        << qint32(m_backdrop.width()) << qint32(m_backdrop.height()) << encoded << raw;
+    stream << quint32(0x32474257) << qint32(m_currentMapIndex) << qint32(map.x) << qint32(map.y)
+        << qint32(m_backdrop.width()) << qint32(m_backdrop.height())
+        << qint32(m_originX->value()) << qint32(m_originY->value()) << encoded << raw;
     if (stream.status() != QDataStream::Ok || !file.commit()) return false;
     m_backdropDirty = false;
     return true;
@@ -511,9 +531,15 @@ bool WarMapEdit::loadBackdrop(const QString &path)
     qint32 index = -1, mapWidth = 0, mapHeight = 0, width = 0, height = 0;
     stream >> magic >> index >> mapWidth >> mapHeight >> width >> height;
     const auto &map = m_mapData.map[m_currentMapIndex];
-    if (stream.status() != QDataStream::Ok || magic != 0x31474257 || index != m_currentMapIndex
+    if (stream.status() != QDataStream::Ok || (magic != 0x31474257 && magic != 0x32474257) || index != m_currentMapIndex
         || mapWidth != map.x || mapHeight != map.y || width <= 0 || height <= 0
         || qint64(width) * height > 16000000) return false;
+    const QSize padded((map.x + map.y) * tileW() + 2 * tilePadding(),
+        (map.x + map.y) * tileH() + 2 * tilePadding());
+    qint32 originX = map.y * tileW(), originY = 2 * tileH();
+    if (QSize(width, height) == padded) { originX = padded.width() / 2; originY = padded.height() / 2 - 31 * tileW(); }
+    if (magic == 0x32474257) stream >> originX >> originY;
+    if (stream.status() != QDataStream::Ok || qAbs(qint64(originX)) > 32767 || qAbs(qint64(originY)) > 32767) return false;
     auto readBlock = [&]() {
         quint32 size = 0; stream >> size;
         if (stream.status() != QDataStream::Ok || size > quint64(file.bytesAvailable()) || size > 128 * 1024 * 1024)
@@ -531,6 +557,11 @@ bool WarMapEdit::loadBackdrop(const QString &path)
         if (depth < -1 || depth >= map.x * (map.x + map.y)) return false;
     }
     m_backdrop = image; m_backdropDepth = candidate; m_backdropMap = index;
+    m_geometry->reset();
+    {
+        const QSignalBlocker blockX(m_originX), blockY(m_originY);
+        m_originX->setValue(originX); m_originY->setValue(originY);
+    }
     m_backdropHistory = {candidate}; m_backdropHistoryPos = 0; m_maskStroke = false;
     m_backdropDirty = false; m_backdropEnabled->setChecked(true);
     return true;
@@ -616,6 +647,12 @@ void WarMapEdit::readWarMapGrp()
 void WarMapEdit::onLoadMap(int index)
 {
     if (index < 0) return;
+    if (index != m_currentMapIndex && m_geometry && (!m_geometry->shapes.isEmpty() || m_geometry->dirty)) {
+        if (!m_geometry->confirmDiscard()) {
+            const QSignalBlocker block(m_mapCombo); m_mapCombo->setCurrentIndex(m_currentMapIndex); return;
+        }
+        m_geometry->reset();
+    }
     if (m_mapData.num == 0) {
         readWarMapDef();
         readWarMapGrp();
@@ -656,8 +693,7 @@ void WarMapEdit::renderMap()
     const bool backdrop = m_backdropEnabled && m_backdropEnabled->isChecked()
         && m_backdropMap == m_currentMapIndex && !m_backdrop.isNull();
     if (backdrop) {
-        const QPoint offset = m_backdrop.size() == QSize(imgW, imgH) ? QPoint()
-            : QPoint(m_renderCenterX - mapH * tw, m_renderCenterY - 2 * th);
+        const QPoint offset = backdropOffset();
         p.drawImage(offset, m_backdrop);
         endLayer = startLayer;
     }
@@ -721,12 +757,13 @@ void WarMapEdit::renderMap()
             }
             p.drawImage(offset, overlay);
         }
-        if (m_actorVisible->isChecked() && inCurrentMap(m_hoverIsoX, m_hoverIsoY) && m_tileCache.size() > 2501) {
+        if ((m_actorVisible->isChecked() || m_geometry->simulating()) && inCurrentMap(m_hoverIsoX, m_hoverIsoY) && m_tileCache.size() > 2501) {
             QPoint position = isoToScreen(m_hoverIsoX, m_hoverIsoY);
             if (m_grpPics.size() > 2501) position -= QPoint(m_grpPics[2501].xoff, m_grpPics[2501].yoff);
             drawBackdropSprite(p, m_tileCache[2501], position, backdropDepth(m_hoverIsoX, m_hoverIsoY));
         }
         const QPoint pixel = m_backdropCursor - offset;
+        m_geometry->draw(p, offset, isoToScreen(m_hoverIsoX, m_hoverIsoY) - offset);
         if (m_backdrop.rect().contains(pixel)) {
             const int depth = validMask ? m_backdropDepth[pixel.y() * m_backdrop.width() + pixel.x()] : -1;
             QString anchor = "-";
@@ -744,7 +781,7 @@ void WarMapEdit::renderMap()
     if (inCurrentMap(m_hoverIsoX, m_hoverIsoY))
         drawSelection(p, m_hoverIsoX, m_hoverIsoY);
 
-    if ((!backdrop || m_backdropTool->currentIndex() == 0) && !m_isSelecting && inCurrentMap(m_hoverIsoX, m_hoverIsoY)
+    if ((!backdrop || (m_backdropTool->currentIndex() == 0 && !m_geometry->active())) && !m_isSelecting && inCurrentMap(m_hoverIsoX, m_hoverIsoY)
         && (m_hasClipboard || m_selectedTileId >= 0)) {
         const Map &source = m_clipboardMap;
         const int width = m_hasClipboard ? source.x : 1;
@@ -825,6 +862,10 @@ void WarMapEdit::handleMouseMove(QMouseEvent *event)
     m_hoverIsoY = iso.y();
     updateTilePreview(iso.x(), iso.y());
     m_backdropCursor = event->pos();
+    if (backdropActive() && m_geometry->active()) {
+        m_geometry->move(event->pos() - backdropOffset());
+        return;
+    }
     if (backdropActive() && (m_backdropTool->currentIndex() == 2 || m_backdropTool->currentIndex() == 3)
         && (event->buttons() & (Qt::LeftButton | Qt::RightButton)))
         paintBackdrop(event->pos(), m_backdropTool->currentIndex() == 3 || (event->buttons() & Qt::RightButton));
@@ -834,6 +875,11 @@ void WarMapEdit::handleMouseMove(QMouseEvent *event)
 
 void WarMapEdit::handleMousePress(QMouseEvent *event)
 {
+    if (backdropActive() && m_geometry->active()) {
+        const QPoint tile = screenToIso(event->pos().x(), event->pos().y());
+        m_hoverIsoX = tile.x(); m_hoverIsoY = tile.y();
+        m_geometry->press(event->pos() - backdropOffset(), event->button()); return;
+    }
     if (!backdropActive() || m_backdropTool->currentIndex() == 0) {
         IsoMapEditor::handleMousePress(event);
         return;
@@ -854,6 +900,7 @@ void WarMapEdit::handleMousePress(QMouseEvent *event)
 
 void WarMapEdit::handleMouseRelease(QMouseEvent *event)
 {
+    if (backdropActive() && m_geometry->active()) return;
     if (m_maskStroke) { recordBackdropStroke(); renderMap(); return; }
     if (backdropActive() && m_backdropTool->currentIndex() != 0) return;
     if (event->button() != Qt::LeftButton || !m_isSelecting) return;
@@ -944,7 +991,7 @@ void WarMapEdit::onDeleteMap()
     int idx = m_mapCombo->currentIndex();
     if (idx < 0 || idx >= m_mapData.num) return;
     if (m_backdropMap == idx && !confirmBackdropDiscard()) return;
-    if (m_backdropMap == idx) { m_backdrop = QImage(); m_backdropMap = -1; }
+    if (m_backdropMap == idx) { m_backdrop = QImage(); m_backdropMap = -1; m_geometry->reset(); m_backdropDirty = false; }
     else if (m_backdropMap > idx) --m_backdropMap;
     m_mapData.map.removeAt(idx);
     m_mapData.num = m_mapData.map.size();
@@ -981,8 +1028,7 @@ QImage WarMapEdit::exportImage(bool ground, bool building) const
         QImage image(size, QImage::Format_ARGB32);
         image.fill(Qt::transparent);
         QPainter painter(&image);
-        const QPoint offset = m_backdrop.size() == size ? QPoint()
-            : QPoint(size.width() / 2 - source.y * tileW(), size.height() / 2 - 31 * tileW() - 2 * tileH());
+        const QPoint offset = backdropOffset();
         painter.drawImage(offset, m_backdrop);
         return image;
     }
